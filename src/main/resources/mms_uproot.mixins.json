@@ -1,0 +1,16 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "info.mudbourn.mmsuproot.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"GenPackMixin",
+		"MaterialRuleContextAccess",
+		"MaterialSystemMixin",
+		"ModPackResourcesFactoryMixin",
+		"PackCompatibilityMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

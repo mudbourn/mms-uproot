@@ -1,0 +1,3 @@
+# Fabric API module ids that no longer exist, and the id that took over. Names only.
+# OLD NEW
+fabric-resource-loader-v0 fabric-resource-loader-v1

@@ -3,3 +3,6 @@ research/
 out/
 __pycache__/
 .DS_Store
+.gradle/
+build/
+run/

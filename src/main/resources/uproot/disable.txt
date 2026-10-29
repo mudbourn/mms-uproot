@@ -1,0 +1,52 @@
+# Parts of target mods that cannot be bridged to 26.3 and are switched off instead.
+# Format: see disable.Disabler. Names only; nothing from a mod lives in this repo.
+# "tentative" in a reason: the rule is a proposal not yet confirmed in a running game.
+# Descriptors that mention Minecraft use 26.3 names (the rules run after the remap); * avoids that.
+
+# --- Biomes We've Gone: pumpkin warden (blocks.md R36) ---
+# The brain is built imperatively on an API that no longer exists, so the whole mob goes.
+stub net/potionstudios/biomeswevegone/world/entity/pumpkinwarden/PumpkinWarden | pumpkin warden brain uses the removed Brain builder API
+stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/PumpkinWardenGoalPackages | pumpkin warden brain activities
+stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/PumpkinWardenPanicTrigger | pumpkin warden brain activities
+stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/EnterPumpkinBurrow | pumpkin warden brain activities
+stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/SetClosestPumpkinBurrowAsWalkTarget | pumpkin warden brain activities
+stub net/potionstudios/biomeswevegone/world/entity/ai/sensing/PumpkinWardenSensor | pumpkin warden sensor on the reworked sensor API
+# Tentative: model and renderer use GeckoLib and render-state APIs that changed; only matters on a client.
+stub net/potionstudios/biomeswevegone/client/renderer/entity/pumpkinwarden/PumpkinWardenRenderer | tentative: client renderer of a mob that is not registered
+stub net/potionstudios/biomeswevegone/client/renderer/entity/pumpkinwarden/PumpkinWardenModel | tentative: client model of a mob that is not registered
+
+# The entity type stays registered: 26.3 entity types hold intrusive holders, and the registry refuses to freeze with
+# one unregistered. Nothing spawns it (no biome lists it); only /summon or a saved entity would make the empty shell.
+# The egg stays registered for the same reason; it spawns the empty shell.
+
+# Burrow occupants: the block entity keeps working but never releases or ticks a warden.
+noop net/potionstudios/biomeswevegone/world/level/block/entities/PumpkinBurrowBlockEntity addOccupant * | burrow cannot take a pumpkin warden occupant
+noop net/potionstudios/biomeswevegone/world/level/block/entities/PumpkinBurrowBlockEntity emptyOccupant * | burrow cannot release a pumpkin warden
+noop net/potionstudios/biomeswevegone/world/level/block/entities/PumpkinBurrowBlockEntity serverTick * | burrow occupant tick is off with the mob
+
+# --- Biomes We've Gone: sniffer digging drops (R28) ---
+# Tentative: drop this rule once the loot helper from the plan exists. The loot API it uses was rebuilt.
+noop net/potionstudios/biomeswevegone/fabric/VanillaCompatFabric registerLootModifiers ()V | tentative: sniffer digging drops use the removed NumberProvider loot API
+
+# --- CorgiLib (blocks.md section 3.6 and 7) ---
+noop corgitaco/corgilib/server/commands/PlaceAllCommand register * | /placeall needs ConfiguredFeature.place and Structure.generate signatures that changed
+# Tentative: the whole class draws with the removed MultiBufferSource.getBuffer(RenderType).
+stub corgitaco/corgilib/client/RenderUtils | tentative: debug sphere and ring rendering uses the removed render API
+# Tentative: the handler's target (Minecraft.getOverlay) is gone; keeping the handler empty is safe if the mixin still applies.
+noop corgitaco/corgilib/mixin/client/MixinMouseHandler editor * | tentative: mouse scroll tweak for the structure box editor
+
+# Map decoration tint (R32) needs no rule: the remapper's constructor rule drops the colour argument.
+
+# --- Biomes We've Gone: noise state provider ---
+# Its base class now takes a NormalNoise instead of the parameter record and the record went package-private.
+# It appears in no BWG data file, only in Java, so nothing loses a feature; a stand-in base class would be a new subsystem.
+stub net/potionstudios/biomeswevegone/world/level/levelgen/feature/stateproviders/BetweenNoiseThresholdProvider | noise state provider on an API that was rebuilt; no BWG data uses it
+skip legacy_state_provider_type biomeswevegone:between_noise_threshold_provider | its provider class is disabled, so its type is not registered
+
+# --- Biomes We've Gone: surface rules ---
+# 26.3 replaced SurfaceRules with material rules; Uproot's shim/surface stands in for the old API and converts what a
+# mod builds, so the rule sources and the TerraBlender call run (see renames.txt). What does not carry over is below.
+# The mixin on the 1.21.11 surface system gave two biomes the eroded-badlands pillars and let the bands source reach
+# the system's noise. The stand-in system is not that class, so the mixin is left out; Uproot's own MaterialSystemMixin
+# restores the pillars, and the bands source falls back to plain stone.
+mixin net/potionstudios/biomeswevegone/mixin/SurfaceSystemMixin | patches 1.21.11's surface system; pillars come from Uproot's MaterialSystemMixin, bands fall back to stone

@@ -1,0 +1,22 @@
+{
+	"schemaVersion": 1,
+	"id": "mms_uproot",
+	"version": "${version}",
+	"name": "MMS Uproot",
+	"description": "Lets Fabric mods built for 1.21.11 run on 26.3. Ships nothing from any mod.",
+	"authors": ["mudbourn"],
+	"license": "GPL-3.0-only",
+	"environment": "*",
+	"languageAdapters": {
+		"mms_uproot": "info.mudbourn.mmsuproot.boot.UprootBoot"
+	},
+	"entrypoints": {
+		"main": ["info.mudbourn.mmsuproot.boot.UprootMain"]
+	},
+	"mixins": ["mms_uproot.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25"
+	}
+}

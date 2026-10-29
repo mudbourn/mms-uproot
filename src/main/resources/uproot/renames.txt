@@ -1,0 +1,253 @@
+# Names that changed between Minecraft 1.21.11 and 26.3. Names only, in Mojang terms.
+# class OLD NEW                    renames one class (nested classes follow their outer class, unless a rule
+#                                  names the nested class itself)
+# package OLD NEW                  renames a package prefix
+# method OWNER OLD NEW [ARGS|DESC] renames a method on OWNER and on everything extending or implementing it;
+#                                  OWNER may be * for any owner. ARGS is an argument count, DESC a descriptor
+#                                  in 1.21.11 names; either keeps unrelated overloads out
+# field OWNER OLD NEW              renames a field, likewise down the hierarchy; OWNER may be *
+# fieldowner OLD NEW               static constants of OLD now live in NEW
+# ctor OWNER OLDDESC NEWDESC POS=FOWNER.FIELD:FDESC
+#                                  a constructor gained a parameter. Calls (invokespecial) push the static field
+#                                  FOWNER.FIELD as argument POS. OWNER and descriptors are 26.3 names. Only an
+#                                  object-typed field, placed last or just before a one-slot last argument.
+#                                  POS=#N pushes the int N instead, as the last argument.
+# fieldmove OWNER NAME NEWOWNER NEWNAME
+#                                  a static field read (getstatic) of OWNER.NAME is read from NEWOWNER.NEWNAME
+#                                  instead, same descriptor. All four are 26.3 names, NAME after any field rule.
+#                                  For constants that 26.3 dropped and a class of Uproot's own now holds
+# callmove OWNER NAME DESC NEWOWNER NEWNAME
+#                                  a static call (invokestatic) of OWNER.NAME with descriptor DESC goes to NEWOWNER.NEWNAME
+#                                  with the same descriptor. All 26.3 names, DESC as the call site has it after renaming.
+#                                  For methods whose signature changed and that a class of Uproot's own now answers.
+#                                  Static methods are inherited, so a call through a subclass of OWNER matches too
+# calldesc OWNER NAME OLDDESC NEWDESC
+#                                  a virtual or interface call of OWNER.NAME with OLDDESC now has NEWDESC (same method,
+#                                  erased differently). Also matches calls through a subclass of OWNER and method
+#                                  references. If the return type changed to a wider one, a checkcast to the old one
+#                                  follows the call. All 26.3 names.
+#                                  e.g. calldesc net/minecraft/world/level/block/state/BlockState is (Lnet/minecraft/world/level/block/Block;)Z (Ljava/lang/Object;)Z
+# callinst OWNER NAME DESC HELPER.method
+#                                  an instance call (invokevirtual or invokeinterface) of OWNER.NAME with DESC becomes
+#                                  invokestatic HELPER.method with DESC plus OWNER as a new first parameter. HELPER is
+#                                  an internal class name, a dot and the method name. Matches subclasses of OWNER
+#                                  and method references, but not super calls.
+#                                  e.g. callinst net/minecraft/world/entity/player/Player displayClientMessage (Lnet/minecraft/network/chat/Component;Z)V info/mudbourn/mmsuproot/shim/block/LegacyBlocks.displayClientMessage
+# bridge OWNER NAME OLDDESC NEWDESC
+#                                  a mod class that extends or implements OWNER (the 26.3 type that declares NEWDESC)
+#                                  overrides NAME with OLDDESC, and NEWDESC only added parameters after the old ones
+#                                  (object parameters may also be narrower). The class gets a NEWDESC method that drops
+#                                  the added arguments and calls the OLDDESC one. A super call of NAME with OLDDESC
+#                                  inside the OLDDESC override goes to the NEWDESC of the super class, passing
+#                                  null, 0 or false for the added arguments and a checkcast for narrowed ones.
+#                                  Same return type. A class that declares NEWDESC itself is left alone.
+#                                  e.g. bridge net/minecraft/world/level/block/BonemealableBlock performBonemeal (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/BonemealSource;)V
+# ctoradapt OWNER OLDDESC NEWDESC HELPER.method
+#                                  a constructor whose arguments change in more ways than ctor can say. Calls
+#                                  (invokespecial, so both new X(...) and super(...)) and X::new references pass the
+#                                  old arguments to the static HELPER.method(OLDDESC arguments) that returns the new
+#                                  ones as an Object[]; each element is cast (or unboxed) to its NEWDESC type.
+#                                  e.g. ctoradapt net/minecraft/world/level/block/grower/TreeGrower (Ljava/lang/String;F...)V (Ljava/lang/String;...)V info/mudbourn/mmsuproot/shim/block/LegacyBlocks.treeGrowerArgs
+# Classes that moved package and kept their simple name are found on their own at load time.
+
+class net/minecraft/resources/ResourceLocation net/minecraft/resources/Identifier
+class net/minecraft/client/gui/GuiGraphics net/minecraft/client/gui/GuiGraphicsExtractor
+class net/minecraft/world/entity/monster/EnderMan net/minecraft/world/entity/monster/Enderman
+class net/minecraft/world/level/block/FarmBlock net/minecraft/world/level/block/FarmlandBlock
+class net/minecraft/world/level/block/DirtPathBlock net/minecraft/world/level/block/PathBlock
+
+package software/bernie/geckolib com/geckolib
+
+fieldowner net/minecraft/world/entity/EntityType net/minecraft/world/entity/EntityTypes
+fieldowner net/minecraft/world/level/block/entity/BlockEntityType net/minecraft/world/level/block/entity/BlockEntityTypes
+
+method net/minecraft/world/level/ChunkPos toLong pack
+method net/minecraft/world/effect/MobEffect isInstantenous isInstantaneous
+method net/minecraft/client/gui/screens/Screen render extractRenderState 4
+method net/minecraft/server/ReloadableServerResources updateStaticRegistryTags updateComponentsAndStaticRegistryTags
+
+# 26.3's PathBlock says which block it turns back into; 1.21.11's DirtPathBlock always made dirt
+ctor net/minecraft/world/level/block/PathBlock (Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V 0=net/minecraft/world/level/block/Blocks.DIRT:Lnet/minecraft/world/level/block/Block;
+
+# Fabric API renamed this factory, same descriptor
+method net/fabricmc/fabric/api/event/registry/FabricRegistryBuilder createSimple create 1
+
+# Likewise FarmlandBlock now takes the block it dries out into; 1.21.11's FarmBlock always made dirt
+ctor net/minecraft/world/level/block/FarmlandBlock (Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V 0=net/minecraft/world/level/block/Blocks.DIRT:Lnet/minecraft/world/level/block/Block;
+
+method net/minecraft/world/Difficulty getKey getSerializedName 0
+
+# Fabric API's payload registries are named by direction and phase now, same descriptors
+method net/fabricmc/fabric/api/networking/v1/PayloadTypeRegistry playS2C clientboundPlay 0
+method net/fabricmc/fabric/api/networking/v1/PayloadTypeRegistry playC2S serverboundPlay 0
+method net/fabricmc/fabric/api/networking/v1/PayloadTypeRegistry configurationS2C clientboundConfiguration 0
+method net/fabricmc/fabric/api/networking/v1/PayloadTypeRegistry configurationC2S serverboundConfiguration 0
+
+# Feature API. 26.3 turned Feature into an interface that is its own settings and moved the
+# registries, so the old names point at Uproot's stand-ins, which only have to load; the game reads
+# a mod's JSON, not the settings it builds in Java. See shim/feature.
+class net/minecraft/world/level/levelgen/feature/Feature info/mudbourn/mmsuproot/shim/feature/LegacyFeature
+class net/minecraft/world/level/levelgen/feature/ConfiguredFeature info/mudbourn/mmsuproot/shim/feature/ConfiguredFeature
+class net/minecraft/world/level/levelgen/feature/FeaturePlaceContext info/mudbourn/mmsuproot/shim/feature/FeaturePlaceContext
+class net/minecraft/world/level/levelgen/feature/configurations/FeatureConfiguration info/mudbourn/mmsuproot/shim/feature/FeatureConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/NoneFeatureConfiguration info/mudbourn/mmsuproot/shim/feature/NoneFeatureConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/BlockStateConfiguration info/mudbourn/mmsuproot/shim/feature/BlockStateConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/ColumnFeatureConfiguration info/mudbourn/mmsuproot/shim/feature/ColumnFeatureConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/DeltaFeatureConfiguration info/mudbourn/mmsuproot/shim/feature/DeltaFeatureConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/DiskConfiguration info/mudbourn/mmsuproot/shim/feature/DiskConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/FallenTreeConfiguration info/mudbourn/mmsuproot/shim/feature/FallenTreeConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/RandomFeatureConfiguration info/mudbourn/mmsuproot/shim/feature/RandomFeatureConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/RandomPatchConfiguration info/mudbourn/mmsuproot/shim/feature/RandomPatchConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/SimpleBlockConfiguration info/mudbourn/mmsuproot/shim/feature/SimpleBlockConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/SimpleRandomFeatureConfiguration info/mudbourn/mmsuproot/shim/feature/SimpleRandomFeatureConfiguration
+class net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProviderType info/mudbourn/mmsuproot/shim/feature/BlockStateProviderType
+class net/minecraft/world/level/levelgen/feature/stateproviders/RuleBasedBlockStateProvider net/minecraft/world/level/levelgen/feature/stateproviders/RuleBasedStateProvider
+class net/minecraft/world/level/levelgen/placement/RandomOffsetPlacement net/minecraft/world/level/levelgen/placement/OffsetPlacement
+class net/minecraft/world/level/levelgen/synth/NormalNoise$NoiseParameters net/minecraft/world/level/levelgen/synth/NormalNoise$Parameters
+class dev/corgitaco/ohthetreesyoullgrow/world/level/levelgen/feature/configurations/TreeFromStructureNBTConfig info/mudbourn/mmsuproot/shim/tree/TreeFromStructureNBTConfig
+
+field net/minecraft/core/registries/Registries CONFIGURED_FEATURE FEATURE
+field net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider CODEC DIRECT_CODEC
+field dev/corgitaco/ohthetreesyoullgrow/world/level/levelgen/feature/TYGFeatures TREE_FROM_NBT_V1 TREE_FROM_NBT_V2
+fieldowner net/minecraft/util/valueproviders/IntProvider net/minecraft/util/valueproviders/IntProviders
+fieldowner net/minecraft/util/valueproviders/FloatProvider net/minecraft/util/valueproviders/FloatProviders
+fieldmove net/minecraft/core/registries/BuiltInRegistries FEATURE info/mudbourn/mmsuproot/shim/feature/LegacyRegistries FEATURE
+fieldmove net/minecraft/core/registries/BuiltInRegistries BLOCKSTATE_PROVIDER_TYPE info/mudbourn/mmsuproot/shim/feature/LegacyRegistries STATE_PROVIDER_TYPE
+fieldmove net/minecraft/data/worldgen/features/VegetationFeatures PATCH_CACTUS info/mudbourn/mmsuproot/shim/feature/LegacyKeys PATCH_CACTUS
+fieldmove net/minecraft/data/worldgen/features/VegetationFeatures PATCH_GRASS info/mudbourn/mmsuproot/shim/feature/LegacyKeys PATCH_GRASS
+fieldmove net/minecraft/data/worldgen/features/VegetationFeatures PATCH_GRASS_JUNGLE info/mudbourn/mmsuproot/shim/feature/LegacyKeys PATCH_GRASS_JUNGLE
+fieldmove net/minecraft/data/worldgen/features/VegetationFeatures PATCH_PUMPKIN info/mudbourn/mmsuproot/shim/feature/LegacyKeys PATCH_PUMPKIN
+fieldmove net/minecraft/data/worldgen/features/VegetationFeatures PATCH_WATERLILY info/mudbourn/mmsuproot/shim/feature/LegacyKeys PATCH_WATERLILY
+callmove net/minecraft/world/level/levelgen/blockpredicates/BlockPredicate matchesBlocks (Lnet/minecraft/core/Vec3i;[Lnet/minecraft/world/level/block/Block;)Lnet/minecraft/world/level/levelgen/blockpredicates/BlockPredicate; info/mudbourn/mmsuproot/shim/feature/LegacyBlockPredicates matchesBlocks
+callmove net/minecraft/world/level/levelgen/blockpredicates/BlockPredicate matchesFluids (Lnet/minecraft/core/Vec3i;[Lnet/minecraft/world/level/material/Fluid;)Lnet/minecraft/world/level/levelgen/blockpredicates/BlockPredicate; info/mudbourn/mmsuproot/shim/feature/LegacyBlockPredicates matchesFluids
+callmove net/minecraft/world/level/levelgen/blockpredicates/BlockPredicate noFluid (Lnet/minecraft/core/Vec3i;)Lnet/minecraft/world/level/levelgen/blockpredicates/BlockPredicate; info/mudbourn/mmsuproot/shim/feature/LegacyBlockPredicates noFluid
+class net/minecraft/world/level/levelgen/synth/ImprovedNoise info/mudbourn/mmsuproot/shim/noise/ImprovedNoise
+
+# PushReaction was renamed constant by constant
+field net/minecraft/world/level/material/PushReaction NORMAL PUSH_PULL
+field net/minecraft/world/level/material/PushReaction DESTROY POPPED
+field net/minecraft/world/level/material/PushReaction BLOCK IMMOVEABLE
+field net/minecraft/world/level/material/PushReaction IGNORE IGNORE_ENTITY
+field net/minecraft/world/level/material/PushReaction PUSH_ONLY PUSH
+
+# FlowerBedBlock now takes the height of its shape in pixels; vanilla's own flower beds pass 3
+ctor net/minecraft/world/level/block/FlowerBedBlock (Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;I)V 1=#3
+
+# Blocks lost their codecs in 26.3; the helper makes the codec a mod keeps in a static field
+callmove net/minecraft/world/level/block/state/BlockBehaviour simpleCodec (Ljava/util/function/Function;)Lcom/mojang/serialization/MapCodec; info/mudbourn/mmsuproot/shim/block/LegacyBlocks simpleCodec
+
+# Stand-ins for classes 26.3 dropped. SignItem became a standing-and-wall block item; the rest are the
+# loot, brewing, fuel, compost and trade APIs that data replaced. The compat stand-ins hand what a mod
+# registers to data.gen, which writes it as data.
+class net/minecraft/world/item/SignItem info/mudbourn/mmsuproot/shim/item/SignItem
+class net/fabricmc/fabric/api/registry/CompostingChanceRegistry info/mudbourn/mmsuproot/shim/compat/CompostingChanceRegistry
+class net/fabricmc/fabric/api/registry/FuelRegistryEvents info/mudbourn/mmsuproot/shim/compat/FuelRegistryEvents
+class net/fabricmc/fabric/api/registry/FuelRegistryEvents$BuildCallback info/mudbourn/mmsuproot/shim/compat/FuelRegistryEvents$BuildCallback
+class net/fabricmc/fabric/api/registry/FuelRegistryEvents$Context info/mudbourn/mmsuproot/shim/compat/FuelRegistryEvents$Context
+class net/minecraft/world/level/block/entity/FuelValues info/mudbourn/mmsuproot/shim/compat/FuelValues
+class net/minecraft/world/level/block/entity/FuelValues$Builder info/mudbourn/mmsuproot/shim/compat/FuelValues$Builder
+class net/fabricmc/fabric/api/registry/FabricBrewingRecipeRegistryBuilder info/mudbourn/mmsuproot/shim/compat/FabricBrewingRecipeRegistryBuilder
+class net/fabricmc/fabric/api/registry/FabricBrewingRecipeRegistryBuilder$BuildCallback info/mudbourn/mmsuproot/shim/compat/FabricBrewingRecipeRegistryBuilder$BuildCallback
+class net/minecraft/world/item/alchemy/PotionBrewing info/mudbourn/mmsuproot/shim/compat/PotionBrewing
+class net/minecraft/world/item/alchemy/PotionBrewing$Builder info/mudbourn/mmsuproot/shim/compat/PotionBrewing$Builder
+class net/minecraft/world/level/storage/loot/providers/number/NumberProvider info/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider
+class net/minecraft/world/level/storage/loot/providers/number/ConstantValue info/mudbourn/mmsuproot/shim/compat/LegacyConstantValue
+class net/minecraft/world/entity/npc/villager/VillagerTrades$ItemListing info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$ItemListing
+class net/minecraft/world/entity/npc/villager/VillagerTrades$EmeraldForItems info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$EmeraldForItems
+class net/minecraft/world/entity/npc/villager/VillagerTrades$ItemsForEmeralds info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$ItemsForEmeralds
+class net/minecraft/world/entity/npc/villager/VillagerTrades$EmeraldsForVillagerTypeItem info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$EmeraldsForVillagerTypeItem
+class net/minecraft/world/entity/npc/villager/VillagerTrades$TreasureMapForEmeralds info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$TreasureMapForEmeralds
+class net/fabricmc/fabric/api/object/builder/v1/trade/TradeOfferHelper info/mudbourn/mmsuproot/shim/compat/TradeOfferHelper
+class net/fabricmc/fabric/api/object/builder/v1/trade/TradeOfferHelper$WanderingTraderOffersBuilder info/mudbourn/mmsuproot/shim/compat/TradeOfferHelper$WanderingTraderOffersBuilder
+
+# Block helpers 26.3 made private or moved into per-colour collections
+callmove net/minecraft/world/level/block/SpreadingSnowyBlock canBeGrass (Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;)Z info/mudbourn/mmsuproot/shim/block/LegacyBlocks canBeGrass
+callmove net/minecraft/world/level/block/SpreadingSnowyBlock canPropagate (Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;)Z info/mudbourn/mmsuproot/shim/block/LegacyBlocks canPropagate
+fieldmove net/minecraft/world/level/block/Blocks ORANGE_TERRACOTTA info/mudbourn/mmsuproot/shim/block/LegacyBlocks ORANGE_TERRACOTTA
+fieldmove net/minecraft/world/level/block/Blocks WHITE_TERRACOTTA info/mudbourn/mmsuproot/shim/block/LegacyBlocks WHITE_TERRACOTTA
+fieldmove net/minecraft/world/level/block/Blocks LIGHT_GRAY_TERRACOTTA info/mudbourn/mmsuproot/shim/block/LegacyBlocks LIGHT_GRAY_TERRACOTTA
+
+# Leaf blocks gained an ambient sound player; 1.21.11's leaves had none
+ctor net/minecraft/world/level/block/UntintedParticleLeavesBlock (FLnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (FLnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/world/level/block/sounds/AmbientLeavesBlockSoundPlayer;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V 2=info/mudbourn/mmsuproot/shim/block/LegacyBlocks.NO_AMBIENT_SOUND:Lnet/minecraft/world/level/block/sounds/AmbientLeavesBlockSoundPlayer;
+
+# Hoe tilling is a block transformer now
+callmove net/minecraft/world/item/HoeItem changeIntoState (Lnet/minecraft/world/level/block/state/BlockState;)Ljava/util/function/Consumer; info/mudbourn/mmsuproot/shim/item/LegacyTools changeIntoState
+callmove net/minecraft/world/item/HoeItem onlyIfAirAbove (Lnet/minecraft/world/item/context/UseOnContext;)Z info/mudbourn/mmsuproot/shim/item/LegacyTools onlyIfAirAbove
+callmove net/fabricmc/fabric/api/registry/TillableBlockRegistry register (Lnet/minecraft/world/level/block/Block;Ljava/util/function/Predicate;Ljava/util/function/Consumer;)V info/mudbourn/mmsuproot/shim/item/LegacyTools registerTillable
+
+# Calls whose receiver or arguments moved. The helper takes the receiver first.
+callinst net/minecraft/world/level/storage/loot/LootPool$Builder setRolls (Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot.setRolls
+callinst net/minecraft/world/entity/EntityType is (Lnet/minecraft/tags/TagKey;)Z info/mudbourn/mmsuproot/shim/entity/LegacyEntities.isTagged
+callinst net/minecraft/world/entity/player/Player displayClientMessage (Lnet/minecraft/network/chat/Component;Z)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.displayClientMessage
+callinst net/minecraft/world/level/Level getDayTime ()J info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getDayTime
+callinst net/minecraft/world/level/StructureManager startsForStructure (Lnet/minecraft/core/SectionPos;Lnet/minecraft/world/level/levelgen/structure/Structure;)Ljava/util/List; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.startsForStructure
+
+# Bone meal asks who is using it; a mod's old override drops that argument. Direct calls report an interaction.
+bridge net/minecraft/world/level/block/BonemealableBlock isValidBonemealTarget (Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z (Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/BonemealSource;)Z
+bridge net/minecraft/world/level/block/BonemealableBlock isBonemealSuccess (Lnet/minecraft/world/level/Level;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z (Lnet/minecraft/world/level/Level;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/BonemealSource;)Z
+bridge net/minecraft/world/level/block/BonemealableBlock performBonemeal (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/BonemealSource;)V
+callinst net/minecraft/world/level/block/BonemealableBlock isValidBonemealTarget (Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z info/mudbourn/mmsuproot/shim/block/LegacyBlocks.isValidBonemealTarget
+callinst net/minecraft/world/level/block/BonemealableBlock isBonemealSuccess (Lnet/minecraft/world/level/Level;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z info/mudbourn/mmsuproot/shim/block/LegacyBlocks.isBonemealSuccess
+callinst net/minecraft/world/level/block/BonemealableBlock performBonemeal (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V info/mudbourn/mmsuproot/shim/block/LegacyBlocks.performBonemeal
+
+# Constructors that changed in more ways than a missing argument. The helper returns the new arguments.
+ctoradapt net/minecraft/world/level/ChunkPos (Lnet/minecraft/core/BlockPos;)V (II)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.chunkPos
+ctoradapt net/minecraft/world/level/block/StemBlock (Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/tags/TagKey;Lnet/minecraft/tags/TagKey;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.stemBlock
+ctoradapt net/minecraft/world/level/block/grower/TreeGrower (Ljava/lang/String;FLjava/util/Optional;Ljava/util/Optional;Ljava/util/Optional;Ljava/util/Optional;Ljava/util/Optional;Ljava/util/Optional;)V (Ljava/lang/String;Lnet/minecraft/util/random/WeightedList;Lnet/minecraft/util/random/WeightedList;Lnet/minecraft/util/random/WeightedList;Lnet/minecraft/resources/ResourceKey;)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.treeGrower
+ctoradapt net/minecraft/world/level/saveddata/maps/MapDecorationType (Lnet/minecraft/resources/Identifier;ZIZZ)V (Lnet/minecraft/resources/Identifier;ZZ)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.mapDecorationType
+ctoradapt net/minecraft/world/entity/npc/villager/VillagerProfession (Lnet/minecraft/network/chat/Component;Ljava/util/function/Predicate;Ljava/util/function/Predicate;Lcom/google/common/collect/ImmutableSet;Lcom/google/common/collect/ImmutableSet;Lnet/minecraft/sounds/SoundEvent;)V (Lnet/minecraft/network/chat/Component;Ljava/util/function/Predicate;Ljava/util/function/Predicate;Lcom/google/common/collect/ImmutableSet;Lcom/google/common/collect/ImmutableSet;Lnet/minecraft/sounds/SoundEvent;Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.villagerProfession
+
+# Classes and members 26.3 renamed (checked with javap on the merged jar and the Fabric API modules)
+class net/minecraft/world/level/block/WaterlilyBlock net/minecraft/world/level/block/LilyPadBlock
+class net/minecraft/world/level/block/SnowyDirtBlock net/minecraft/world/level/block/SnowyBlock
+class net/minecraft/world/level/block/SpreadingSnowyDirtBlock net/minecraft/world/level/block/SpreadingSnowyBlock
+class net/fabricmc/fabric/api/itemgroup/v1/FabricItemGroup net/fabricmc/fabric/api/creativetab/v1/FabricCreativeModeTab
+class net/fabricmc/fabric/api/object/builder/v1/world/poi/PointOfInterestHelper net/fabricmc/fabric/api/object/builder/v1/world/poi/PoiHelper
+class net/minecraft/world/entity/ai/goal/TryFindWaterGoal net/minecraft/world/entity/ai/goal/TryFindLiquidGoal
+method net/minecraft/data/BlockFamily$Builder dontGenerateRecipe dontGenerateCraftingRecipe 0
+method net/minecraft/server/level/ServerLevel getStructureManager structureManager 0
+field net/minecraft/tags/BlockTags MUSHROOM_GROW_BLOCK OVERRIDES_MUSHROOM_LIGHT_REQUIREMENT
+field net/minecraft/world/level/pathfinder/PathType DANGER_FIRE FIRE_IN_NEIGHBOR
+field net/minecraft/world/level/pathfinder/PathType DAMAGE_FIRE FIRE
+field net/minecraft/world/level/pathfinder/PathType DANGER_OTHER DAMAGING_IN_NEIGHBOR
+field net/minecraft/world/level/pathfinder/PathType DAMAGE_OTHER DAMAGING
+
+# The goal needs the fluid it looks for; the old one always looked for water
+ctor net/minecraft/world/entity/ai/goal/TryFindLiquidGoal (Lnet/minecraft/world/entity/PathfinderMob;)V (Lnet/minecraft/world/entity/PathfinderMob;Lnet/minecraft/tags/TagKey;)V 1=net/minecraft/tags/FluidTags.WATER:Lnet/minecraft/tags/TagKey;
+# Pumpkin stems are the closest stand-in for 1.21.11's farmland-only stems
+ctor net/minecraft/world/level/block/AttachedStemBlock (Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/tags/TagKey;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V 3=net/minecraft/tags/BlockTags.SUPPORTS_PUMPKIN_STEM:Lnet/minecraft/tags/TagKey;
+
+# Fabric's strippable and flattenable registries are block transformers now
+callmove net/fabricmc/fabric/api/registry/StrippableBlockRegistry register (Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/Block;)V net/fabricmc/fabric/api/item/v1/BlockTransformerHelper registerStripping
+callmove net/fabricmc/fabric/api/registry/FlattenableBlockRegistry register (Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/state/BlockState;)V net/fabricmc/fabric/api/item/v1/BlockTransformerHelper registerFlattening
+
+# is(Block), is(Item) and is(Fluid) all erase to is(Object) on 26.3's TypedInstance
+calldesc net/minecraft/world/level/block/state/BlockState is (Lnet/minecraft/world/level/block/Block;)Z (Ljava/lang/Object;)Z
+calldesc net/minecraft/world/item/ItemStack is (Lnet/minecraft/world/item/Item;)Z (Ljava/lang/Object;)Z
+calldesc net/minecraft/world/level/material/FluidState is (Lnet/minecraft/world/level/material/Fluid;)Z (Ljava/lang/Object;)Z
+
+# The properties half of a block's codec is gone with the codec
+callmove net/minecraft/world/level/block/state/BlockBehaviour propertiesCodec ()Lcom/mojang/serialization/codecs/RecordCodecBuilder; info/mudbourn/mmsuproot/shim/block/LegacyBlocks propertiesCodec
+ctoradapt net/minecraft/world/level/block/grower/TreeGrower (Ljava/lang/String;Ljava/util/Optional;Ljava/util/Optional;Ljava/util/Optional;)V (Ljava/lang/String;Lnet/minecraft/util/random/WeightedList;Lnet/minecraft/util/random/WeightedList;Lnet/minecraft/util/random/WeightedList;Lnet/minecraft/resources/ResourceKey;)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.treeGrowerKeys
+
+# Default components are bound after mod init; a mod asking for a default stack that early gets one without components
+callinst net/minecraft/world/item/Item getDefaultInstance ()Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/item/LegacyItems.getDefaultInstance
+
+# Structure processors: the type holder is gone and a mod's processor class cannot load, so its type decodes to a processor that does nothing
+class net/minecraft/world/level/levelgen/structure/templatesystem/StructureProcessorType info/mudbourn/mmsuproot/shim/feature/StructureProcessorType
+fieldmove net/minecraft/core/registries/BuiltInRegistries STRUCTURE_PROCESSOR info/mudbourn/mmsuproot/shim/feature/LegacyRegistries STRUCTURE_PROCESSOR
+
+# Surface rules. 26.3 replaced SurfaceRules, SurfaceSystem and SurfaceRuleData with material rules and TerraBlender renamed its
+# SurfaceRuleManager to MaterialRuleManager, so the old names point at Uproot's stand-ins, which build a small tree and convert
+# it once a biome lookup exists. See shim/surface. KeyDispatchDataCodec is gone; the registry holds the map codec itself.
+class net/minecraft/world/level/levelgen/SurfaceRules info/mudbourn/mmsuproot/shim/surface/SurfaceRules
+class net/minecraft/world/level/levelgen/SurfaceSystem info/mudbourn/mmsuproot/shim/surface/SurfaceSystem
+class net/minecraft/data/worldgen/SurfaceRuleData info/mudbourn/mmsuproot/shim/surface/SurfaceRuleData
+class net/minecraft/util/KeyDispatchDataCodec info/mudbourn/mmsuproot/shim/surface/KeyDispatchDataCodec
+class terrablender/api/SurfaceRuleManager info/mudbourn/mmsuproot/shim/surface/SurfaceRuleManager
+field net/minecraft/core/registries/BuiltInRegistries MATERIAL_RULE MATERIAL_RULE_TYPE
+# FloatProvider became an interface with min() and max(); a call of the old names has to be an interface call, which a helper makes
+callinst net/minecraft/util/valueproviders/FloatProvider getMinValue ()F info/mudbourn/mmsuproot/shim/surface/Thresholds.getMinValue
+callinst net/minecraft/util/valueproviders/FloatProvider getMaxValue ()F info/mudbourn/mmsuproot/shim/surface/Thresholds.getMaxValue
+# A mod's stripe helper sits in a class that is switched off (its base class was rebuilt); the call goes to a plain copy of the arithmetic
+callmove net/potionstudios/biomeswevegone/world/level/levelgen/feature/stateproviders/BetweenNoiseThresholdProvider createThresholds (FFF)Ljava/util/List; info/mudbourn/mmsuproot/shim/surface/Thresholds createThresholds
