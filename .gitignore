@@ -1,0 +1,5 @@
+# Downloaded Minecraft, mappings and library jars (regenerate with tools/uproot-map/fetch_*.py)
+refdata/
+out/
+__pycache__/
+.DS_Store
