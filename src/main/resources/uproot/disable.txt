@@ -55,7 +55,7 @@ noop net/potionstudios/biomeswevegone/world/level/levelgen/structure/village/Pla
 
 # --- Biomes We've Gone: client model access (first client run) ---
 # The extra block-state models (BlockStateModel baked from a ResolvedModel through SingleVariant) have no 26.3 form.
-noop net/potionstudios/biomeswevegone/fabric/client/BiomesWeveGoneClientFabric lambda$blockStateModel$4 * | tentative: bakes a BlockStateModel through SingleVariant
+noop net/potionstudios/biomeswevegone/fabric/client/BiomesWeveGoneClientFabric lambda$blockStateModel$4 * | dead code: the bake goes through Fabric API now (see renames.txt)
 # Sign sprites: 26.3 has no Sheets material table to fill; see the client audit in the report.
 noop net/potionstudios/biomeswevegone/client/BiomesWeveGoneClient registerWoodTypes * | tentative: fills the removed Sheets sign material tables
 # The wreath draws its block model through SubmitNodeCollector.submitBlockModel with the removed BlockStateModel
@@ -69,3 +69,9 @@ stub io/github/wouink/furnish/recipe/FurnitureRecipe | the recipe serializer can
 noop io/github/wouink/furnish/reglib/RegLib registerRecipeSerializer * | the workbench recipe serializer is switched off
 # Tentative: adds Furnish's items to vanilla loot tables with the removed NumberProvider loot API
 noop io/github/wouink/furnish/FurnishContents lambda$init$3 * | tentative: vanilla loot table additions use the removed UniformGenerator/NumberProvider API
+
+# --- Mob AI Tweaks: zombie villager and zombified piglin arms ---
+# These two inject at the animateZombieArms call inside their model's setupAnim. 26.3's models no longer make that call
+# (only ZombieModel does; the arm poses come from the render state), so there is nothing to inject at.
+mixin com/notunanancyowen/mait/mixin/ZombieVillagerEntityModelMixin | tentative: its injection point, the animateZombieArms call in the model's setupAnim, is gone in 26.3
+mixin com/notunanancyowen/mait/mixin/ZombifiedPiglinEntityModelMixin | tentative: its injection point, the animateZombieArms call in the model's setupAnim, is gone in 26.3

@@ -10,14 +10,6 @@ base {
 }
 
 loom {
-	runs {
-		client {
-			programArgs "--quickPlaySingleplayer", "testworld"
-			vmArg "-Duproot.devShot=/private/tmp/claude-501/-Volumes----GitHub-mms-uproot/bbc92b81-9bc0-4ac0-a215-bdd1fade99a9/scratchpad/shots"
-			vmArg "-Duproot.devShotCount=2"
-			vmArg "-Duproot.mixinRequire=1"
-		}
-	}
 	mods {
 		"mms_uproot" {
 			sourceSet sourceSets.main

@@ -62,13 +62,16 @@
 #                                  old arguments to the static HELPER.method(OLDDESC arguments) that returns the new
 #                                  ones as an Object[]; each element is cast (or unboxed) to its NEWDESC type.
 #                                  e.g. ctoradapt net/minecraft/world/level/block/grower/TreeGrower (Ljava/lang/String;F...)V (Ljava/lang/String;...)V info/mudbourn/mmsuproot/shim/block/LegacyBlocks.treeGrowerArgs
-# inherited TARGET NAME DESC
+# inherited TARGET NAME DESC [SUPERDESC]
 #                                  a mixin class targeting TARGET has injectors on NAME DESC, which 26.3's TARGET no longer
 #                                  declares but a superclass does. Mixin cannot inject into an inherited method, so the mixin
 #                                  class gets a public override NAME DESC that calls the superclass's method; Mixin merges it
-#                                  into TARGET and the injectors land on it. TARGET and DESC are 26.3 names, DESC as the
-#                                  declaring superclass has it (erased). Skipped when TARGET declares the method itself.
-#                                  e.g. inherited net/minecraft/client/model/monster/zombie/DrownedModel setupAnim (Lnet/minecraft/client/renderer/entity/state/ZombieRenderState;)V
+#                                  into TARGET and the injectors land on it. DESC is what the mixin names (1.21.11's shape),
+#                                  SUPERDESC what the declaring superclass has (its erased generics), DESC when omitted. When
+#                                  they differ, a bridge method SUPERDESC that casts and calls the DESC one is added too, as
+#                                  javac would have, so the game's call reaches the injectors. TARGET and descriptors are 26.3
+#                                  names. Skipped when TARGET declares the method itself.
+#                                  e.g. inherited net/minecraft/client/model/monster/zombie/DrownedModel setupAnim (Lnet/minecraft/client/renderer/entity/state/ZombieRenderState;)V (Lnet/minecraft/client/renderer/entity/state/HumanoidRenderState;)V
 # Not a rule: a call of a Minecraft class that is now an interface (or no longer one) switches between invokevirtual and
 # invokeinterface on its own, method references and static calls included; see remap.CallRules.
 # Classes that moved package and kept their simple name are found on their own at load time.
@@ -374,3 +377,15 @@ callmove net/potionstudios/biomeswevegone/fabric/client/BiomesWeveGoneClientFabr
 method net/minecraft/client/renderer/rendertype/RenderTypes entityCutout entityCutoutCull 1
 method net/minecraft/client/renderer/rendertype/RenderTypes entityCutoutNoCull entityCutout
 method net/minecraft/client/renderer/rendertype/RenderTypes entityCutoutNoCullZOffset entityCutoutZOffset
+
+# Mob AI's bullet renderer retextures the bullet through the model's renderType call and the glow layer through the ordered submit
+# call. 26.3's submit hands the texture and the render type straight to submitModel, so the argument modifiers land there.
+injectat net/minecraft/client/model/object/projectile/ShulkerBulletModel renderType (Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType; net/minecraft/client/renderer/SubmitNodeCollector submitModel (Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/resources/Identifier;III)V
+injectat net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModel (Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/renderer/texture/TextureAtlasSprite;ILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModel (Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/renderer/texture/UvMapping;I)V
+
+# 26.3 moved these overrides up into a superclass; the mixin injectors need a method of their own to land on (see "inherited" above)
+inherited net/minecraft/client/model/monster/zombie/DrownedModel setupAnim (Lnet/minecraft/client/renderer/entity/state/ZombieRenderState;)V (Lnet/minecraft/client/renderer/entity/state/HumanoidRenderState;)V
+inherited net/minecraft/client/renderer/entity/SlimeRenderer extractRenderState (Lnet/minecraft/world/entity/monster/cubemob/Slime;Lnet/minecraft/client/renderer/entity/state/SlimeRenderState;F)V (Lnet/minecraft/world/entity/monster/cubemob/AbstractCubeMob;Lnet/minecraft/client/renderer/entity/state/SlimeRenderState;F)V
+
+# The swing progress 0..1 that 1.21.11 called attackTime is the animation value now: LivingEntity.getAttackAnim(pt) became getSwingAnimation(pt)
+field net/minecraft/client/renderer/entity/state/ArmedEntityRenderState attackTime swingAnimation

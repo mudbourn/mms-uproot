@@ -94,30 +94,44 @@ final class MixinParams extends ClassVisitor {
 		for (Renames.Inherited rule : namer.renames().inherited()) {
 			if (!targets.contains(rule.target())) continue;
 			var own = namer.game().info(rule.target());
-			if (own.isEmpty() || own.get().hasMethod(rule.name(), rule.desc())) continue;
+			if (own.isEmpty() || own.get().hasMethod(rule.name(), rule.desc()) || own.get().hasMethod(rule.name(), rule.superDesc())) continue;
 			String declaring = null;
 			for (String c = own.get().superName(); c != null && declaring == null; ) {
 				var info = namer.game().info(c);
 				if (info.isEmpty()) break;
-				if (info.get().hasMethod(rule.name(), rule.desc())) declaring = c;
+				if (info.get().hasMethod(rule.name(), rule.superDesc())) declaring = c;
 				c = info.get().superName();
 			}
 			if (declaring == null) continue;
-			Type[] args = Type.getArgumentTypes(rule.desc());
-			MethodVisitor w = super.visitMethod(Opcodes.ACC_PUBLIC, rule.name(), rule.desc(), null, null);
-			w.visitCode();
-			w.visitVarInsn(Opcodes.ALOAD, 0);
-			int slot = 1;
-			for (Type a : args) {
-				w.visitVarInsn(a.getOpcode(Opcodes.ILOAD), slot);
-				slot += a.getSize();
+			// the method the injectors name: calls the superclass's
+			emitOverride(rule.desc(), Opcodes.ACC_PUBLIC, rule.name(), rule.desc(), declaring, rule.superDesc(), Opcodes.INVOKESPECIAL, declaring);
+			// the method the game calls, when the superclass erased the types: what javac's bridge would do
+			if (!rule.desc().equals(rule.superDesc())) {
+				emitOverride(rule.superDesc(), Opcodes.ACC_PUBLIC | Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC, rule.name(), rule.superDesc(), className, rule.desc(), Opcodes.INVOKEVIRTUAL, className);
 			}
-			w.visitMethodInsn(Opcodes.INVOKESPECIAL, declaring, rule.name(), rule.desc(), false);
-			w.visitInsn(Type.getReturnType(rule.desc()).getOpcode(Opcodes.IRETURN));
-			w.visitMaxs(slot + Type.getReturnType(rule.desc()).getSize(), slot);
-			w.visitEnd();
 			namer.note("mixin " + className.substring(className.lastIndexOf('/') + 1) + " gets an override of " + rule.name() + " so its injectors can reach it (declared in " + declaring.substring(declaring.lastIndexOf('/') + 1) + ")");
 		}
+	}
+
+	/** A method {@code name desc} that calls {@code callOwner.name callDesc} on this, casting arguments that differ in type. */
+	private void emitOverride(String desc, int access, String name, String declDesc, String callOwner, String callDesc, int op, String ignored) {
+		Type[] have = Type.getArgumentTypes(desc);
+		Type[] want = Type.getArgumentTypes(callDesc);
+		MethodVisitor w = super.visitMethod(access, name, desc, null, null);
+		w.visitCode();
+		w.visitVarInsn(Opcodes.ALOAD, 0);
+		int slot = 1;
+		for (int i = 0; i < have.length; i++) {
+			w.visitVarInsn(have[i].getOpcode(Opcodes.ILOAD), slot);
+			if (have[i].getSort() == Type.OBJECT && !have[i].equals(want[i]) && !namer.ancestorsOf(have[i].getInternalName()).contains(want[i].getInternalName())) {
+				w.visitTypeInsn(Opcodes.CHECKCAST, want[i].getInternalName());
+			}
+			slot += have[i].getSize();
+		}
+		w.visitMethodInsn(op, callOwner, name, callDesc, false);
+		w.visitInsn(Type.getReturnType(desc).getOpcode(Opcodes.IRETURN));
+		w.visitMaxs(slot + Type.getReturnType(desc).getSize(), slot);
+		w.visitEnd();
 	}
 
 	/**

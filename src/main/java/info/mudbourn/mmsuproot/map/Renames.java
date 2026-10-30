@@ -35,8 +35,8 @@ public final class Renames {
 	/** An override whose 26.3 descriptor differs: {@code owner} is the 26.3 type that declares {@code newDesc}. */
 	public record Bridge(String owner, String name, String oldDesc, String newDesc) { }
 
-	/** A mixin target (26.3 name) that inherits {@code name desc} where 1.21.11 declared it. */
-	public record Inherited(String target, String name, String desc) { }
+	/** A mixin target (26.3 name) that inherits {@code name} where 1.21.11 declared it as {@code desc}; the superclass declares it as {@code superDesc}. */
+	public record Inherited(String target, String name, String desc, String superDesc) { }
 
 	private final Map<String, List<CtorAdapt>> ctorAdapts = new HashMap<>(); // owner (26.3 name) -> adapters
 	private final Map<String, String> callDescs = new HashMap<>(); // "owner.name olddesc" -> new desc
@@ -94,8 +94,8 @@ public final class Renames {
 			case "callinst" -> r.callInsts.put(p[1] + "." + p[2] + " " + p[3], helper(p[4], line));
 			case "bridge" -> r.bridges.add(bridge(p, line));
 			case "inherited" -> {
-				if (p.length != 4) throw new IllegalStateException("Bad inherited rule: " + line);
-				r.inherited.add(new Inherited(p[1], p[2], p[3]));
+				if (p.length != 4 && p.length != 5) throw new IllegalStateException("Bad inherited rule: " + line);
+				r.inherited.add(new Inherited(p[1], p[2], p[3], p.length == 5 ? p[4] : p[3]));
 			}
 			case "ctoradapt" -> {
 				String[] h = helper(p[4], line);
