@@ -12,7 +12,6 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.commons.Remapper;
-import org.objectweb.asm.tree.MethodNode;
 
 /**
  * Rewrites one class from intermediary names to 26.3 names, in memory. Besides the bytecode it
@@ -26,7 +25,7 @@ public final class ClassRemap {
 	public static byte[] remap(byte[] bytes, Namer namer) {
 		ClassReader reader = new ClassReader(bytes);
 		ClassWriter writer = new ClassWriter(0);
-		ClassVisitor chain = new MixinParams(new CtorAdapters(new CallRules(new FieldMoves(writer, namer), namer), namer), namer);
+		ClassVisitor chain = new MixinShadows(new MixinParams(new CtorAdapters(new CallRules(new FieldMoves(writer, namer), namer), namer), namer), namer);
 		chain = new ClassRemapper(chain, new NameRemapper(namer));
 		chain = new AnnotationStrings(chain, namer);
 		reader.accept(chain, 0);
@@ -184,6 +183,55 @@ public final class ClassRemap {
 			super.visit(version, access, name, signature, superName, interfaces);
 		}
 
+		/**
+		 * A {@code fieldget} or {@code fieldset} rule for the access, found on the owner or on anything it extends (a mixin
+		 * class extends its targets), is emitted as a call: of the owner's method, or of the rule's static helper, which
+		 * takes the object the rule names (and, for a write, the value) in the order the stack already holds them.
+		 * Returns false when no rule applies.
+		 */
+		private boolean fieldRule(String owner, String fieldName, boolean write, String fieldDesc, MethodVisitor mv) {
+			Renames renames = namer.renames();
+			if (!renames.hasFieldRule(fieldName)) return false;
+			String ruleOwner = null;
+			String[] rule = null;
+			String getter = null;
+			for (String candidate : candidates(owner)) {
+				if (write) rule = renames.fieldSet(candidate, fieldName);
+				else getter = renames.fieldGet(candidate, fieldName);
+				if (rule != null || getter != null) {
+					ruleOwner = candidate;
+					break;
+				}
+			}
+			if (rule == null && getter == null) return false;
+			String helperOwner = null;
+			String name;
+			if (write) {
+				helperOwner = rule[0];
+				name = rule[1];
+			} else {
+				int dot = getter.lastIndexOf('.');
+				helperOwner = dot < 0 ? null : getter.substring(0, dot);
+				name = dot < 0 ? getter : getter.substring(dot + 1);
+			}
+			String desc = write ? "(" + fieldDesc + ")V" : "()" + fieldDesc;
+			if (helperOwner != null) {
+				String helperDesc = write ? "(L" + ruleOwner + ";" + fieldDesc + ")V" : "(L" + ruleOwner + ";)" + fieldDesc;
+				mv.visitMethodInsn(Opcodes.INVOKESTATIC, helperOwner, name, helperDesc, false);
+			} else {
+				mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, owner, name, desc, false);
+			}
+			return true;
+		}
+
+		/** The owner, then everything it extends or implements (a mixin class counts its targets). */
+		private java.util.Collection<String> candidates(String owner) {
+			java.util.List<String> out = new java.util.ArrayList<>();
+			out.add(owner);
+			out.addAll(namer.ancestorsOf(owner));
+			return out;
+		}
+
 		/** A static field handle, as {@code ldc} and bootstrap arguments carry them. */
 		private Object moved(Object o) {
 			if (!(o instanceof Handle h) || h.getTag() != Opcodes.H_GETSTATIC) return o;
@@ -200,12 +248,8 @@ public final class ClassRemap {
 			return new MethodVisitor(API, mv) {
 				@Override
 				public void visitFieldInsn(int opcode, String owner, String fieldName, String fieldDesc) {
-					String getter = opcode == Opcodes.GETFIELD ? namer.renames().fieldGet(owner, fieldName) : null;
-					if (getter != null) {
-						namer.audit(className, Opcodes.INVOKEVIRTUAL, owner, getter, "()" + fieldDesc, false);
-						super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, owner, getter, "()" + fieldDesc, false);
-						return;
-					}
+					if (opcode == Opcodes.GETFIELD && fieldRule(owner, fieldName, false, fieldDesc, this)) return;
+					if (opcode == Opcodes.PUTFIELD && fieldRule(owner, fieldName, true, fieldDesc, this)) return;
 					if (opcode == Opcodes.GETSTATIC) {
 						String[] move = namer.renames().fieldMove(owner, fieldName);
 						if (move != null) {
@@ -252,9 +296,9 @@ public final class ClassRemap {
 	 * parameter in 26.3 get the extra argument from a static field,
 	 * as the rename table says; calls to constructors with a {@code ctoradapt} rule send their arguments
 	 * through a static helper that returns the new ones. Runs after the name mapping, so owner and
-	 * descriptors are 26.3 names. The writer does not compute frames: the inserted code has no branches,
-	 * so existing frames stay valid, the stack limit grows and a method that adapts uses one spare local
-	 * past its own (never read after the adapted call, so no frame needs to mention it).
+	 * descriptors are 26.3 names. The writer does not compute frames: the inserted code has no branches
+	 * and uses no local, so existing frames stay valid and only the stack limit grows. (Mixin runs the field
+	 * initialisers of a mixin inside the target's, and cannot take a local there.)
 	 */
 	private static final class CtorAdapters extends ClassVisitor {
 		private final Namer namer;
@@ -323,7 +367,7 @@ public final class ClassRemap {
 						mv.visitVarInsn(t.getOpcode(Opcodes.ILOAD), used);
 						used += t.getSize();
 					}
-					adapt(mv, owner, a, used);
+					adapt(mv, owner, a);
 					mv.visitInsn(Opcodes.ARETURN);
 					mv.visitMaxs(2 + stackFor(a), used + 1);
 					mv.visitEnd();
@@ -364,22 +408,29 @@ public final class ClassRemap {
 		}
 
 		/**
-		 * With the old arguments on the stack: calls the helper, keeps its {@code Object[]} in local
-		 * {@code spare}, pushes the new arguments from it (cast, or unboxed for primitives) and calls the
-		 * new constructor. Nothing sits between the receiver and the arguments but the arguments, so this
-		 * serves {@code new X(...)} and {@code super(...)} alike (the helper is static).
+		 * With the old arguments on the stack: calls the helper, which leaves its {@code Object[]}, then lays the new
+		 * arguments out under it (cast, or unboxed for primitives) one by one and drops the array. Only the stack is
+		 * used. Nothing sits between the receiver and the arguments but the arguments, so this serves
+		 * {@code new X(...)} and {@code super(...)} alike (the helper is static).
 		 */
-		private static void adapt(MethodVisitor mv, String owner, Renames.CtorAdapt a, int spare) {
+		private static void adapt(MethodVisitor mv, String owner, Renames.CtorAdapt a) {
 			mv.visitMethodInsn(Opcodes.INVOKESTATIC, a.helperOwner(), a.helperName(),
 					Type.getMethodDescriptor(Type.getType(Object[].class), Type.getArgumentTypes(a.oldDesc())), false);
-			mv.visitVarInsn(Opcodes.ASTORE, spare);
 			Type[] now = Type.getArgumentTypes(a.newDesc());
 			for (int i = 0; i < now.length; i++) {
-				mv.visitVarInsn(Opcodes.ALOAD, spare);
+				Type t = now[i];
+				mv.visitInsn(Opcodes.DUP);
 				pushInt(mv, i);
 				mv.visitInsn(Opcodes.AALOAD);
-				unpack(mv, now[i]);
+				unpack(mv, t);
+				if (t.getSize() == 2) {
+					mv.visitInsn(Opcodes.DUP2_X1);
+					mv.visitInsn(Opcodes.POP2);
+				} else {
+					mv.visitInsn(Opcodes.SWAP);
+				}
 			}
+			mv.visitInsn(Opcodes.POP);
 			mv.visitMethodInsn(Opcodes.INVOKESPECIAL, owner, "<init>", a.newDesc(), false);
 		}
 
@@ -415,28 +466,16 @@ public final class ClassRemap {
 			mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, box, method, "()" + t.getDescriptor(), false);
 		}
 
-		/**
-		 * The method is held back until its end so the adapter knows {@code maxLocals}, whose slot is
-		 * the first one nothing uses.
-		 */
 		@Override
 		public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
 			MethodVisitor next = super.visitMethod(access, name, descriptor, signature, exceptions);
-			if (next == null) return null;
-			return new MethodNode(API, access, name, descriptor, signature, exceptions) {
-				@Override
-				public void visitEnd() {
-					super.visitEnd();
-					accept(rewriter(next, maxLocals));
-				}
-			};
+			return next == null ? null : rewriter(next);
 		}
 
-		private MethodVisitor rewriter(MethodVisitor next, int spare) {
+		private MethodVisitor rewriter(MethodVisitor next) {
 			return new MethodVisitor(API, next) {
 				private boolean adapted;
 				private int extraStack;
-				private boolean spareUsed;
 
 				@Override
 				public void visitInvokeDynamicInsn(String indyName, String indyDesc, Handle bsm, Object... bsmArgs) {
@@ -450,9 +489,8 @@ public final class ClassRemap {
 					if (opcode == Opcodes.INVOKESPECIAL && methodName.equals("<init>")) {
 						Renames.CtorAdapt a = namer.renames().ctorAdapt(owner, methodDesc);
 						if (a != null) {
-							adapt(mv, owner, a, spare);
+							adapt(mv, owner, a);
 							extraStack = Math.max(extraStack, stackFor(a));
-							spareUsed = true;
 							return;
 						}
 					}
@@ -476,10 +514,9 @@ public final class ClassRemap {
 
 				@Override
 				public void visitMaxs(int maxStack, int maxLocals) {
-					super.visitMaxs(maxStack + extraStack + (adapted ? 1 : 0), spareUsed ? Math.max(maxLocals, spare + 1) : maxLocals);
+					super.visitMaxs(maxStack + extraStack + (adapted ? 1 : 0), maxLocals);
 					adapted = false;
 					extraStack = 0;
-					spareUsed = false;
 				}
 			};
 		}

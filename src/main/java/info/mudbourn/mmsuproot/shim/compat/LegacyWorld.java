@@ -39,6 +39,11 @@ public final class LegacyWorld {
 
 	private LegacyWorld() { }
 
+	/** {@code BlockPos.getBottomCenter()}: the middle of the block's floor. */
+	public static Vec3 getBottomCenter(BlockPos pos) {
+		return new Vec3(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
+	}
+
 	/** Remembers the running server, for calls that used to find it through an object that no longer leads there. */
 	public static void register() {
 		ServerLifecycleEvents.SERVER_STARTING.register(s -> server = s);

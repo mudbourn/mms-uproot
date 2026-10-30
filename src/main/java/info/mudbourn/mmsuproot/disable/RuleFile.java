@@ -57,7 +57,7 @@ final class RuleFile {
 				if (p.length == 2) return new Rule(Rule.Kind.STUB, internal(p[1]), "", "", reason, line, hits);
 				break;
 			case "noop":
-				if (p.length == 4 && !p[2].startsWith("<")) return new Rule(Rule.Kind.NOOP, internal(p[1]), p[2], p[3], reason, line, hits);
+				if (p.length == 4 && (!p[2].startsWith("<") || p[2].equals("<clinit>"))) return new Rule(Rule.Kind.NOOP, internal(p[1]), p[2], p[3], reason, line, hits);
 				break;
 			case "skip":
 				if (p.length == 3) return new Rule(Rule.Kind.SKIP, p[1], p[2], "", reason, line, hits);

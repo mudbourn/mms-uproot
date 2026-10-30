@@ -62,16 +62,19 @@ noop net/potionstudios/biomeswevegone/client/BiomesWeveGoneClient registerWoodTy
 # GeckoLib 5.5 gave ItemInHandGeoLayer a render context the old call cannot supply; the mob is not spawned anyway
 stub net/potionstudios/biomeswevegone/client/renderer/entity/pumpkinwarden/PumpkinWardenRenderer | GeckoLib's ItemInHandGeoLayer constructor gained a render context; the mob it draws is switched off
 
-# --- Furnish: furniture workbench recipe ---
-# The recipe serializer implements an interface that is a record in 26.3, so the class cannot load. The recipe type stays
-# registered; the serializer and the recipe class go, so the workbench has no recipes (blocks and renderers are unaffected).
-stub io/github/wouink/furnish/recipe/FurnitureRecipe | the recipe serializer cannot load: RecipeSerializer is a record in 26.3
-noop io/github/wouink/furnish/reglib/RegLib registerRecipeSerializer * | the workbench recipe serializer is switched off
 # Tentative: adds Furnish's items to vanilla loot tables with the removed NumberProvider loot API
 noop io/github/wouink/furnish/FurnishContents lambda$init$3 * | tentative: vanilla loot table additions use the removed UniformGenerator/NumberProvider API
 
 # --- Mob AI Tweaks: zombie villager and zombified piglin arms ---
 # These two inject at the animateZombieArms call inside their model's setupAnim. 26.3's models no longer make that call
 # (only ZombieModel does; the arm poses come from the render state), so there is nothing to inject at.
-mixin com/notunanancyowen/mait/mixin/ZombieVillagerEntityModelMixin | tentative: its injection point, the animateZombieArms call in the model's setupAnim, is gone in 26.3
-mixin com/notunanancyowen/mait/mixin/ZombifiedPiglinEntityModelMixin | tentative: its injection point, the animateZombieArms call in the model's setupAnim, is gone in 26.3
+
+# --- Furnish: furniture workbench recipe ---
+# The recipe's own serializer class cannot load (RecipeSerializer is a record in 26.3), so the recipe class must not build it; the
+# SERIALIZER reads are moved to the record serializer of shim/recipe (renames.txt).
+noop io/github/wouink/furnish/recipe/FurnitureRecipe <clinit> * | the recipe class must not build its own serializer; RecipeSerializer is a record in 26.3
+
+# --- Furnish: furniture workbench recipe ---
+# The recipe's own serializer class cannot load (RecipeSerializer is a record in 26.3), so the recipe class must not build it; the
+# SERIALIZER reads are moved to the record serializer of shim/recipe (renames.txt).
+noop io/github/wouink/furnish/recipe/FurnitureRecipe <clinit> * | the recipe class must not build its own serializer; RecipeSerializer is a record in 26.3

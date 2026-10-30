@@ -347,9 +347,6 @@ method net/fabricmc/fabric/api/client/rendering/v1/ModelLayerRegistry$TexturedLa
 class net/minecraft/client/renderer/block/BlockRenderDispatcher info/mudbourn/mmsuproot/shim/client/BlockRenderDispatcher
 callinst net/minecraft/client/renderer/entity/EntityRendererProvider$Context getBlockRenderDispatcher ()Linfo/mudbourn/mmsuproot/shim/client/BlockRenderDispatcher; info/mudbourn/mmsuproot/shim/client/BlockRenderDispatcher.of
 
-# A mod's own recipe serializer cannot load (RecipeSerializer is a record now); disable.txt switches the class off, so the sync has nothing to send
-callmove net/fabricmc/fabric/api/recipe/v1/sync/RecipeSynchronization synchronizeRecipeSerializer (Lnet/minecraft/world/item/crafting/RecipeSerializer;)V info/mudbourn/mmsuproot/shim/compat/LegacyRecipes synchronizeRecipeSerializer
-
 # Fabric's item group events are creative tab events now
 class net/fabricmc/fabric/api/itemgroup/v1/ItemGroupEvents net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents
 class net/fabricmc/fabric/api/itemgroup/v1/ItemGroupEvents$ModifyEntries net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents$ModifyOutput
@@ -389,3 +386,66 @@ inherited net/minecraft/client/renderer/entity/SlimeRenderer extractRenderState 
 
 # The swing progress 0..1 that 1.21.11 called attackTime is the animation value now: LivingEntity.getAttackAnim(pt) became getSwingAnimation(pt)
 field net/minecraft/client/renderer/entity/state/ArmedEntityRenderState attackTime swingAnimation
+
+# Furnish's workbench recipe extends SingleItemRecipe. 26.3's one takes a notification flag and an item template instead of a group and a
+# stack, and leaves group() and recipeBookCategory() to the subclass; the stand-in keeps the old constructor, those two and the stack-returning
+# result(). The mod's own serializer class cannot load (RecipeSerializer is a record now); shim/recipe builds the record, which SERIALIZER reads.
+class net/minecraft/world/item/crafting/SingleItemRecipe info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe
+callinst info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe result ()Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe.legacyResultOf
+ctoradapt net/minecraft/world/item/crafting/display/SlotDisplay$ItemStackSlotDisplay (Lnet/minecraft/world/item/ItemStack;)V (Lnet/minecraft/world/item/ItemStackTemplate;)V info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe.slotDisplayArgs
+fieldmove io/github/wouink/furnish/recipe/FurnitureRecipe SERIALIZER info/mudbourn/mmsuproot/shim/recipe/FurnishRecipes SERIALIZER
+fieldget net/minecraft/world/entity/LivingEntity swingingArm info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swingingArm
+fieldget net/minecraft/world/entity/monster/cubemob/AbstractCubeMob wasOnGround info/mudbourn/mmsuproot/shim/entity/LegacyEntities.wasOnGround
+fieldset net/minecraft/world/entity/monster/cubemob/AbstractCubeMob wasOnGround info/mudbourn/mmsuproot/shim/entity/LegacyEntities.setWasOnGround
+
+# --- Mob AI Tweaks: rules and rule kinds added with the mixin shadow fixes (remap.MixinShadows) ---
+# Rule kinds this block adds (their parsing is in map.Renames, their effect in remap.ClassRemap and remap.CallRules):
+# fieldget OWNER NAME METHOD|HELPER.method   as above, and now also found for a read through any class that extends OWNER (a mixin
+#                                  class counts its targets). With a helper (pkg/Class.method) the read is
+#                                  invokestatic HELPER.method(OWNER)T, for a value that has to be worked out; T is the type of the field
+#                                  as the mod reads it.
+# fieldset OWNER NAME METHOD|HELPER.method   a write (putfield) of the field OWNER.NAME, likewise found down the hierarchy, becomes
+#                                  OWNER.METHOD(value) on the object that was written to, or invokestatic HELPER.method(OWNER,value)V.
+#                                  For fields that 26.3 made private or removed. A helper may ignore the value.
+# calldrop OWNER NAME DESC         a call (virtual, special or interface) of OWNER.NAME with DESC, found down the hierarchy, is removed:
+#                                  receiver and arguments are popped and a null, zero or false stands in for the result. For methods
+#                                  that 26.3 does by itself, such as ticking a swing.
+# bridge, also: a super call (invokespecial) of a bridged method with the old descriptor is sent through the stub in every method of a
+#                                  class that extends the owner, not only in the override of that method; a mixin handler can make it.
+# Not a rule: remap.MixinShadows fixes the shapes mixins take against the class hierarchy. A shadow member that the target inherits
+# is dropped and its uses name the target, one that is static now gets a static adapter, one the game lacks is dropped (a method) or
+# kept as a field of the mixin (a field), and a declared superclass that the target no longer extends becomes the closest one it does.
+
+method net/minecraft/client/model/monster/zombie/ZombieVillagerModel setupAnim setupAttackAnimation (Lnet/minecraft/client/renderer/entity/state/ZombieVillagerRenderState;)V
+method net/minecraft/client/model/monster/piglin/ZombifiedPiglinModel setupAnim setupAttackAnimation (Lnet/minecraft/client/renderer/entity/state/ZombifiedPiglinRenderState;)V
+class net/minecraft/world/level/dimension/end/EndDragonFight net/minecraft/world/level/dimension/end/EnderDragonFight
+field net/minecraft/world/level/dimension/end/EnderDragonFight crystalsAlive aliveCrystals
+
+method net/minecraft/world/entity/LivingEntity getAttackAnim getSwingAnimation 1
+method net/minecraft/world/entity/Entity setInvulnerable setPermanentlyInvulnerable 1
+field net/minecraft/world/entity/Entity hurtMarked syncVelocity
+method net/minecraft/world/item/component/AttackRange minRange minReach 0
+method net/minecraft/world/item/component/AttackRange maxRange maxReach 0
+method net/minecraft/world/item/component/AttackRange minCreativeRange minCreativeReach 0
+method net/minecraft/world/item/component/AttackRange maxCreativeRange maxCreativeReach 0
+fieldget net/minecraft/world/entity/LivingEntity swinging isSwinging
+fieldget net/minecraft/world/entity/LivingEntity swingTime info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swingTime
+fieldget net/minecraft/world/entity/LivingEntity attackAnim info/mudbourn/mmsuproot/shim/entity/LegacyEntities.attackAnim
+fieldset net/minecraft/world/entity/LivingEntity attackAnim info/mudbourn/mmsuproot/shim/entity/LegacyEntities.setAttackAnim
+fieldset net/minecraft/world/entity/Entity invulnerableTime setInvulnerableTime
+callinst net/minecraft/world/entity/LivingEntity swingForAttack (Lnet/minecraft/world/InteractionHand;)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swingForAttack
+callinst net/minecraft/world/entity/LivingEntity swing (Lnet/minecraft/world/InteractionHand;Z)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swing
+calldrop net/minecraft/world/entity/LivingEntity updateSwingTime ()V
+callinst net/minecraft/world/entity/LivingEntity onEquippedItemBroken (Lnet/minecraft/world/item/Item;Lnet/minecraft/world/entity/EquipmentSlot;)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.onEquippedItemBroken
+callinst net/minecraft/world/entity/LivingEntity entityAttackRange ()Lnet/minecraft/world/item/component/AttackRange; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.entityAttackRange
+callmove net/minecraft/world/entity/EntityType loadEntityRecursive (Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/EntityProcessor;)Lnet/minecraft/world/entity/Entity; info/mudbourn/mmsuproot/shim/entity/LegacyEntities loadEntityRecursive
+ctoradapt net/minecraft/server/level/ServerBossEvent (Lnet/minecraft/network/chat/Component;Lnet/minecraft/world/BossEvent$BossBarColor;Lnet/minecraft/world/BossEvent$BossBarOverlay;)V (Ljava/util/UUID;Lnet/minecraft/network/chat/Component;Lnet/minecraft/world/BossEvent$BossBarColor;Lnet/minecraft/world/BossEvent$BossBarOverlay;)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.serverBossEvent
+ctoradapt net/minecraft/core/particles/ItemParticleOption (Lnet/minecraft/core/particles/ParticleType;Lnet/minecraft/world/item/ItemStack;)V (Lnet/minecraft/core/particles/ParticleType;Lnet/minecraft/world/item/ItemStackTemplate;)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.itemParticleOption
+callinst net/minecraft/core/BlockPos getBottomCenter ()Lnet/minecraft/world/phys/Vec3; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getBottomCenter
+callmove net/minecraft/world/item/DyeItem byColor (Lnet/minecraft/world/item/DyeColor;)Lnet/minecraft/world/item/DyeItem; info/mudbourn/mmsuproot/shim/item/LegacyItems dyeByColor
+callinst net/minecraft/world/item/DyeItem getDyeColor ()Lnet/minecraft/world/item/DyeColor; info/mudbourn/mmsuproot/shim/item/LegacyItems.dyeColor
+callmove net/minecraft/world/level/block/ShulkerBoxBlock getColoredItemStack (Lnet/minecraft/world/item/DyeColor;)Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/item/LegacyItems shulkerBoxStack
+fieldmove net/minecraft/world/item/Items CYAN_BANNER info/mudbourn/mmsuproot/shim/item/LegacyItems$Banners CYAN_BANNER
+fieldget net/minecraft/client/renderer/entity/state/EndermanRenderState carriedBlock info/mudbourn/mmsuproot/shim/entity/LegacyRenderStates.carriedBlock
+fieldset net/minecraft/world/entity/npc/villager/Villager updateMerchantTimer info/mudbourn/mmsuproot/shim/entity/LegacyVillagers.updateMerchantTimer
+fieldset net/minecraft/world/entity/npc/villager/Villager increaseProfessionLevelOnUpdate info/mudbourn/mmsuproot/shim/entity/LegacyVillagers.increaseProfessionLevelOnUpdate

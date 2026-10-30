@@ -157,10 +157,22 @@ final class CallRules extends ClassVisitor {
 
 			@Override
 			public void visitMethodInsn(int opcode, String owner, String methodName, String methodDesc, boolean itf) {
-				if (opcode == Opcodes.INVOKESPECIAL && bridge != null && methodName.equals(bridge.name()) && methodDesc.equals(bridge.oldDesc())) {
+				if (opcode != Opcodes.INVOKESTATIC && !methodName.equals("<init>") && renames.hasCallDrop(methodName) && dropped(owner, methodName, methodDesc)) {
+					dropCall(this, methodDesc);
+					return;
+				}
+				Renames.Bridge superBridge = bridge;
+				if (opcode == Opcodes.INVOKESPECIAL && superBridge == null && !methodName.equals("<init>") && namer.game().has(owner)) {
+					// a super call of the old shape from a method that is not itself an override (a mixin handler, say)
+					for (Renames.Bridge b : applicable()) {
+						if (b.name().equals(methodName) && b.oldDesc().equals(methodDesc) && !namer.game().findMethod(owner, methodName, methodDesc)
+								&& namer.game().findMethod(owner, methodName, b.newDesc())) superBridge = b;
+					}
+				}
+				if (opcode == Opcodes.INVOKESPECIAL && superBridge != null && methodName.equals(superBridge.name()) && methodDesc.equals(superBridge.oldDesc())) {
 					// super.m(old) in the override of m(old): the super class only has m(new) now, which a stub of this class reaches
 					String stub = "uproot$super$" + superStubs.size();
-					superStubs.add(new Object[] {stub, owner, itf, bridge});
+					superStubs.add(new Object[] {stub, owner, itf, superBridge});
 					super.visitMethodInsn(Opcodes.INVOKESTATIC, className, stub, "(L" + className + ";" + methodDesc.substring(1), isInterface);
 					return;
 				}
@@ -192,6 +204,22 @@ final class CallRules extends ClassVisitor {
 		}
 		for (Object[] s : superStubs) emitSuperStub((String) s[0], (String) s[1], (boolean) s[2], (Renames.Bridge) s[3]);
 		super.visitEnd();
+	}
+
+	/** Whether a {@code calldrop} rule covers the call, found on the owner or on anything it extends. */
+	private boolean dropped(String owner, String name, String desc) {
+		if (renames.callDrop(owner, name, desc)) return true;
+		for (String ancestor : namer.ancestorsOf(owner)) if (renames.callDrop(ancestor, name, desc)) return true;
+		return false;
+	}
+
+	/** Replaces an instance call: its arguments and receiver are popped and a null, zero or false stands in for the result. */
+	private static void dropCall(MethodVisitor mv, String desc) {
+		Type[] args = Type.getArgumentTypes(desc);
+		for (int i = args.length - 1; i >= 0; i--) mv.visitInsn(args[i].getSize() == 2 ? Opcodes.POP2 : Opcodes.POP);
+		mv.visitInsn(Opcodes.POP);
+		Type ret = Type.getReturnType(desc);
+		if (ret.getSort() != Type.VOID) pushDefault(mv, ret);
 	}
 
 	/** {@code m(new)} for a class that only has {@code m(old)}: drops the added trailing parameters and calls {@code m(old)}. */

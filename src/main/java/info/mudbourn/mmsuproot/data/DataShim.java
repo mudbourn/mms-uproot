@@ -11,7 +11,7 @@ import net.fabricmc.fabric.api.resource.v1.pack.ModPackResources;
 import net.minecraft.server.packs.PackResources;
 
 /**
- * Serves the data of target mods in the shapes 26.3 reads, built in memory when the pack is first
+ * Serves the data and client assets of target mods in the shapes 26.3 reads, built in memory when the pack is first
  * asked for data and never written anywhere. The mod's own pack is wrapped where Fabric API hands it
  * to the pack repository, so the game's loaders need no change.
  */
@@ -33,9 +33,12 @@ public final class DataShim {
 		if (report == null) return pack;
 		return WRAPPED.computeIfAbsent(pack, p -> {
 			ConvertedView view = new ConvertedView(mod, report);
+			ConvertedAssets assets = new ConvertedAssets(mod, report);
 			InvocationHandler handler = (proxy, method, args) -> {
 				try {
 					Object special = view.intercept(method, args);
+					if (special != ConvertedView.PASS) return special;
+					special = assets.intercept(method, args);
 					if (special != ConvertedView.PASS) return special;
 					return method.invoke(mod, args);
 				} catch (InvocationTargetException e) {

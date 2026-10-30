@@ -26,11 +26,11 @@ public final class FeatureJson {
 	private static final Set<String> FLAT = Set.of("minecraft:random_selector", "minecraft:simple_random_selector", "minecraft:simple_block",
 			"minecraft:delta_feature", "minecraft:disk", "minecraft:fallen_tree");
 
-	/** The parts of an entity predicate that 26.3 keys by component id. */
-	private static final Map<String, String> ENTITY_PARTS = Map.of("type", "minecraft:entity_type", "location", "minecraft:location",
-			"distance", "minecraft:distance", "flags", "minecraft:flags", "effects", "minecraft:effects");
-	/** Criteria fields that hold an entity predicate. */
-	private static final Set<String> ENTITY_FIELDS = Set.of("entity", "player", "victim", "direct_entity", "source_entity", "villager", "bystander", "projectile");
+	/** Criteria fields that hold an entity as a context-aware predicate: one loot condition in 26.3. */
+	private static final Set<String> ENTITY_FIELDS = Set.of("entity", "player", "victim", "villager", "bystander", "projectile",
+			"parent", "partner", "child", "shooter", "source", "lightning");
+	/** Fields of a damage predicate that hold a plain entity predicate. */
+	private static final Set<String> DAMAGE_ENTITIES = Set.of("direct_entity", "source_entity");
 
 	private FeatureJson() { }
 
@@ -62,7 +62,9 @@ public final class FeatureJson {
 	/**
 	 * Advancement criteria in 26.3's shape: the recipe trigger names a list of recipes, and a field that held
 	 * a list of loot conditions holds one predicate (several become an {@code all_of}) whose conditions are
-	 * keyed {@code type}. Returns null for an advancement that tests an entity in 1.21.11's plain shape.
+	 * keyed {@code type}.
+	 * An entity tested in the old plain shape becomes an {@code entity_properties} condition or, inside a
+	 * damage predicate, a keyed entity predicate.
 	 */
 	@SuppressWarnings("unchecked")
 	public static Object advancement(Map<String, Object> root, Stats stats) {
@@ -91,26 +93,79 @@ public final class FeatureJson {
 					}
 				}
 			}
-			if (legacyEntity(conditions)) {
-				stats.count("advancements left out for old entity predicates");
-				return null;
+			for (Map.Entry<String, Object> e : conditions.entrySet()) {
+				if (ENTITY_FIELDS.contains(e.getKey()) && e.getValue() instanceof Map<?, ?> m && plainEntity(m)) {
+					stats.count("advancement entity predicates");
+					e.setValue(wrapEntity(entityPredicate((Map<String, Object>) m)));
+				} else if (e.getKey().equals("victims") && e.getValue() instanceof List<?> list) {
+					List<Object> wrapped = new ArrayList<>();
+					for (Object o : list) wrapped.add(o instanceof Map<?, ?> m && plainEntity(m) ? wrapEntity(entityPredicate((Map<String, Object>) m)) : o);
+					e.setValue(wrapped);
+				} else if ((e.getKey().equals("damage") || e.getKey().equals("killing_blow")) && e.getValue() instanceof Map<?, ?> m) {
+					e.setValue(damagePredicate((Map<String, Object>) m, stats));
+				}
 			}
 		}
 		return root;
 	}
 
+	/** Whether a criteria field holds a plain entity predicate rather than loot conditions. */
+	private static boolean plainEntity(Map<?, ?> m) {
+		return !m.containsKey("terms") && !m.containsKey("term") && !m.containsKey("predicate");
+	}
+
+	/** An entity predicate as the one loot condition a context-aware field holds in 26.3. */
+	private static Map<String, Object> wrapEntity(Map<String, Object> predicate) {
+		Map<String, Object> out = new LinkedHashMap<>();
+		out.put("type", "minecraft:entity_properties");
+		out.put("entity", "this");
+		out.put("predicate", predicate);
+		return out;
+	}
+
 	/**
-	 * Whether a criteria field holds an entity predicate in 1.21.11's shape (plain parts such as
-	 * {@code type} or {@code nbt}), which 26.3 reads as a predicate tree Uproot does not convert.
+	 * An entity predicate in 26.3's shape: every part is keyed by its component id ({@code type} became
+	 * {@code minecraft:entity_type}, the others gain the {@code minecraft:} prefix) and the parts that hold
+	 * an entity themselves convert too. {@code type_specific} became a part per kind.
 	 */
 	@SuppressWarnings("unchecked")
-	private static boolean legacyEntity(Map<String, Object> node) {
-		for (Map.Entry<String, Object> e : node.entrySet()) {
-			if (!(e.getValue() instanceof Map<?, ?> m)) continue;
-			if (ENTITY_FIELDS.contains(e.getKey()) && !m.containsKey("terms") && !m.containsKey("term") && !m.containsKey("predicate")) return true;
-			if (legacyEntity((Map<String, Object>) m)) return true;
+	private static Map<String, Object> entityPredicate(Map<String, Object> in) {
+		Map<String, Object> out = new LinkedHashMap<>();
+		for (Map.Entry<String, Object> e : in.entrySet()) {
+			String key = e.getKey();
+			Object v = e.getValue();
+			if (key.startsWith("minecraft:")) {
+				out.put(key, v);
+			} else if (key.equals("type")) {
+				out.put("minecraft:entity_type", v);
+			} else if (key.equals("type_specific") && v instanceof Map<?, ?> m && m.get("type") instanceof String kind) {
+				Map<String, Object> rest = new LinkedHashMap<>((Map<String, Object>) m);
+				rest.remove("type");
+				out.put("minecraft:type_specific/" + kind, rest);
+			} else if ((key.equals("vehicle") || key.equals("passenger") || key.equals("targeted_entity")) && v instanceof Map<?, ?> m) {
+				out.put("minecraft:" + key, entityPredicate((Map<String, Object>) m));
+			} else {
+				out.put("minecraft:" + key, v);
+			}
 		}
-		return false;
+		return out;
+	}
+
+	/** A damage predicate: its entity fields are plain entity predicates, here and inside {@code type}. */
+	@SuppressWarnings("unchecked")
+	private static Map<String, Object> damagePredicate(Map<String, Object> in, Stats stats) {
+		Map<String, Object> out = new LinkedHashMap<>();
+		for (Map.Entry<String, Object> e : in.entrySet()) {
+			Object v = e.getValue();
+			if (DAMAGE_ENTITIES.contains(e.getKey()) && v instanceof Map<?, ?> m) {
+				stats.count("advancement entity predicates");
+				v = entityPredicate((Map<String, Object>) m);
+			} else if (e.getKey().equals("type") && v instanceof Map<?, ?> m) {
+				v = damagePredicate((Map<String, Object>) m, stats);
+			}
+			out.put(e.getKey(), v);
+		}
+		return out;
 	}
 
 	/**
@@ -148,9 +203,7 @@ public final class FeatureJson {
 			String key = e.getKey().equals("condition") ? "type" : e.getKey();
 			Object v = e.getValue();
 			if (key.equals("predicate") && "minecraft:entity_properties".equals(in.get("condition")) && v instanceof Map<?, ?> p) {
-				Map<String, Object> pred = new LinkedHashMap<>();
-				((Map<String, Object>) p).forEach((k, pv) -> pred.put(ENTITY_PARTS.getOrDefault(k, k), pv));
-				v = pred;
+				v = entityPredicate((Map<String, Object>) p);
 			} else if (v instanceof List<?> list && key.equals("terms")) {
 				List<Object> terms = new ArrayList<>();
 				for (Object o : list) terms.add(o instanceof Map<?, ?> m ? lootCondition((Map<String, Object>) m) : o);

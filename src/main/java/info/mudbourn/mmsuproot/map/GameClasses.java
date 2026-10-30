@@ -30,14 +30,19 @@ import org.slf4j.LoggerFactory;
  */
 public final class GameClasses {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot");
-	private static final Info ABSENT = new Info(null, List.of(), Set.of(), Set.of(), false, Set.of());
+	private static final Info ABSENT = new Info(null, List.of(), Set.of(), Set.of(), false, Set.of(), Map.of(), Map.of());
 
 	/** Members of one class, as {@code name} and {@code name+desc} strings. */
-	public record Info(String superName, List<String> interfaces, Set<String> fields, Set<String> methods, boolean isInterface, Set<String> privateFields) {
+	public record Info(String superName, List<String> interfaces, Set<String> fields, Set<String> methods, boolean isInterface, Set<String> privateFields,
+			Map<String, Integer> methodAccess, Map<String, Integer> fieldAccess) {
 		public boolean hasField(String name, String desc) { return fields.contains(name + ":" + desc); }
 		public boolean hasMethod(String name, String desc) { return methods.contains(name + desc); }
 		public boolean hasFieldNamed(String name) { return fields.stream().anyMatch(f -> f.startsWith(name + ":")); }
 		public boolean hasMethodNamed(String name) { return methods.stream().anyMatch(m -> m.startsWith(name + "(")); }
+		/** Access flags of a method declared by this class, or -1. */
+		public int methodFlags(String name, String desc) { return methodAccess.getOrDefault(name + desc, -1); }
+		/** Access flags of a field declared by this class, or -1. */
+		public int fieldFlags(String name, String desc) { return fieldAccess.getOrDefault(name + ":" + desc, -1); }
 	}
 
 	private final ClassLoader loader;
@@ -94,11 +99,14 @@ public final class GameClasses {
 			Set<String> fields = new HashSet<>();
 			Set<String> methods = new HashSet<>();
 			Set<String> privateFields = new HashSet<>();
+			Map<String, Integer> methodAccess = new HashMap<>();
+			Map<String, Integer> fieldAccess = new HashMap<>();
 			boolean itfFlag = (reader.getAccess() & Opcodes.ACC_INTERFACE) != 0;
 			reader.accept(new ClassVisitor(Opcodes.ASM9) {
 				@Override
 				public FieldVisitor visitField(int access, String n, String desc, String sig, Object value) {
 					fields.add(n + ":" + desc);
+					fieldAccess.put(n + ":" + desc, access);
 					if ((access & Opcodes.ACC_PRIVATE) != 0) privateFields.add(n + ":" + desc);
 					return null;
 				}
@@ -106,11 +114,12 @@ public final class GameClasses {
 				@Override
 				public MethodVisitor visitMethod(int access, String n, String desc, String sig, String[] ex) {
 					methods.add(n + desc);
+					methodAccess.put(n + desc, access);
 					return null;
 				}
 			}, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 			String[] itf = reader.getInterfaces();
-			return new Info(reader.getSuperName(), List.of(itf), fields, methods, itfFlag, privateFields);
+			return new Info(reader.getSuperName(), List.of(itf), fields, methods, itfFlag, privateFields, methodAccess, fieldAccess);
 		} catch (IOException e) {
 			return ABSENT;
 		}
@@ -141,6 +150,33 @@ public final class GameClasses {
 			c = info.superName();
 		}
 		return false;
+	}
+
+	/**
+	 * The class on or above {@code owner} (superclasses first, then interfaces) that declares the method, or null.
+	 * The first hit wins, as a call would resolve it.
+	 */
+	public String declaringMethod(String owner, String name, String desc) {
+		return declaring(owner, new HashSet<>(), i -> i.hasMethod(name, desc), name + desc, false);
+	}
+
+	/** As {@link #declaringMethod} for a field. */
+	public String declaringField(String owner, String name, String desc) {
+		return declaring(owner, new HashSet<>(), i -> i.hasField(name, desc), name + ":" + desc, true);
+	}
+
+	private String declaring(String owner, Set<String> seen, java.util.function.Predicate<Info> test, String key, boolean field) {
+		if (owner == null || !seen.add(owner)) return null;
+		Info info = info(owner).orElse(null);
+		if (info == null) return null;
+		if (test.test(info)) return owner;
+		String up = declaring(info.superName(), seen, test, key, field);
+		if (up != null) return up;
+		for (String i : info.interfaces()) {
+			up = declaring(i, seen, test, key, field);
+			if (up != null) return up;
+		}
+		return null;
 	}
 
 	public boolean findMethod(String owner, String name, String desc) {

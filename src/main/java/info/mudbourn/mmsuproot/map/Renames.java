@@ -8,8 +8,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -54,6 +56,8 @@ public final class Renames {
 	private final Map<String, String> fieldGets = new HashMap<>(); // "owner.name" (26.3 names) -> getter name
 	private final Map<String, String> injectAts = new HashMap<>(); // mixin target string of a call -> the string it becomes
 	private final Map<String, String[]> fieldMoves = new HashMap<>(); // "owner.name" (26.3 names) -> {new owner, new name}
+	private final Map<String, String[]> fieldSets = new HashMap<>(); // "owner.name" (26.3 names) -> {helper owner or null, helper or setter name}
+	private final Set<String> callDrops = new HashSet<>(); // "owner.name desc" (26.3 names)
 
 	public static Renames load() {
 		try (InputStream in = Renames.class.getResourceAsStream("/uproot/renames.txt")) {
@@ -86,6 +90,11 @@ public final class Renames {
 			case "callmove" -> r.callMoves.put(p[1] + "." + p[2] + " " + p[3], new String[] {p[4], p[5]});
 			case "fieldmove" -> r.fieldMoves.put(p[1] + "." + p[2], new String[] {p[3], p[4]});
 			case "fieldget" -> r.fieldGets.put(p[1] + "." + p[2], p[3]);
+			case "fieldset" -> {
+				int dot = p[3].lastIndexOf('.');
+				r.fieldSets.put(p[1] + "." + p[2], dot < 0 ? new String[] {null, p[3]} : helper(p[3], line));
+			}
+			case "calldrop" -> r.callDrops.add(p[1] + "." + p[2] + " " + p[3]);
 			case "injectat" -> {
 				if (p.length != 7) throw new IllegalStateException("Bad injectat rule: " + line);
 				r.injectAts.put("L" + p[1] + ";" + p[2] + p[3], "L" + p[4] + ";" + p[5] + p[6]);
@@ -271,6 +280,29 @@ public final class Renames {
 	/** The no-argument method that a read of the field {@code owner.name} (26.3 names) goes to now, or null. */
 	public String fieldGet(String owner, String name) {
 		return fieldGets.get(owner + "." + name);
+	}
+
+	/** Whether any field read or write rule is named {@code name}, so callers can skip the hierarchy walk. */
+	public boolean hasFieldRule(String name) {
+		for (String key : fieldGets.keySet()) if (key.substring(key.indexOf('.') + 1).equals(name)) return true;
+		for (String key : fieldSets.keySet()) if (key.substring(key.indexOf('.') + 1).equals(name)) return true;
+		return false;
+	}
+
+	/** {helper owner or null, helper or setter name} for a write of the field {@code owner.name} (26.3 names), or null. */
+	public String[] fieldSet(String owner, String name) {
+		return fieldSets.get(owner + "." + name);
+	}
+
+	/** Whether the call {@code owner.name desc} (26.3 names) is dropped. */
+	public boolean callDrop(String owner, String name, String desc) {
+		return !callDrops.isEmpty() && callDrops.contains(owner + "." + name + " " + desc);
+	}
+
+	/** Whether any call drop is named {@code name}, so callers can skip the hierarchy walk. */
+	public boolean hasCallDrop(String name) {
+		for (String key : callDrops) if (key.substring(key.indexOf('.') + 1).startsWith(name + " ")) return true;
+		return false;
 	}
 
 	/** The mixin {@code @At} target strings that are retargeted, from the 26.3 form of the 1.21.11 target to the new one. */
