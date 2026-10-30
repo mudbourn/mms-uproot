@@ -35,17 +35,24 @@ public final class Renames {
 	/** An override whose 26.3 descriptor differs: {@code owner} is the 26.3 type that declares {@code newDesc}. */
 	public record Bridge(String owner, String name, String oldDesc, String newDesc) { }
 
+	/** A mixin target (26.3 name) that inherits {@code name desc} where 1.21.11 declared it. */
+	public record Inherited(String target, String name, String desc) { }
+
 	private final Map<String, List<CtorAdapt>> ctorAdapts = new HashMap<>(); // owner (26.3 name) -> adapters
 	private final Map<String, String> callDescs = new HashMap<>(); // "owner.name olddesc" -> new desc
 	private final Map<String, String[]> callInsts = new HashMap<>(); // "owner.name desc" -> {helper owner, helper name}
 	private final List<Bridge> bridges = new ArrayList<>();
+	private final List<Inherited> inherited = new ArrayList<>();
 	private final Map<String, List<Ctor>> ctors = new HashMap<>(); // owner (26.3 name) -> adapters
 	private final Map<String, String> classes = new HashMap<>();
 	private final List<String[]> packages = new ArrayList<>();
 	private final Map<String, List<Rule>> methods = new HashMap<>(); // old name -> rules
 	private final Map<String, List<Rule>> fields = new HashMap<>();
 	private final Map<String, String> fieldOwners = new HashMap<>();
+	private final Map<String, String[]> casts = new HashMap<>(); // class (26.3 name) -> {helper owner, helper name}
 	private final Map<String, String[]> callMoves = new HashMap<>(); // "owner.name desc" (26.3 names) -> {new owner, new name}
+	private final Map<String, String> fieldGets = new HashMap<>(); // "owner.name" (26.3 names) -> getter name
+	private final Map<String, String> injectAts = new HashMap<>(); // mixin target string of a call -> the string it becomes
 	private final Map<String, String[]> fieldMoves = new HashMap<>(); // "owner.name" (26.3 names) -> {new owner, new name}
 
 	public static Renames load() {
@@ -72,11 +79,24 @@ public final class Renames {
 			case "field" -> r.fields.computeIfAbsent(p[2], k -> new ArrayList<>()).add(rule(p));
 			case "ctor" -> r.ctors.computeIfAbsent(p[1], k -> new ArrayList<>()).add(ctor(p, line));
 			case "fieldowner" -> r.fieldOwners.put(p[1], p[2]);
+			case "castadapt" -> {
+				int dot = p[2].lastIndexOf('.');
+				r.casts.put(p[1], new String[] {p[2].substring(0, dot), p[2].substring(dot + 1)});
+			}
 			case "callmove" -> r.callMoves.put(p[1] + "." + p[2] + " " + p[3], new String[] {p[4], p[5]});
 			case "fieldmove" -> r.fieldMoves.put(p[1] + "." + p[2], new String[] {p[3], p[4]});
+			case "fieldget" -> r.fieldGets.put(p[1] + "." + p[2], p[3]);
+			case "injectat" -> {
+				if (p.length != 7) throw new IllegalStateException("Bad injectat rule: " + line);
+				r.injectAts.put("L" + p[1] + ";" + p[2] + p[3], "L" + p[4] + ";" + p[5] + p[6]);
+			}
 			case "calldesc" -> r.callDescs.put(p[1] + "." + p[2] + " " + p[3], p[4]);
 			case "callinst" -> r.callInsts.put(p[1] + "." + p[2] + " " + p[3], helper(p[4], line));
 			case "bridge" -> r.bridges.add(bridge(p, line));
+			case "inherited" -> {
+				if (p.length != 4) throw new IllegalStateException("Bad inherited rule: " + line);
+				r.inherited.add(new Inherited(p[1], p[2], p[3]));
+			}
 			case "ctoradapt" -> {
 				String[] h = helper(p[4], line);
 				r.ctorAdapts.computeIfAbsent(p[1], k -> new ArrayList<>()).add(new CtorAdapt(p[2], p[3], h[0], h[1]));
@@ -177,6 +197,10 @@ public final class Renames {
 		return false;
 	}
 
+	public List<Inherited> inherited() {
+		return inherited;
+	}
+
 	public List<Bridge> bridges() {
 		return bridges;
 	}
@@ -235,8 +259,23 @@ public final class Renames {
 	}
 
 	/** Where a static call now goes, as {new owner, new name} with the same descriptor, or null. All 26.3 names. */
+	/** {helper owner, helper name} for a checkcast to the class, or null. */
+	public String[] castAdapt(String cls) {
+		return casts.get(cls);
+	}
+
 	public String[] callMove(String owner, String name, String desc) {
 		return callMoves.get(owner + "." + name + " " + desc);
+	}
+
+	/** The no-argument method that a read of the field {@code owner.name} (26.3 names) goes to now, or null. */
+	public String fieldGet(String owner, String name) {
+		return fieldGets.get(owner + "." + name);
+	}
+
+	/** The mixin {@code @At} target strings that are retargeted, from the 26.3 form of the 1.21.11 target to the new one. */
+	public Map<String, String> injectAts() {
+		return injectAts;
 	}
 
 	/** Whether any call redirect is named {@code name}, so callers can skip the hierarchy walk. */

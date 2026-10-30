@@ -57,6 +57,27 @@ public final class Namer {
 		this.report = report;
 	}
 
+	/**
+	 * Notes a call or field read of a Minecraft class that no member of 26.3 answers. Runs on the final
+	 * owner and descriptor, so what is listed is what would fail at run time with NoSuchMethodError or
+	 * NoSuchFieldError once the line executes.
+	 */
+	public void audit(String user, int opcode, String owner, String name, String desc, boolean field) {
+		if (!game.has(owner) || owner.indexOf('[') >= 0) return;
+		boolean found = field ? game.findField(owner, name, desc) : game.findMethod(owner, name, desc);
+		if (!found && !field && game.findMethod("java/lang/Object", name, desc)) found = true;
+		if (found && field && game.isPrivateField(owner, name, desc)) {
+			report.unresolved.add(owner + "." + name + ":" + desc + " (private)  <- " + user);
+			return;
+		}
+		if (!found) report.unresolved.add(owner + "." + name + (field ? ":" : "") + desc + "  <- " + user);
+	}
+
+	/** Adds a line to the mod's report notes, once. */
+	public void note(String text) {
+		if (!report.notes.contains(text)) report.notes.add(text);
+	}
+
 	public ModClasses mods() {
 		return mods;
 	}
@@ -313,7 +334,11 @@ public final class Namer {
 			String owner = movedOwner(m.group(1), m.group(2), m.group(3));
 			m.appendReplacement(sb, Matcher.quoteReplacement("L" + owner + ";" + m.group(2) + ":" + m.group(3)));
 		}
-		return m.appendTail(sb).toString();
+		s = m.appendTail(sb).toString();
+		for (Map.Entry<String, String> at : renames.injectAts().entrySet()) {
+			if (s.contains(at.getKey())) s = s.replace(at.getKey(), at.getValue());
+		}
+		return s;
 	}
 
 	private static String bareName(String s) {

@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.Set;
 import info.mudbourn.mmsuproot.boot.Report;
 import info.mudbourn.mmsuproot.util.Json;
 import net.fabricmc.fabric.api.resource.v1.pack.ModPackResources;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.PackType;
@@ -111,14 +113,44 @@ final class ConvertedView {
 			pack.listResources(PackType.SERVER_DATA, ns, "worldgen", (id, supplier) -> files.add(new Object[] {ns, id.getPath(), supplier}));
 		}
 
+		Map<String, String> parents = new HashMap<>();
+		Set<String> hiddenRecipes = new HashSet<>();
 		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
-			for (String folder : List.of("timeline", "advancement")) {
+			for (String folder : List.of("recipe", "timeline", "advancement", "loot_table", "enchantment")) {
 				pack.listResources(PackType.SERVER_DATA, ns, folder, (id, supplier) -> {
 					if (!id.getPath().endsWith(".json")) return;
 					String key = ns + ":" + id.getPath();
 					try (InputStream in = supplier.get()) {
 						Map<String, Object> root = Json.parseObject(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-						Object converted = folder.equals("timeline") ? FeatureJson.timeline(root, stats) : FeatureJson.advancement(root, stats);
+						if (folder.equals("recipe")) {
+							// a recipe of a type whose serializer a mod could not register would fail the whole recipe registry
+							if (root.get("type") instanceof String type && Identifier.tryParse(type) instanceof Identifier serializer
+									&& !BuiltInRegistries.RECIPE_SERIALIZER.containsKey(serializer)) {
+								hidden.add(key);
+								hiddenRecipes.add(ns + ":" + id.getPath().substring("recipe/".length(), id.getPath().length() - ".json".length()));
+								stats.count("recipes of unregistered types left out");
+							}
+							return;
+						}
+						if (folder.equals("advancement") && root.get("rewards") instanceof Map<?, ?> rewards && rewards.get("recipes") instanceof List<?> unlocked
+								&& unlocked.stream().anyMatch(r -> hiddenRecipes.contains(String.valueOf(r)))) {
+							// the advancement only unlocks recipes that were left out
+							hidden.add(key);
+							return;
+						}
+						Object converted = switch (folder) {
+							case "timeline" -> FeatureJson.timeline(root, stats);
+							case "advancement" -> FeatureJson.advancement(root, stats);
+							case "enchantment" -> FeatureJson.enchantment(root, stats);
+							default -> FeatureJson.lootTable(root, stats);
+						};
+						if (converted == null) {
+							hidden.add(key);
+							return;
+						}
+						if (folder.equals("advancement") && root.get("parent") instanceof String parent) {
+							parents.put(key, parent.contains(":") ? parent.replaceFirst(":", ":advancement/") + ".json" : "minecraft:advancement/" + parent + ".json");
+						}
 						served.put(key, Json.write(converted).getBytes(StandardCharsets.UTF_8));
 						report.dataConvertedFiles.incrementAndGet();
 					} catch (IOException | RuntimeException e) {
@@ -126,6 +158,22 @@ final class ConvertedView {
 					}
 				});
 			}
+		}
+		hideOrphans(parents, hidden, served);
+
+		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
+			pack.listResources(PackType.SERVER_DATA, ns, "structure", (id, supplier) -> {
+				if (!id.getPath().endsWith(".nbt")) return;
+				String key = ns + ":" + id.getPath();
+				try (InputStream in = supplier.get()) {
+					byte[] fixed = StructureNbt.fix(in.readAllBytes(), stats);
+					if (fixed == null) return;
+					served.put(key, fixed);
+					report.dataConvertedFiles.incrementAndGet();
+				} catch (IOException | RuntimeException e) {
+					fail(key, e);
+				}
+			});
 		}
 
 		boolean referencesPatches = false;
@@ -175,6 +223,20 @@ final class ConvertedView {
 			report.dataConverted.computeIfAbsent("rebuilt minecraft patch features", k -> new java.util.concurrent.atomic.AtomicInteger()).addAndGet(5);
 		}
 		return new Built(served, hidden, added, namespaces);
+	}
+
+	/** An advancement whose parent was left out has nothing to hang from; it goes too, down the chain. */
+	private void hideOrphans(Map<String, String> parents, Set<String> hidden, Map<String, byte[]> served) {
+		boolean again = true;
+		while (again) {
+			again = false;
+			for (Map.Entry<String, String> e : parents.entrySet()) {
+				if (hidden.contains(e.getValue()) && hidden.add(e.getKey())) {
+					served.remove(e.getKey());
+					again = true;
+				}
+			}
+		}
 	}
 
 	private void fail(String file, Exception e) {

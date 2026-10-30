@@ -16,6 +16,7 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.util.random.WeightedList;
 import net.minecraft.world.entity.ai.village.poi.PoiType;
 import net.minecraft.world.item.Item;
+import info.mudbourn.mmsuproot.shim.noise.NoiseParameters;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.levelgen.feature.Feature;
@@ -73,5 +74,16 @@ public final class CtorAdapters {
 	public static Object[] villagerProfession(Component name, Predicate<Holder<PoiType>> heldJobSite, Predicate<Holder<PoiType>> acquirableJobSite,
 		ImmutableSet<Item> requestedItems, ImmutableSet<Block> secondaryPoi, SoundEvent workSound) {
 		return new Object[] {name, heldJobSite, acquirableJobSite, requestedItems, secondaryPoi, workSound, new Int2ObjectOpenHashMap<>()};
+	}
+
+	/** {@code NoiseProvider(seed, parameters, scale, states)}: the provider takes the made noise, not its parameters. */
+	public static Object[] noiseProvider(long seed, NoiseParameters parameters, float scale, java.util.List<?> states) {
+		return new Object[] {seed, parameters.toNoise(), scale, states};
+	}
+
+	/** {@code NoiseThresholdProvider(seed, parameters, scale, threshold, highChance, defaultState, low, high)}, likewise. */
+	public static Object[] noiseThresholdProvider(long seed, NoiseParameters parameters, float scale, float threshold, float highChance,
+			net.minecraft.world.level.block.state.BlockState defaultState, java.util.List<?> low, java.util.List<?> high) {
+		return new Object[] {seed, parameters.toNoise(), scale, threshold, highChance, defaultState, low, high};
 	}
 }

@@ -26,7 +26,7 @@ public final class ClassRemap {
 	public static byte[] remap(byte[] bytes, Namer namer) {
 		ClassReader reader = new ClassReader(bytes);
 		ClassWriter writer = new ClassWriter(0);
-		ClassVisitor chain = new CtorAdapters(new CallRules(new FieldMoves(writer, namer), namer), namer);
+		ClassVisitor chain = new MixinParams(new CtorAdapters(new CallRules(new FieldMoves(writer, namer), namer), namer), namer);
 		chain = new ClassRemapper(chain, new NameRemapper(namer));
 		chain = new AnnotationStrings(chain, namer);
 		reader.accept(chain, 0);
@@ -171,9 +171,17 @@ public final class ClassRemap {
 	private static final class FieldMoves extends ClassVisitor {
 		private final Namer namer;
 
+		private String className = "?";
+
 		FieldMoves(ClassVisitor next, Namer namer) {
 			super(API, next);
 			this.namer = namer;
+		}
+
+		@Override
+		public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+			className = name;
+			super.visit(version, access, name, signature, superName, interfaces);
 		}
 
 		/** A static field handle, as {@code ldc} and bootstrap arguments carry them. */
@@ -192,6 +200,12 @@ public final class ClassRemap {
 			return new MethodVisitor(API, mv) {
 				@Override
 				public void visitFieldInsn(int opcode, String owner, String fieldName, String fieldDesc) {
+					String getter = opcode == Opcodes.GETFIELD ? namer.renames().fieldGet(owner, fieldName) : null;
+					if (getter != null) {
+						namer.audit(className, Opcodes.INVOKEVIRTUAL, owner, getter, "()" + fieldDesc, false);
+						super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, owner, getter, "()" + fieldDesc, false);
+						return;
+					}
 					if (opcode == Opcodes.GETSTATIC) {
 						String[] move = namer.renames().fieldMove(owner, fieldName);
 						if (move != null) {
@@ -201,7 +215,21 @@ public final class ClassRemap {
 							owner = namer.movedOwner(owner, fieldName, fieldDesc);
 						}
 					}
+					if (opcode == Opcodes.GETFIELD && namer.game().has(owner) && namer.game().isPrivateField(owner, fieldName, fieldDesc)
+							&& namer.game().findMethod(owner, fieldName, "()" + fieldDesc)) {
+						// a field that 26.3 made private (a record component, say) is read through its accessor
+						namer.audit(className, Opcodes.INVOKEVIRTUAL, owner, fieldName, "()" + fieldDesc, false);
+						super.visitMethodInsn(namer.game().isInterface(owner) ? Opcodes.INVOKEINTERFACE : Opcodes.INVOKEVIRTUAL, owner, fieldName, "()" + fieldDesc, namer.game().isInterface(owner));
+						return;
+					}
+					namer.audit(className, opcode, owner, fieldName, fieldDesc, true);
 					super.visitFieldInsn(opcode, owner, fieldName, fieldDesc);
+				}
+
+				@Override
+				public void visitMethodInsn(int opcode, String owner, String methodName, String methodDesc, boolean itf) {
+					namer.audit(className, opcode, owner, methodName, methodDesc, false);
+					super.visitMethodInsn(opcode, owner, methodName, methodDesc, itf);
 				}
 
 				@Override

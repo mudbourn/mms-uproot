@@ -1,6 +1,7 @@
 package info.mudbourn.mmsuproot.boot;
 
 import info.mudbourn.mmsuproot.data.gen.GenSetup;
+import info.mudbourn.mmsuproot.shim.compat.LegacyWorld;
 import info.mudbourn.mmsuproot.shim.surface.LegacyRule;
 import net.fabricmc.api.ModInitializer;
 
@@ -11,5 +12,6 @@ public final class UprootMain implements ModInitializer {
 		UprootBoot.release();
 		GenSetup.register();
 		LegacyRule.register();
+		LegacyWorld.register();
 	}
 }

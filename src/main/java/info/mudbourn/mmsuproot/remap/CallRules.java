@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import info.mudbourn.mmsuproot.map.GameClasses;
 import info.mudbourn.mmsuproot.map.Renames;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Handle;
@@ -15,7 +16,9 @@ import org.objectweb.asm.Type;
 /**
  * The call-shaped rules of the rename table that need no stack tricks: {@code calldesc} (a virtual
  * call whose descriptor changed), {@code callinst} (an instance call that a static helper answers)
- * and {@code bridge} (an override whose 26.3 descriptor gained parameters). Runs after the name
+ * {@code castadapt} (a cast that a static helper answers) and {@code bridge} (an override whose 26.3 descriptor gained parameters). It also switches
+ * invokevirtual and invokeinterface (and the interface flag of static calls) for Minecraft classes
+ * that became interfaces or classes. Runs after the name
  * mapping, so owners and descriptors are 26.3 names. The inserted code has no branches, so the
  * frames and the stack limit of existing methods stay valid; the generated methods are straight-line.
  */
@@ -84,12 +87,44 @@ final class CallRules extends ClassVisitor {
 	}
 
 	private Object rewritten(Object arg) {
+		if (arg instanceof Handle g && g.getTag() >= Opcodes.H_INVOKEVIRTUAL && g.getTag() <= Opcodes.H_INVOKEINTERFACE) {
+			Handle fixed = shapeHandle(g);
+			if (fixed != g) arg = fixed;
+		}
 		if (!(arg instanceof Handle h) || (h.getTag() != Opcodes.H_INVOKEVIRTUAL && h.getTag() != Opcodes.H_INVOKEINTERFACE)) return arg;
 		String[] inst = callInst(h.getOwner(), h.getName(), h.getDesc());
 		if (inst != null) return new Handle(Opcodes.H_INVOKESTATIC, inst[0], inst[1], helperDesc(inst[2], h.getDesc()), false);
 		String now = callDesc(h.getOwner(), h.getName(), h.getDesc());
 		if (now != null && Type.getReturnType(now).equals(Type.getReturnType(h.getDesc()))) return new Handle(h.getTag(), h.getOwner(), h.getName(), now, h.isInterface());
 		return arg;
+	}
+
+	/**
+	 * A Minecraft class that became an interface (or stopped being one) is called with the other
+	 * instruction now. Returns the opcode to use for a call whose owner is a game class.
+	 */
+	private int shapeOpcode(int opcode, String owner) {
+		GameClasses game = namer.game();
+		if (opcode == Opcodes.INVOKEVIRTUAL && game.isInterface(owner)) return Opcodes.INVOKEINTERFACE;
+		if (opcode == Opcodes.INVOKEINTERFACE && game.isClass(owner)) return Opcodes.INVOKEVIRTUAL;
+		return opcode;
+	}
+
+	/** The interface flag a call needs: the owner's own shape when it is a game class, else the flag as written. */
+	private boolean shapeFlag(String owner, boolean itf) {
+		GameClasses game = namer.game();
+		if (game.isInterface(owner)) return true;
+		if (game.isClass(owner)) return false;
+		return itf;
+	}
+
+	private Handle shapeHandle(Handle h) {
+		int tag = h.getTag();
+		if (tag == Opcodes.H_INVOKEVIRTUAL && namer.game().isInterface(h.getOwner())) tag = Opcodes.H_INVOKEINTERFACE;
+		else if (tag == Opcodes.H_INVOKEINTERFACE && namer.game().isClass(h.getOwner())) tag = Opcodes.H_INVOKEVIRTUAL;
+		boolean itf = shapeFlag(h.getOwner(), h.isInterface());
+		if (tag == h.getTag() && itf == h.isInterface()) return h;
+		return new Handle(tag, h.getOwner(), h.getName(), h.getDesc(), itf);
 	}
 
 	@Override
@@ -111,6 +146,16 @@ final class CallRules extends ClassVisitor {
 			}
 
 			@Override
+			public void visitTypeInsn(int opcode, String type) {
+				String[] cast = opcode == Opcodes.CHECKCAST ? renames.castAdapt(type) : null;
+				if (cast != null) {
+					super.visitMethodInsn(Opcodes.INVOKESTATIC, cast[0], cast[1], "(Ljava/lang/Object;)L" + type + ";", false);
+					return;
+				}
+				super.visitTypeInsn(opcode, type);
+			}
+
+			@Override
 			public void visitMethodInsn(int opcode, String owner, String methodName, String methodDesc, boolean itf) {
 				if (opcode == Opcodes.INVOKESPECIAL && bridge != null && methodName.equals(bridge.name()) && methodDesc.equals(bridge.oldDesc())) {
 					// super.m(old) in the override of m(old): the super class only has m(new) now, which a stub of this class reaches
@@ -127,7 +172,7 @@ final class CallRules extends ClassVisitor {
 					}
 					String now = callDesc(owner, methodName, methodDesc);
 					if (now != null) {
-						super.visitMethodInsn(opcode, owner, methodName, now, itf);
+						super.visitMethodInsn(shapeOpcode(opcode, owner), owner, methodName, now, shapeFlag(owner, itf));
 						Type was = Type.getReturnType(methodDesc);
 						if ((was.getSort() == Type.OBJECT || was.getSort() == Type.ARRAY) && !was.equals(Type.getReturnType(now))) {
 							super.visitTypeInsn(Opcodes.CHECKCAST, was.getInternalName());
@@ -135,7 +180,7 @@ final class CallRules extends ClassVisitor {
 						return;
 					}
 				}
-				super.visitMethodInsn(opcode, owner, methodName, methodDesc, itf);
+				super.visitMethodInsn(shapeOpcode(opcode, owner), owner, methodName, methodDesc, shapeFlag(owner, itf));
 			}
 		};
 	}

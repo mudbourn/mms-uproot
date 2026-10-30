@@ -33,6 +33,11 @@
 #                                  an internal class name, a dot and the method name. Matches subclasses of OWNER
 #                                  and method references, but not super calls.
 #                                  e.g. callinst net/minecraft/world/entity/player/Player displayClientMessage (Lnet/minecraft/network/chat/Component;Z)V info/mudbourn/mmsuproot/shim/block/LegacyBlocks.displayClientMessage
+# fieldget OWNER NAME METHOD     a read (getfield) of the field OWNER.NAME is a call of OWNER.METHOD() now, which returns the same
+#                                  type; the field is private or gone. OWNER is the 26.3 name the read names, no subclasses.
+# castadapt CLASS HELPER.method   a checkcast to CLASS (26.3 name) becomes invokestatic HELPER.method(Object)CLASS. For a value
+#                                  whose type changed behind a generic, such as a registry entry that is now another class.
+#                                  e.g. castadapt info/mudbourn/mmsuproot/shim/noise/NoiseParameters info/mudbourn/mmsuproot/shim/noise/NoiseParameters.cast
 # bridge OWNER NAME OLDDESC NEWDESC
 #                                  a mod class that extends or implements OWNER (the 26.3 type that declares NEWDESC)
 #                                  overrides NAME with OLDDESC, and NEWDESC only added parameters after the old ones
@@ -41,13 +46,31 @@
 #                                  inside the OLDDESC override goes to the NEWDESC of the super class, passing
 #                                  null, 0 or false for the added arguments and a checkcast for narrowed ones.
 #                                  Same return type. A class that declares NEWDESC itself is left alone.
+#                                  The rule also serves mixins: an @Inject handler of a mixin whose target class extends or
+#                                  implements OWNER, and that names NAME, lists the old parameters before its callback; it
+#                                  gets the added parameters inserted before the callback and the handler is wrapped so
+#                                  its body runs unchanged (see remap.MixinParams).
 #                                  e.g. bridge net/minecraft/world/level/block/BonemealableBlock performBonemeal (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/BonemealSource;)V
+# injectat OWNER NAME DESC NEWOWNER NEWNAME NEWDESC
+#                                  a mixin @At target string (Lowner;name(desc)ret) that names OWNER.NAME with DESC now names
+#                                  NEWOWNER.NEWNAME with NEWDESC. All 26.3 names, DESC as the string has it after renaming.
+#                                  For injections whose call moved to another method; pair it with a method rule for the
+#                                  injected method itself, whose handler arguments and locals must still fit.
 # ctoradapt OWNER OLDDESC NEWDESC HELPER.method
 #                                  a constructor whose arguments change in more ways than ctor can say. Calls
 #                                  (invokespecial, so both new X(...) and super(...)) and X::new references pass the
 #                                  old arguments to the static HELPER.method(OLDDESC arguments) that returns the new
 #                                  ones as an Object[]; each element is cast (or unboxed) to its NEWDESC type.
 #                                  e.g. ctoradapt net/minecraft/world/level/block/grower/TreeGrower (Ljava/lang/String;F...)V (Ljava/lang/String;...)V info/mudbourn/mmsuproot/shim/block/LegacyBlocks.treeGrowerArgs
+# inherited TARGET NAME DESC
+#                                  a mixin class targeting TARGET has injectors on NAME DESC, which 26.3's TARGET no longer
+#                                  declares but a superclass does. Mixin cannot inject into an inherited method, so the mixin
+#                                  class gets a public override NAME DESC that calls the superclass's method; Mixin merges it
+#                                  into TARGET and the injectors land on it. TARGET and DESC are 26.3 names, DESC as the
+#                                  declaring superclass has it (erased). Skipped when TARGET declares the method itself.
+#                                  e.g. inherited net/minecraft/client/model/monster/zombie/DrownedModel setupAnim (Lnet/minecraft/client/renderer/entity/state/ZombieRenderState;)V
+# Not a rule: a call of a Minecraft class that is now an interface (or no longer one) switches between invokevirtual and
+# invokeinterface on its own, method references and static calls included; see remap.CallRules.
 # Classes that moved package and kept their simple name are found on their own at load time.
 
 class net/minecraft/resources/ResourceLocation net/minecraft/resources/Identifier
@@ -62,6 +85,8 @@ fieldowner net/minecraft/world/entity/EntityType net/minecraft/world/entity/Enti
 fieldowner net/minecraft/world/level/block/entity/BlockEntityType net/minecraft/world/level/block/entity/BlockEntityTypes
 
 method net/minecraft/world/level/ChunkPos toLong pack
+method net/minecraft/world/level/ChunkPos asLong pack
+method net/minecraft/world/level/chunk/ChunkAccess markPosForPostprocessing markPosForPostProcessing
 method net/minecraft/world/effect/MobEffect isInstantenous isInstantaneous
 method net/minecraft/client/gui/screens/Screen render extractRenderState 4
 method net/minecraft/server/ReloadableServerResources updateStaticRegistryTags updateComponentsAndStaticRegistryTags
@@ -103,7 +128,7 @@ class net/minecraft/world/level/levelgen/feature/configurations/SimpleRandomFeat
 class net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProviderType info/mudbourn/mmsuproot/shim/feature/BlockStateProviderType
 class net/minecraft/world/level/levelgen/feature/stateproviders/RuleBasedBlockStateProvider net/minecraft/world/level/levelgen/feature/stateproviders/RuleBasedStateProvider
 class net/minecraft/world/level/levelgen/placement/RandomOffsetPlacement net/minecraft/world/level/levelgen/placement/OffsetPlacement
-class net/minecraft/world/level/levelgen/synth/NormalNoise$NoiseParameters net/minecraft/world/level/levelgen/synth/NormalNoise$Parameters
+class net/minecraft/world/level/levelgen/synth/NormalNoise$NoiseParameters info/mudbourn/mmsuproot/shim/noise/NoiseParameters
 class dev/corgitaco/ohthetreesyoullgrow/world/level/levelgen/feature/configurations/TreeFromStructureNBTConfig info/mudbourn/mmsuproot/shim/tree/TreeFromStructureNBTConfig
 
 field net/minecraft/core/registries/Registries CONFIGURED_FEATURE FEATURE
@@ -166,6 +191,22 @@ callmove net/minecraft/world/level/block/SpreadingSnowyBlock canPropagate (Lnet/
 fieldmove net/minecraft/world/level/block/Blocks ORANGE_TERRACOTTA info/mudbourn/mmsuproot/shim/block/LegacyBlocks ORANGE_TERRACOTTA
 fieldmove net/minecraft/world/level/block/Blocks WHITE_TERRACOTTA info/mudbourn/mmsuproot/shim/block/LegacyBlocks WHITE_TERRACOTTA
 fieldmove net/minecraft/world/level/block/Blocks LIGHT_GRAY_TERRACOTTA info/mudbourn/mmsuproot/shim/block/LegacyBlocks LIGHT_GRAY_TERRACOTTA
+fieldmove net/minecraft/world/level/block/Blocks WHITE_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks WHITE_WOOL
+fieldmove net/minecraft/world/level/block/Blocks ORANGE_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks ORANGE_WOOL
+fieldmove net/minecraft/world/level/block/Blocks MAGENTA_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks MAGENTA_WOOL
+fieldmove net/minecraft/world/level/block/Blocks LIGHT_BLUE_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks LIGHT_BLUE_WOOL
+fieldmove net/minecraft/world/level/block/Blocks YELLOW_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks YELLOW_WOOL
+fieldmove net/minecraft/world/level/block/Blocks LIME_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks LIME_WOOL
+fieldmove net/minecraft/world/level/block/Blocks PINK_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks PINK_WOOL
+fieldmove net/minecraft/world/level/block/Blocks GRAY_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks GRAY_WOOL
+fieldmove net/minecraft/world/level/block/Blocks LIGHT_GRAY_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks LIGHT_GRAY_WOOL
+fieldmove net/minecraft/world/level/block/Blocks CYAN_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks CYAN_WOOL
+fieldmove net/minecraft/world/level/block/Blocks PURPLE_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks PURPLE_WOOL
+fieldmove net/minecraft/world/level/block/Blocks BLUE_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks BLUE_WOOL
+fieldmove net/minecraft/world/level/block/Blocks BROWN_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks BROWN_WOOL
+fieldmove net/minecraft/world/level/block/Blocks GREEN_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks GREEN_WOOL
+fieldmove net/minecraft/world/level/block/Blocks RED_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks RED_WOOL
+fieldmove net/minecraft/world/level/block/Blocks BLACK_WOOL info/mudbourn/mmsuproot/shim/block/LegacyBlocks BLACK_WOOL
 
 # Leaf blocks gained an ambient sound player; 1.21.11's leaves had none
 ctor net/minecraft/world/level/block/UntintedParticleLeavesBlock (FLnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (FLnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/world/level/block/sounds/AmbientLeavesBlockSoundPlayer;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V 2=info/mudbourn/mmsuproot/shim/block/LegacyBlocks.NO_AMBIENT_SOUND:Lnet/minecraft/world/level/block/sounds/AmbientLeavesBlockSoundPlayer;
@@ -251,3 +292,85 @@ callinst net/minecraft/util/valueproviders/FloatProvider getMinValue ()F info/mu
 callinst net/minecraft/util/valueproviders/FloatProvider getMaxValue ()F info/mudbourn/mmsuproot/shim/surface/Thresholds.getMaxValue
 # A mod's stripe helper sits in a class that is switched off (its base class was rebuilt); the call goes to a plain copy of the arithmetic
 callmove net/potionstudios/biomeswevegone/world/level/levelgen/feature/stateproviders/BetweenNoiseThresholdProvider createThresholds (FFF)Ljava/util/List; info/mudbourn/mmsuproot/shim/surface/Thresholds createThresholds
+
+# Climate sampling moved from RandomState and BiomeSource onto sampler objects; BlockStateProvider.getState gained the level
+callinst net/minecraft/world/level/levelgen/RandomState sampler ()Lnet/minecraft/world/level/biome/Climate$Sampler; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.sampler
+callinst net/minecraft/world/level/biome/BiomeSource getNoiseBiome (IIILnet/minecraft/world/level/biome/Climate$Sampler;)Lnet/minecraft/core/Holder; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getNoiseBiome
+callinst net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider getState (Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getState
+callinst net/minecraft/world/level/StructureManager hasAnyStructureAt (Lnet/minecraft/core/BlockPos;)Z info/mudbourn/mmsuproot/shim/compat/LegacyWorld.hasAnyStructureAt
+callinst net/minecraft/core/BlockPos getCenter ()Lnet/minecraft/world/phys/Vec3; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getCenter
+callinst net/minecraft/world/level/levelgen/synth/SimplexNoise getValue (DD)D info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getValue
+callinst net/minecraft/world/level/levelgen/synth/SimplexNoise getValue (DDD)D info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getValue
+# NormalNoise.NoiseParameters is package-private now (see the class rule above) and the noise providers take the made noise
+ctoradapt net/minecraft/world/level/levelgen/feature/stateproviders/NoiseProvider (JLinfo/mudbourn/mmsuproot/shim/noise/NoiseParameters;FLjava/util/List;)V (JLnet/minecraft/world/level/levelgen/synth/NormalNoise;FLjava/util/List;)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.noiseProvider
+ctoradapt net/minecraft/world/level/levelgen/feature/stateproviders/NoiseThresholdProvider (JLinfo/mudbourn/mmsuproot/shim/noise/NoiseParameters;FFFLnet/minecraft/world/level/block/state/BlockState;Ljava/util/List;Ljava/util/List;)V (JLnet/minecraft/world/level/levelgen/synth/NormalNoise;FFFLnet/minecraft/world/level/block/state/BlockState;Ljava/util/List;Ljava/util/List;)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.noiseThresholdProvider
+castadapt info/mudbourn/mmsuproot/shim/noise/NoiseParameters info/mudbourn/mmsuproot/shim/noise/NoiseParameters.cast
+castadapt info/mudbourn/mmsuproot/shim/feature/ConfiguredFeature info/mudbourn/mmsuproot/shim/feature/ConfiguredFeature.cast
+callinst net/minecraft/world/level/levelgen/placement/PlacementModifier getPositions (Lnet/minecraft/world/level/levelgen/placement/PlacementContext;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Ljava/util/stream/Stream; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getPositions
+callinst net/minecraft/world/level/storage/WorldData worldGenOptions ()Lnet/minecraft/world/level/levelgen/WorldOptions; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.worldGenOptions
+
+# Terrain extensions. 1.21.11 ran a chunk's surface as a step of its own; 26.3 builds terrain, surface and carvers in one
+# step and the features step follows, so a mod's injection into the surface step (the INVOKE of the generator's surface
+# call) now sits in the features step, in front of the generator's decoration call. Same arguments and same locals.
+# The biome source of a biome manager is a resolver now, and NormalNoise only describes a noise (see shim/noise).
+method net/minecraft/world/level/chunk/status/ChunkStatusTasks generateSurface generateFeatures 4
+injectat net/minecraft/world/level/chunk/ChunkGenerator buildSurface (Lnet/minecraft/server/level/WorldGenRegion;Lnet/minecraft/world/level/StructureManager;Lnet/minecraft/world/level/levelgen/RandomState;Lnet/minecraft/world/level/chunk/ChunkAccess;)V net/minecraft/world/level/chunk/ChunkGenerator applyBiomeDecoration (Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/world/level/chunk/ChunkAccess;Lnet/minecraft/world/level/StructureManager;)V
+class net/minecraft/world/level/biome/BiomeManager$NoiseBiomeSource net/minecraft/world/level/biome/BiomeResolver
+field net/minecraft/world/level/chunk/status/ChunkStatus NOISE TERRAIN
+callmove net/minecraft/world/level/levelgen/synth/NormalNoise create (Lnet/minecraft/util/RandomSource;Linfo/mudbourn/mmsuproot/shim/noise/NoiseParameters;)Lnet/minecraft/world/level/levelgen/synth/NormalNoise; info/mudbourn/mmsuproot/shim/noise/LegacyNoise create
+callinst net/minecraft/world/level/levelgen/synth/NormalNoise getValue (DDD)D info/mudbourn/mmsuproot/shim/noise/LegacyNoise.getValue
+
+# Fields and calls that 26.3 changed shape of, found by the audit of the target mods
+fieldget net/minecraft/world/entity/player/Inventory items getNonEquipmentItems
+callinst net/minecraft/world/level/biome/BiomeGenerationSettings getFlowerFeatures ()Ljava/util/List; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getFlowerFeatures
+callinst net/minecraft/ChatFormatting getColor ()Ljava/lang/Integer; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getColor
+# Breaking a block hands the server level and player over; a block that reacts to being broken by a player overrides the old shape
+bridge net/minecraft/world/level/block/Block playerDestroy (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/item/ItemStack;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/item/ItemStack;)V
+
+# Client side. Fabric's layer table is gone and 26.3 takes the chunk layer from the sprite, so the stand-in ignores the call; the
+# cutout-mipped layer folded into cutout. Block colours became tint sources (see shim/client).
+class net/fabricmc/fabric/api/client/rendering/v1/BlockRenderLayerMap info/mudbourn/mmsuproot/shim/client/BlockRenderLayerMap
+class net/fabricmc/fabric/api/client/rendering/v1/ColorProviderRegistry info/mudbourn/mmsuproot/shim/client/ColorProviderRegistry
+class net/minecraft/client/color/block/BlockColor info/mudbourn/mmsuproot/shim/client/BlockColor
+field net/minecraft/client/renderer/chunk/ChunkSectionLayer CUTOUT_MIPPED CUTOUT
+class net/fabricmc/fabric/api/client/particle/v1/ParticleFactoryRegistry net/fabricmc/fabric/api/client/particle/v1/ParticleProviderRegistry
+class net/fabricmc/fabric/api/client/particle/v1/ParticleFactoryRegistry$PendingParticleFactory net/fabricmc/fabric/api/client/particle/v1/ParticleProviderRegistry$PendingParticleProvider
+class net/fabricmc/fabric/api/client/rendering/v1/EntityModelLayerRegistry net/fabricmc/fabric/api/client/rendering/v1/ModelLayerRegistry
+class net/fabricmc/fabric/api/client/rendering/v1/EntityModelLayerRegistry$TexturedModelDataProvider net/fabricmc/fabric/api/client/rendering/v1/ModelLayerRegistry$TexturedLayerDefinitionProvider
+class net/minecraft/client/renderer/blockentity/SignRenderer net/minecraft/client/renderer/blockentity/StandingSignRenderer
+class net/fabricmc/fabric/api/client/particle/v1/FabricSpriteProvider net/fabricmc/fabric/api/client/particle/v1/FabricSpriteSet
+method net/fabricmc/fabric/api/client/rendering/v1/ModelLayerRegistry$TexturedLayerDefinitionProvider createModelData createLayerDefinition
+# The block render dispatcher is gone; a renderer that asks the context for it gets an empty stand-in, enough to construct it
+class net/minecraft/client/renderer/block/BlockRenderDispatcher info/mudbourn/mmsuproot/shim/client/BlockRenderDispatcher
+callinst net/minecraft/client/renderer/entity/EntityRendererProvider$Context getBlockRenderDispatcher ()Linfo/mudbourn/mmsuproot/shim/client/BlockRenderDispatcher; info/mudbourn/mmsuproot/shim/client/BlockRenderDispatcher.of
+
+# A mod's own recipe serializer cannot load (RecipeSerializer is a record now); disable.txt switches the class off, so the sync has nothing to send
+callmove net/fabricmc/fabric/api/recipe/v1/sync/RecipeSynchronization synchronizeRecipeSerializer (Lnet/minecraft/world/item/crafting/RecipeSerializer;)V info/mudbourn/mmsuproot/shim/compat/LegacyRecipes synchronizeRecipeSerializer
+
+# Fabric's item group events are creative tab events now
+class net/fabricmc/fabric/api/itemgroup/v1/ItemGroupEvents net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents
+class net/fabricmc/fabric/api/itemgroup/v1/ItemGroupEvents$ModifyEntries net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents$ModifyOutput
+class net/fabricmc/fabric/api/itemgroup/v1/FabricItemGroupEntries net/fabricmc/fabric/api/creativetab/v1/FabricCreativeModeTabOutput
+method net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents modifyEntriesEvent modifyOutputEvent
+method net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents$ModifyOutput modifyEntries modifyOutput
+
+# Render API. The camera is a getter named for the field; the HUD hidden flag moved onto Hud; the quaternion overload of mulPose is rotate
+method net/minecraft/client/renderer/GameRenderer getMainCamera mainCamera 0
+callmove net/minecraft/client/Minecraft renderNames ()Z info/mudbourn/mmsuproot/shim/client/LegacyClient renderNames
+method com/mojang/blaze3d/vertex/PoseStack mulPose rotate (Lorg/joml/Quaternionfc;)V
+# EntityRenderer.shouldRender gained the partial tick
+bridge net/minecraft/client/renderer/entity/EntityRenderer shouldRender (Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDD)Z (Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDDF)Z
+
+# Entity tags are a getter of their own
+method net/minecraft/world/entity/Entity getTags entityTags 0
+# A plain swing is the attack swing in 26.3; the full swing call takes the animation too
+method net/minecraft/world/entity/LivingEntity swing swingForAttack (Lnet/minecraft/world/InteractionHand;)V
+
+# The wreath draws a block model with a colour; the helper makes the part list and the tint array. The extra model bake is Fabric's own now.
+callinst net/minecraft/client/renderer/SubmitNodeCollector submitBlockModel (Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;Lnet/minecraft/client/renderer/block/dispatch/BlockStateModel;FFFIII)V info/mudbourn/mmsuproot/shim/client/LegacyClient.submitBlockModel
+callmove net/potionstudios/biomeswevegone/fabric/client/BiomesWeveGoneClientFabric blockStateModel (Lnet/minecraft/resources/Identifier;)Lnet/fabricmc/fabric/api/client/model/loading/v1/SimpleUnbakedExtraModel; info/mudbourn/mmsuproot/shim/client/LegacyClient blockStateModel
+
+# RenderTypes: the two cutout names swapped places and the z-offset one lost "NoCull". Each call is renamed once, from its own old name.
+method net/minecraft/client/renderer/rendertype/RenderTypes entityCutout entityCutoutCull 1
+method net/minecraft/client/renderer/rendertype/RenderTypes entityCutoutNoCull entityCutout
+method net/minecraft/client/renderer/rendertype/RenderTypes entityCutoutNoCullZOffset entityCutoutZOffset

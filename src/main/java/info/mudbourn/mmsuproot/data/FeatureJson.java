@@ -29,6 +29,8 @@ public final class FeatureJson {
 	/** The parts of an entity predicate that 26.3 keys by component id. */
 	private static final Map<String, String> ENTITY_PARTS = Map.of("type", "minecraft:entity_type", "location", "minecraft:location",
 			"distance", "minecraft:distance", "flags", "minecraft:flags", "effects", "minecraft:effects");
+	/** Criteria fields that hold an entity predicate. */
+	private static final Set<String> ENTITY_FIELDS = Set.of("entity", "player", "victim", "direct_entity", "source_entity", "villager", "bystander", "projectile");
 
 	private FeatureJson() { }
 
@@ -60,7 +62,7 @@ public final class FeatureJson {
 	/**
 	 * Advancement criteria in 26.3's shape: the recipe trigger names a list of recipes, and a field that held
 	 * a list of loot conditions holds one predicate (several become an {@code all_of}) whose conditions are
-	 * keyed {@code type}. Entity predicates key their parts by component id.
+	 * keyed {@code type}. Returns null for an advancement that tests an entity in 1.21.11's plain shape.
 	 */
 	@SuppressWarnings("unchecked")
 	public static Object advancement(Map<String, Object> root, Stats stats) {
@@ -89,14 +91,59 @@ public final class FeatureJson {
 					}
 				}
 			}
+			if (legacyEntity(conditions)) {
+				stats.count("advancements left out for old entity predicates");
+				return null;
+			}
 		}
 		return root;
+	}
+
+	/**
+	 * Whether a criteria field holds an entity predicate in 1.21.11's shape (plain parts such as
+	 * {@code type} or {@code nbt}), which 26.3 reads as a predicate tree Uproot does not convert.
+	 */
+	@SuppressWarnings("unchecked")
+	private static boolean legacyEntity(Map<String, Object> node) {
+		for (Map.Entry<String, Object> e : node.entrySet()) {
+			if (!(e.getValue() instanceof Map<?, ?> m)) continue;
+			if (ENTITY_FIELDS.contains(e.getKey()) && !m.containsKey("terms") && !m.containsKey("term") && !m.containsKey("predicate")) return true;
+			if (legacyEntity((Map<String, Object>) m)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * An enchantment whose effect entries keep their loot condition under {@code requirements}: the
+	 * condition's discriminator is {@code type} in 26.3, wherever the entry sits in the effect tree.
+	 */
+	@SuppressWarnings("unchecked")
+	public static Object enchantment(Object node, Stats stats) {
+		if (node instanceof List<?> list) {
+			List<Object> out = new ArrayList<>();
+			for (Object o : list) out.add(enchantment(o, stats));
+			return out;
+		}
+		if (!(node instanceof Map<?, ?> map)) return node;
+		Map<String, Object> out = new LinkedHashMap<>();
+		for (Map.Entry<String, Object> e : ((Map<String, Object>) map).entrySet()) {
+			Object v = e.getValue();
+			if (e.getKey().equals("requirements") && v instanceof Map<?, ?> m && m.containsKey("condition")) {
+				stats.count("enchantment conditions");
+				v = lootCondition((Map<String, Object>) m);
+			} else {
+				v = enchantment(v, stats);
+			}
+			out.put(e.getKey(), v);
+		}
+		return out;
 	}
 
 	/** A loot condition with the discriminator renamed from {@code condition} to {@code type}, at every depth. */
 	@SuppressWarnings("unchecked")
 	private static Map<String, Object> lootCondition(Map<String, Object> in) {
 		Map<String, Object> out = new LinkedHashMap<>();
+		boolean blockState = "minecraft:block_state_property".equals(in.get("condition"));
 		for (Map.Entry<String, Object> e : in.entrySet()) {
 			String key = e.getKey().equals("condition") ? "type" : e.getKey();
 			Object v = e.getValue();
@@ -108,8 +155,76 @@ public final class FeatureJson {
 				List<Object> terms = new ArrayList<>();
 				for (Object o : list) terms.add(o instanceof Map<?, ?> m ? lootCondition((Map<String, Object>) m) : o);
 				v = terms;
+			} else if (key.equals("term") && v instanceof Map<?, ?> m) {
+				v = lootCondition((Map<String, Object>) m);
+			} else if (blockState) {
+				// block_state_property became match_block: the block is a set of blocks, the properties are the state
+				if (key.equals("type")) v = "minecraft:match_block";
+				else if (key.equals("block")) key = "blocks";
+				else if (key.equals("properties")) key = "state";
 			}
 			out.put(key, v);
+		}
+		return out;
+	}
+
+	/** A list of loot conditions as the one predicate 26.3 reads: several become an {@code all_of}. */
+	@SuppressWarnings("unchecked")
+	private static Object conditionList(List<?> list) {
+		List<Object> terms = new ArrayList<>();
+		for (Object o : list) terms.add(lootCondition((Map<String, Object>) o));
+		if (terms.size() == 1) return terms.get(0);
+		Map<String, Object> all = new LinkedHashMap<>();
+		all.put("type", "minecraft:all_of");
+		all.put("terms", terms);
+		return all;
+	}
+
+	private static boolean keyed(Object o, String key) {
+		return o instanceof List<?> list && !list.isEmpty() && list.stream().allMatch(x -> x instanceof Map<?, ?> m && m.containsKey(key));
+	}
+
+	/**
+	 * A loot table in 26.3's shape. Wherever a table, pool, entry or function listed {@code conditions}
+	 * it now holds one {@code condition}; {@code functions} became {@code modifier}, each function keyed
+	 * {@code type}. The old keys are not an error to the new codecs, they are silently ignored, so an
+	 * unconverted entry drops its conditions and then reads as unreachable.
+	 */
+	public static Object lootTable(Object value, Stats stats) {
+		if (value instanceof List<?> list) {
+			List<Object> out = new ArrayList<>(list.size());
+			for (Object o : list) out.add(lootTable(o, stats));
+			return out;
+		}
+		if (!(value instanceof Map<?, ?> m)) return value;
+		Map<String, Object> out = new LinkedHashMap<>();
+		for (Map.Entry<String, Object> e : cast(m).entrySet()) {
+			String key = e.getKey();
+			Object v = e.getValue();
+			if (key.equals("conditions") && keyed(v, "condition")) {
+				stats.count("loot conditions");
+				out.put("condition", conditionList((List<?>) v));
+			} else if (key.equals("functions") && keyed(v, "function")) {
+				stats.count("loot functions");
+				List<Object> fns = new ArrayList<>();
+				for (Object f : (List<?>) v) {
+					Map<String, Object> fn = new LinkedHashMap<>();
+					for (Map.Entry<String, Object> fe : cast(f).entrySet()) {
+						if (fe.getKey().equals("function")) fn.put("type", fe.getValue());
+						else if (fe.getKey().equals("conditions") && keyed(fe.getValue(), "condition")) fn.put("condition", conditionList((List<?>) fe.getValue()));
+						else fn.put(fe.getKey(), lootTable(fe.getValue(), stats));
+					}
+					if ("minecraft:exploration_map".equals(fn.get("type")) && !fn.containsKey("destination")) {
+						// the destination is required now; the old default was the treasure map tag
+						stats.count("exploration map destinations");
+						fn.put("destination", "#minecraft:on_treasure_maps");
+					}
+					fns.add(fn);
+				}
+				out.put("modifier", fns);
+			} else {
+				out.put(key, lootTable(v, stats));
+			}
 		}
 		return out;
 	}
@@ -266,6 +381,7 @@ public final class FeatureJson {
 			}
 			Map<String, Object> out = typed(type);
 			for (Map.Entry<String, Object> e : cfg.entrySet()) out.put(e.getKey(), e.getValue());
+			if (type.equals("minecraft:delta_feature")) fitDelta(out, stats);
 			if (type.equals("minecraft:random_selector")) {
 				out.put("features", selectorEntries(out.get("features"), stats));
 				out.put("default", placedRef(out.get("default"), stats));
@@ -275,6 +391,45 @@ public final class FeatureJson {
 			return out;
 		}
 		}
+	}
+
+	/**
+	 * 26.3 lets a feature write one chunk past its own and read nothing beyond that. A delta reaches
+	 * {@code size + rim} blocks from its origin and reads one block further, so the two must add up to
+	 * 15 at most or it can touch chunks two away. Vanilla's own deltas stay at 9. The rim keeps its
+	 * range and the size gives way.
+	 */
+	private static void fitDelta(Map<String, Object> f, Stats stats) {
+		Long rim = maxOf(f.get("rim_size"));
+		Long size = maxOf(f.get("size"));
+		if (rim == null || size == null || size + rim <= REACH) return;
+		stats.count("clamped delta_feature reach");
+		f.put("size", capInt(f.get("size"), Math.max(0, REACH - rim)));
+	}
+
+	/** Blocks around the origin a feature may touch, counting the one block read past its last write. */
+	private static final long REACH = 15;
+
+	/** The largest value of an int provider, or null when it is not one this knows. */
+	private static Long maxOf(Object p) {
+		if (p instanceof Number n) return n.longValue();
+		if (!(p instanceof Map<?, ?> m)) return null;
+		if (m.get("max_inclusive") instanceof Number n) return n.longValue();
+		if (m.get("value") instanceof Number n) return n.longValue();
+		return null;
+	}
+
+	/** An int provider that never goes above {@code cap}. Bounds are lowered in place of wrapping when the provider has them. */
+	private static Object capInt(Object p, long cap) {
+		if (p instanceof Number n) return Math.min(n.longValue(), cap);
+		Map<String, Object> m = new LinkedHashMap<>(cast(p));
+		if (m.get("max_inclusive") instanceof Number max) {
+			m.put("max_inclusive", Math.min(max.longValue(), cap));
+			if (m.get("min_inclusive") instanceof Number min) m.put("min_inclusive", Math.min(min.longValue(), cap));
+		} else if (m.get("value") instanceof Number v) {
+			m.put("value", Math.min(v.longValue(), cap));
+		}
+		return m;
 	}
 
 	private static Map<String, Object> mod(Map<String, Object> f, Stats stats) {

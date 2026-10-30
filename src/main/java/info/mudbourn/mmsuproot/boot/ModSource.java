@@ -75,6 +75,20 @@ final class ModSource {
 		return out;
 	}
 
+	/**
+	 * Remaps every class once so the report lists all references to Minecraft members that 26.3 lacks,
+	 * not only those of classes the game happened to load. Only for {@code -Duproot.auditAll=true}.
+	 */
+	void auditAll() {
+		for (String name : new ArrayList<>(classes.keySet())) {
+			try {
+				remapped(name, false);
+			} catch (IOException | RuntimeException | LinkageError e) {
+				report.notes.add("audit could not read " + name + ": " + e);
+			}
+		}
+	}
+
 	/** Names of the mod's mixin configs for the current side. */
 	List<String> mixinConfigs(net.fabricmc.api.EnvType side) {
 		return new ArrayList<>(mod.getMetadata().getMixinConfigs(side));

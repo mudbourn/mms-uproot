@@ -1,16 +1,59 @@
 package info.mudbourn.mmsuproot.shim.compat;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import info.mudbourn.mmsuproot.shim.feature.ConfiguredFeature;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
+import net.minecraft.network.chat.TextColor;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.levelgen.synth.SimplexNoise;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.StructureManager;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeGenerationSettings;
+import net.minecraft.world.level.levelgen.feature.Feature;
+import net.minecraft.world.level.biome.BiomeSource;
+import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.storage.WorldData;
+import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
+import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvider;
+import net.minecraft.world.level.levelgen.placement.PlacementContext;
+import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 
 /** World calls that moved or changed argument shape. */
 public final class LegacyWorld {
+	private static volatile MinecraftServer server;
+
 	private LegacyWorld() { }
+
+	/** Remembers the running server, for calls that used to find it through an object that no longer leads there. */
+	public static void register() {
+		ServerLifecycleEvents.SERVER_STARTING.register(s -> server = s);
+		ServerLifecycleEvents.SERVER_STOPPED.register(s -> server = null);
+	}
+
+	/**
+	 * {@code WorldData.worldGenOptions()}: the world options now sit in the world generation settings of the server,
+	 * which the caller reached the world data through.
+	 */
+	public static WorldOptions worldGenOptions(WorldData data) {
+		MinecraftServer s = server;
+		if (s == null) throw new IllegalStateException("no server is running");
+		return s.getWorldGenSettings().options();
+	}
 
 	/**
 	 * {@code Level.getDayTime()}. 26.3 has several world clocks; the dimension's own default clock is
@@ -23,5 +66,66 @@ public final class LegacyWorld {
 	/** {@code StructureManager.startsForStructure(SectionPos, Structure)}, now taking the chunk coordinates. */
 	public static List<StructureStart> startsForStructure(StructureManager manager, SectionPos section, Structure structure) {
 		return manager.startsForStructure(section.x(), section.z(), structure);
+	}
+
+	/** {@code RandomState.sampler()}, now made on demand; an uncached context is enough for a point lookup. */
+	public static Climate.Sampler sampler(RandomState state) {
+		return state.createClimateSampler(SamplerContext.EMPTY_UNCACHED);
+	}
+
+	/** {@code BiomeSource.getNoiseBiome(x, y, z, sampler)}, now answered by a resolver made from the sampler. */
+	public static Holder<Biome> getNoiseBiome(BiomeSource source, int x, int y, int z, Climate.Sampler sampler) {
+		return source.createResolver(sampler).getNoiseBiome(x, y, z);
+	}
+
+	/**
+	 * {@code BlockStateProvider.getState(random, pos)}, now also taking the level. The providers that
+	 * Minecraft ships and the mods use ignore it for a plain pick, so none is passed.
+	 */
+	public static BlockState getState(BlockStateProvider provider, RandomSource random, BlockPos pos) {
+		return provider.getState(null, random, pos);
+	}
+
+	/** {@code StructureManager.hasAnyStructureAt(pos)}: whether any structure has a piece's chunk reference at the position. */
+	public static boolean hasAnyStructureAt(StructureManager manager, BlockPos pos) {
+		return !manager.getAllStructuresAt(pos).isEmpty();
+	}
+
+	/** {@code BlockPos.getCenter()}, now a static on {@link Vec3}. */
+	public static Vec3 getCenter(BlockPos pos) {
+		return Vec3.atCenterOf(pos);
+	}
+
+	/** {@code SimplexNoise.getValue(x, y)}, now {@code get} and a float. */
+	public static double getValue(SimplexNoise noise, double x, double y) {
+		return noise.get(x, y);
+	}
+
+	/** {@code SimplexNoise.getValue(x, y, z)}, now {@code get} and a float. */
+	public static double getValue(SimplexNoise noise, double x, double y, double z) {
+		return noise.get(x, y, z);
+	}
+
+	/** {@code PlacementModifier.getPositions(context, random, pos)}, now a callback; the positions are collected in order. */
+	public static Stream<BlockPos> getPositions(PlacementModifier modifier, PlacementContext context, RandomSource random, BlockPos pos) {
+		List<BlockPos> out = new ArrayList<>();
+		modifier.modify(context, random, pos, out::add);
+		return out.stream();
+	}
+
+	/**
+	 * {@code BiomeGenerationSettings.getFlowerFeatures()}: the flowers a bone meal can grow, as the old configured
+	 * features that wrap a patch. 26.3 keeps the features themselves, which place on their own.
+	 */
+	public static List<?> getFlowerFeatures(BiomeGenerationSettings settings) {
+		List<ConfiguredFeature<?, ?>> out = new ArrayList<>();
+		for (Feature feature : settings.getBoneMealFeatures()) out.add(ConfiguredFeature.patchOf(feature));
+		return out;
+	}
+
+	/** {@code ChatFormatting.getColor()}: the colour is a text colour now. Null for the formats that have none. */
+	public static Integer getColor(ChatFormatting format) {
+		TextColor color = TextColor.fromLegacyFormat(format);
+		return color == null ? null : color.getValue();
 	}
 }

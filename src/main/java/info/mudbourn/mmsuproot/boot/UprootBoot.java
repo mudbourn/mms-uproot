@@ -121,6 +121,14 @@ public final class UprootBoot implements LanguageAdapter {
 		for (ModSource src : sources) {
 			LOGGER.info("{}: {} classes indexed, {} mixin issues found before launch", src.id, src.classes.size(), src.report.mixinIssues.size());
 		}
+		if (Boolean.getBoolean("uproot.auditAll")) {
+			Thread audit = new Thread(() -> {
+				for (ModSource src : sources) src.auditAll();
+				LOGGER.info("Uproot audited every class of {} mods", sources.size());
+			}, "mms-uproot-audit");
+			audit.setDaemon(true);
+			audit.start();
+		}
 		report.write();
 	}
 

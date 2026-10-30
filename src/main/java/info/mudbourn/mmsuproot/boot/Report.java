@@ -32,6 +32,8 @@ public final class Report {
 		public final AtomicInteger classesFailed = new AtomicInteger();
 		public final AtomicInteger mixinConfigs = new AtomicInteger();
 		public final Set<String> unmapped = ConcurrentHashMap.newKeySet();
+		/** Calls and field reads of Minecraft members that 26.3 does not have, after every rule ran: {@code owner.member desc  <- user class}. */
+		public final Set<String> unresolved = ConcurrentHashMap.newKeySet();
 		public final Map<String, String> moved = new ConcurrentHashMap<>();
 		public final List<String> mixinIssues = new CopyOnWriteArrayList<>();
 		public final List<String> accessWideners = new CopyOnWriteArrayList<>();
@@ -87,7 +89,7 @@ public final class Report {
 		int h = general.size();
 		for (String l : disabled.get()) h = h * 31 + l.hashCode();
 		for (Entry e : entries.values()) {
-			h = h * 31 + e.classesRemapped.get() + 7 * e.classesFailed.get() + 13 * e.unmapped.size() + 17 * e.moved.size()
+			h = h * 31 + e.classesRemapped.get() + 7 * e.classesFailed.get() + 13 * e.unmapped.size() + 17 * e.moved.size() + 43 * e.unresolved.size()
 					+ 19 * e.mixinIssues.size() + 23 * e.accessWideners.size() + 29 * e.accessWidenerSkips.size() + 31 * e.notes.size() + 37 * e.dataConvertedFiles.get() + 41 * e.dataFailures.size();
 		}
 		return h;
@@ -113,6 +115,7 @@ public final class Report {
 					w.println("mixin configs served soft: " + e.mixinConfigs.get());
 					section(w, "notes", e.notes);
 					section(w, "names with no mapping (" + e.unmapped.size() + ")", new TreeSet<>(e.unmapped));
+					section(w, "references to Minecraft members that 26.3 lacks (" + e.unresolved.size() + ")", new TreeSet<>(e.unresolved));
 					section(w, "classes found by name in another package (" + e.moved.size() + ")",
 							new TreeMap<>(e.moved).entrySet().stream().map(x -> x.getKey() + " -> " + x.getValue()).toList());
 					section(w, "mixins that will not apply or did not (" + e.mixinIssues.size() + ")", e.mixinIssues);

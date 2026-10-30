@@ -11,9 +11,6 @@ stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/PumpkinWardenPani
 stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/EnterPumpkinBurrow | pumpkin warden brain activities
 stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/SetClosestPumpkinBurrowAsWalkTarget | pumpkin warden brain activities
 stub net/potionstudios/biomeswevegone/world/entity/ai/sensing/PumpkinWardenSensor | pumpkin warden sensor on the reworked sensor API
-# Tentative: model and renderer use GeckoLib and render-state APIs that changed; only matters on a client.
-stub net/potionstudios/biomeswevegone/client/renderer/entity/pumpkinwarden/PumpkinWardenRenderer | tentative: client renderer of a mob that is not registered
-stub net/potionstudios/biomeswevegone/client/renderer/entity/pumpkinwarden/PumpkinWardenModel | tentative: client model of a mob that is not registered
 
 # The entity type stays registered: 26.3 entity types hold intrusive holders, and the registry refuses to freeze with
 # one unregistered. Nothing spawns it (no biome lists it); only /summon or a saved entity would make the empty shell.
@@ -50,3 +47,25 @@ skip legacy_state_provider_type biomeswevegone:between_noise_threshold_provider 
 # the system's noise. The stand-in system is not that class, so the mixin is left out; Uproot's own MaterialSystemMixin
 # restores the pillars, and the bands source falls back to plain stone.
 mixin net/potionstudios/biomeswevegone/mixin/SurfaceSystemMixin | patches 1.21.11's surface system; pillars come from Uproot's MaterialSystemMixin, bands fall back to stone
+
+# --- Biomes We've Gone: extra village houses ---
+# The mod pushes its houses into the vanilla village pools by writing the pools' private lists. 26.3 gives no way to add to a
+# built pool, so the vanilla villages stay as they are; BWG's own village structures (village/*) are separate and unaffected.
+noop net/potionstudios/biomeswevegone/world/level/levelgen/structure/village/PlaceInVillage addBuildingToPool * | villages cannot take extra houses: the pool lists are private in 26.3
+
+# --- Biomes We've Gone: client model access (first client run) ---
+# The extra block-state models (BlockStateModel baked from a ResolvedModel through SingleVariant) have no 26.3 form.
+noop net/potionstudios/biomeswevegone/fabric/client/BiomesWeveGoneClientFabric lambda$blockStateModel$4 * | tentative: bakes a BlockStateModel through SingleVariant
+# Sign sprites: 26.3 has no Sheets material table to fill; see the client audit in the report.
+noop net/potionstudios/biomeswevegone/client/BiomesWeveGoneClient registerWoodTypes * | tentative: fills the removed Sheets sign material tables
+# The wreath draws its block model through SubmitNodeCollector.submitBlockModel with the removed BlockStateModel
+# GeckoLib 5.5 gave ItemInHandGeoLayer a render context the old call cannot supply; the mob is not spawned anyway
+stub net/potionstudios/biomeswevegone/client/renderer/entity/pumpkinwarden/PumpkinWardenRenderer | GeckoLib's ItemInHandGeoLayer constructor gained a render context; the mob it draws is switched off
+
+# --- Furnish: furniture workbench recipe ---
+# The recipe serializer implements an interface that is a record in 26.3, so the class cannot load. The recipe type stays
+# registered; the serializer and the recipe class go, so the workbench has no recipes (blocks and renderers are unaffected).
+stub io/github/wouink/furnish/recipe/FurnitureRecipe | the recipe serializer cannot load: RecipeSerializer is a record in 26.3
+noop io/github/wouink/furnish/reglib/RegLib registerRecipeSerializer * | the workbench recipe serializer is switched off
+# Tentative: adds Furnish's items to vanilla loot tables with the removed NumberProvider loot API
+noop io/github/wouink/furnish/FurnishContents lambda$init$3 * | tentative: vanilla loot table additions use the removed UniformGenerator/NumberProvider API

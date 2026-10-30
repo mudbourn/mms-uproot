@@ -23,7 +23,8 @@ public final class MixinConfigs {
 			config.put("required", Boolean.FALSE);
 			Object inj = config.get("injectors");
 			Map<String, Object> injectors = inj instanceof Map ? (Map<String, Object>) inj : new LinkedHashMap<>();
-			injectors.put("defaultRequire", 0L);
+			// -Duproot.mixinRequire=1 makes an injector that finds no target fail loudly, to list the ones that would silently do nothing
+			injectors.put("defaultRequire", (long) Integer.getInteger("uproot.mixinRequire", 0));
 			config.put("injectors", injectors);
 			String pkg = String.valueOf(config.get("package")).replace('.', '/') + "/";
 			for (String key : new String[] {"mixins", "client", "server"}) {

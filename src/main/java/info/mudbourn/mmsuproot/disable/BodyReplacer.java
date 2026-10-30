@@ -11,7 +11,8 @@ import org.objectweb.asm.TypePath;
  * forwarded (or dropped) first, because a mixin handler has to stay a handler.
  *
  * <p>A constructor must still call a super constructor to verify, so it repeats the super call the
- * original made, with a default for every argument ({@code null}, 0, false).
+ * original made. Each argument takes the constructor's own parameter of the same type when there is
+ * one (a renderer keeps its context), else a default ({@code null}, 0, false).
  */
 final class BodyReplacer extends MethodVisitor {
 	private static final String EMPTY_BUILDER = "net/minecraft/world/entity/ai/attributes/AttributeSupplier$Builder";
@@ -59,7 +60,28 @@ final class BodyReplacer extends MethodVisitor {
 			target.visitVarInsn(Opcodes.ALOAD, 0);
 			String owner = superCall == null ? null : superCall[0];
 			String callDesc = superCall == null ? "()V" : superCall[1];
-			for (Type t : Type.getArgumentTypes(callDesc)) pushDefault(target, t);
+			Type[] own = Type.getArgumentTypes(desc);
+			int[] slots = new int[own.length];
+			int slot = 1;
+			for (int i = 0; i < own.length; i++) {
+				slots[i] = slot;
+				slot += own[i].getSize();
+			}
+			boolean[] used = new boolean[own.length];
+			for (Type t : Type.getArgumentTypes(callDesc)) {
+				int found = -1;
+				if (t.getSort() == Type.OBJECT) {
+					for (int i = 0; i < own.length && found < 0; i++) {
+						if (!used[i] && own[i].equals(t)) found = i;
+					}
+				}
+				if (found < 0) {
+					pushDefault(target, t);
+				} else {
+					used[found] = true;
+					target.visitVarInsn(Opcodes.ALOAD, slots[found]);
+				}
+			}
 			target.visitMethodInsn(Opcodes.INVOKESPECIAL, owner == null ? "java/lang/Object" : owner, "<init>", callDesc, false);
 			target.visitInsn(Opcodes.RETURN);
 		} else if (name.equals("<clinit>")) {

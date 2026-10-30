@@ -11,7 +11,8 @@
 		"mms_uproot": "info.mudbourn.mmsuproot.boot.UprootBoot"
 	},
 	"entrypoints": {
-		"main": ["info.mudbourn.mmsuproot.boot.UprootMain"]
+		"main": ["info.mudbourn.mmsuproot.boot.UprootMain"],
+		"client": ["info.mudbourn.mmsuproot.boot.DevShot"]
 	},
 	"mixins": ["mms_uproot.mixins.json"],
 	"depends": {

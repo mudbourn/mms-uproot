@@ -30,10 +30,10 @@ import org.slf4j.LoggerFactory;
  */
 public final class GameClasses {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot");
-	private static final Info ABSENT = new Info(null, List.of(), Set.of(), Set.of());
+	private static final Info ABSENT = new Info(null, List.of(), Set.of(), Set.of(), false, Set.of());
 
 	/** Members of one class, as {@code name} and {@code name+desc} strings. */
-	public record Info(String superName, List<String> interfaces, Set<String> fields, Set<String> methods) {
+	public record Info(String superName, List<String> interfaces, Set<String> fields, Set<String> methods, boolean isInterface, Set<String> privateFields) {
 		public boolean hasField(String name, String desc) { return fields.contains(name + ":" + desc); }
 		public boolean hasMethod(String name, String desc) { return methods.contains(name + desc); }
 		public boolean hasFieldNamed(String name) { return fields.stream().anyMatch(f -> f.startsWith(name + ":")); }
@@ -93,10 +93,13 @@ public final class GameClasses {
 			ClassReader reader = new ClassReader(in);
 			Set<String> fields = new HashSet<>();
 			Set<String> methods = new HashSet<>();
+			Set<String> privateFields = new HashSet<>();
+			boolean itfFlag = (reader.getAccess() & Opcodes.ACC_INTERFACE) != 0;
 			reader.accept(new ClassVisitor(Opcodes.ASM9) {
 				@Override
 				public FieldVisitor visitField(int access, String n, String desc, String sig, Object value) {
 					fields.add(n + ":" + desc);
+					if ((access & Opcodes.ACC_PRIVATE) != 0) privateFields.add(n + ":" + desc);
 					return null;
 				}
 
@@ -107,15 +110,37 @@ public final class GameClasses {
 				}
 			}, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 			String[] itf = reader.getInterfaces();
-			return new Info(reader.getSuperName(), List.of(itf), fields, methods);
+			return new Info(reader.getSuperName(), List.of(itf), fields, methods, itfFlag, privateFields);
 		} catch (IOException e) {
 			return ABSENT;
 		}
 	}
 
+	/** Whether a Minecraft class is an interface in the running game; false for a class or a name the game lacks. */
+	public boolean isInterface(String internalName) {
+		return internalName.charAt(0) != '[' && names.contains(internalName) && info(internalName).map(Info::isInterface).orElse(false);
+	}
+
+	/** Whether a Minecraft class is a plain class (not an interface) in the running game. */
+	public boolean isClass(String internalName) {
+		return internalName.charAt(0) != '[' && names.contains(internalName) && info(internalName).map(i -> !i.isInterface()).orElse(false);
+	}
+
 	/** Finds a field by name and descriptor on a class or anything it extends or implements. */
 	public boolean findField(String owner, String name, String desc) {
 		return walk(owner, new HashSet<>(), i -> desc == null ? i.hasFieldNamed(name) : i.hasField(name, desc));
+	}
+
+	/** Whether the field is found on the class or something it extends and is private there, so the caller cannot read it. */
+	public boolean isPrivateField(String owner, String name, String desc) {
+		String key = name + ":" + desc;
+		for (String c = owner; c != null; ) {
+			Info info = info(c).orElse(null);
+			if (info == null) return false;
+			if (info.fields().contains(key)) return info.privateFields().contains(key);
+			c = info.superName();
+		}
+		return false;
 	}
 
 	public boolean findMethod(String owner, String name, String desc) {

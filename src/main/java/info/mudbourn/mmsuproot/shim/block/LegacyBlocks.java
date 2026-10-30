@@ -33,6 +33,24 @@ public final class LegacyBlocks {
 	public static final Block WHITE_TERRACOTTA = Blocks.DYED_TERRACOTTA.white();
 	public static final Block LIGHT_GRAY_TERRACOTTA = Blocks.DYED_TERRACOTTA.lightGray();
 
+	/** Likewise wool: 26.3 keeps it in a per-colour collection. */
+	public static final Block WHITE_WOOL = Blocks.WOOL.white();
+	public static final Block ORANGE_WOOL = Blocks.WOOL.orange();
+	public static final Block MAGENTA_WOOL = Blocks.WOOL.magenta();
+	public static final Block LIGHT_BLUE_WOOL = Blocks.WOOL.lightBlue();
+	public static final Block YELLOW_WOOL = Blocks.WOOL.yellow();
+	public static final Block LIME_WOOL = Blocks.WOOL.lime();
+	public static final Block PINK_WOOL = Blocks.WOOL.pink();
+	public static final Block GRAY_WOOL = Blocks.WOOL.gray();
+	public static final Block LIGHT_GRAY_WOOL = Blocks.WOOL.lightGray();
+	public static final Block CYAN_WOOL = Blocks.WOOL.cyan();
+	public static final Block PURPLE_WOOL = Blocks.WOOL.purple();
+	public static final Block BLUE_WOOL = Blocks.WOOL.blue();
+	public static final Block BROWN_WOOL = Blocks.WOOL.brown();
+	public static final Block GREEN_WOOL = Blocks.WOOL.green();
+	public static final Block RED_WOOL = Blocks.WOOL.red();
+	public static final Block BLACK_WOOL = Blocks.WOOL.black();
+
 	private LegacyBlocks() { }
 
 	/**
