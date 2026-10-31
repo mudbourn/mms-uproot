@@ -5,12 +5,14 @@
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"GenPackMixin",
+		"LegacyBounceMixin",
 		"LegacySwingMixin",
 		"MaterialRuleContextAccess",
 		"MaterialSystemMixin",
 		"ModPackResourcesFactoryMixin",
 		"PackCompatibilityMixin",
-		"SlimeSplitMixin"
+		"SlimeSplitMixin",
+		"VillagerLevelUpMixin"
 	],
 	"client": [
 		"EntityRenderersMixin",

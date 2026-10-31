@@ -115,6 +115,7 @@ final class ConvertedView {
 
 		Map<String, String> parents = new HashMap<>();
 		Set<String> hiddenRecipes = new HashSet<>();
+		List<String> timelines = new ArrayList<>();
 		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
 			for (String folder : List.of("recipe", "timeline", "advancement", "loot_table", "enchantment")) {
 				pack.listResources(PackType.SERVER_DATA, ns, folder, (id, supplier) -> {
@@ -151,6 +152,7 @@ final class ConvertedView {
 						if (folder.equals("advancement") && root.get("parent") instanceof String parent) {
 							parents.put(key, parent.contains(":") ? parent.replaceFirst(":", ":advancement/") + ".json" : "minecraft:advancement/" + parent + ".json");
 						}
+						if (folder.equals("timeline")) timelines.add(ns + ":" + id.getPath().substring("timeline/".length(), id.getPath().length() - ".json".length()));
 						served.put(key, Json.write(converted).getBytes(StandardCharsets.UTF_8));
 						report.dataConvertedFiles.incrementAndGet();
 					} catch (IOException | RuntimeException e) {
@@ -160,6 +162,7 @@ final class ConvertedView {
 			}
 		}
 		hideOrphans(parents, hidden, served);
+		tagTimelines(timelines, served, added, namespaces, stats);
 
 		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
 			pack.listResources(PackType.SERVER_DATA, ns, "structure", (id, supplier) -> {
@@ -223,6 +226,47 @@ final class ConvertedView {
 			report.dataConverted.computeIfAbsent("rebuilt minecraft patch features", k -> new java.util.concurrent.atomic.AtomicInteger()).addAndGet(5);
 		}
 		return new Built(served, hidden, added, namespaces);
+	}
+
+	/**
+	 * 26.3 runs only the timelines a dimension's tag lists. 1.21.11 mods listed theirs in code, so a timeline no tag of the pack
+	 * names (as the clock of every converted one is the overworld's) joins {@code minecraft:timeline/in_overworld}.
+	 */
+	private void tagTimelines(List<String> timelines, Map<String, byte[]> served, Set<String> added, Set<String> namespaces, FeatureJson.Stats stats) {
+		if (timelines.isEmpty()) return;
+		StringBuilder tagged = new StringBuilder();
+		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
+			pack.listResources(PackType.SERVER_DATA, ns, "tags/timeline", (id, supplier) -> {
+				try (InputStream in = supplier.get()) {
+					tagged.append(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+				} catch (IOException | RuntimeException e) {
+					fail(ns + ":" + id.getPath(), e);
+				}
+			});
+		}
+		List<Object> values = new ArrayList<>();
+		IoSupplier<InputStream> own = pack.getResource(PackType.SERVER_DATA, Identifier.parse("minecraft:tags/timeline/in_overworld.json"));
+		if (own != null) {
+			// the pack's own file of that name is replaced by this one, so its entries come along
+			try (InputStream in = own.get()) {
+				if (Json.parseObject(new String(in.readAllBytes(), StandardCharsets.UTF_8)).get("values") instanceof List<?> existing) values.addAll(existing);
+			} catch (IOException | RuntimeException e) {
+				fail("minecraft:tags/timeline/in_overworld.json", e);
+			}
+		}
+		int own0 = values.size();
+		for (String timeline : timelines) {
+			if (tagged.indexOf("\"" + timeline + "\"") >= 0) continue;
+			values.add(timeline);
+			stats.count("timelines added to the overworld tag");
+		}
+		if (values.size() == own0) return;
+		String key = "minecraft:tags/timeline/in_overworld.json";
+		Map<String, Object> tag = new LinkedHashMap<>();
+		tag.put("values", values);
+		served.put(key, Json.write(tag).getBytes(StandardCharsets.UTF_8));
+		added.add(key);
+		namespaces.add("minecraft");
 	}
 
 	/** An advancement whose parent was left out has nothing to hang from; it goes too, down the chain. */

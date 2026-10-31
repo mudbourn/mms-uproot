@@ -8,9 +8,9 @@
 # answer, and the burrow's occupants are the same mob. Its renderer needed the context GeckoLib 5.5's item layer asks for, which a
 # ctor rule of renames.txt passes.
 # Known limits, with no rule to lift them:
-# - The warden's day schedule is the timeline biomeswevegone:pumpkin_warden. No tag in the mod's data lists it, so no dimension runs it and the
-#   mob stays on its core and idle activities (panic after a hit still works). Adding it to data/minecraft/tags/timeline/in_overworld.json
-#   makes it follow the schedule and shelter in a burrow at rest time (tried on a server).
+# - The warden's day schedule is the timeline biomeswevegone:pumpkin_warden. No tag in the mod's data lists it (1.21.11 code registered it), so the
+#   data converter (ConvertedView.tagTimelines) adds every timeline a pack leaves unlisted to minecraft:timeline/in_overworld; the warden then
+#   follows the schedule and shelters in a burrow at rest time.
 # - Map marker colour: 26.3's MapDecorationType has no colour and the map_color item component is gone (MapColorComponentRemovalFix
 #   deletes it), so the explorer maps keep the vanilla tint. The constructor adapter in renames.txt drops the argument.
 
@@ -38,15 +38,10 @@ skip legacy_state_provider_type biomeswevegone:between_noise_threshold_provider 
 
 # --- Biomes We've Gone: client model access (first client run) ---
 # The extra block-state models (BlockStateModel baked from a ResolvedModel through SingleVariant) have no 26.3 form.
-noop net/potionstudios/biomeswevegone/fabric/client/BiomesWeveGoneClientFabric lambda$blockStateModel$4 * | dead code: the bake goes through Fabric API now (see renames.txt)
-# Sign sprites: 26.3 has no Sheets material table to fill; see the client audit in the report.
-noop net/potionstudios/biomeswevegone/client/BiomesWeveGoneClient registerWoodTypes * | tentative: fills the removed Sheets sign material tables
+noop net/potionstudios/biomeswevegone/fabric/client/BiomesWeveGoneClientFabric lambda$blockStateModel$4 * | unreachable: its only user, blockStateModel, is sent to the shim by a callmove in renames.txt, and it builds the removed SimpleModelWrapper
+# Sign sprites: 26.3 has no Sheets material tables; sign bodies are ordinary block models, which data.ConvertedAssets rebuilds from the wood's entity sheet.
+noop net/potionstudios/biomeswevegone/client/BiomesWeveGoneClient registerWoodTypes * | fills the Sheets sign material tables, which 26.3 does not have
 # The wreath draws its block model through SubmitNodeCollector.submitBlockModel with the removed BlockStateModel
-
-# --- Furnish: furniture workbench recipe ---
-# The recipe's own serializer class cannot load (RecipeSerializer is a record in 26.3), so the recipe class must not build it; the
-# SERIALIZER reads are moved to the record serializer of shim/recipe (renames.txt).
-noop io/github/wouink/furnish/recipe/FurnitureRecipe <clinit> * | the recipe class must not build its own serializer; RecipeSerializer is a record in 26.3
 
 # --- Furnish: furniture workbench recipe ---
 # The recipe's own serializer class cannot load (RecipeSerializer is a record in 26.3), so the recipe class must not build it; the

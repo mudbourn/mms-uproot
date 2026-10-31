@@ -28,7 +28,7 @@ import net.minecraft.server.packs.resources.IoSupplier;
  * The converted client assets of one mod pack. Built on the first request for assets, once per pack.
  * Today that is the sign bodies: 1.21.11 drew them from entity sheets, 26.3 draws them as block
  * models over a 32x32 block texture, and a mod whose sign models only carry a particle texture
- * would show text without a board.
+ * would show text without a board. And the farmland models, whose template 26.3 renamed.
  */
 final class ConvertedAssets {
 	/** Blockstate name endings, longest first, with the vanilla model family each one uses. */
@@ -115,6 +115,7 @@ final class ConvertedAssets {
 		Set<String> namespaces = new HashSet<>();
 		try {
 			signs(served);
+			farmlands(served);
 		} catch (RuntimeException e) {
 			report.dataFailures.add("client assets: " + e);
 		}
@@ -164,6 +165,32 @@ final class ConvertedAssets {
 					report.dataFailures.add(ns + ":blockstates/" + stem + ".json: " + e);
 				}
 			}
+		}
+	}
+
+	/**
+	 * A block model whose parent is the farmland template 26.3 no longer has is moved onto the indented cube template, which has the
+	 * same shape: the dirt texture is its bottom and sides, and the top stays the top.
+	 */
+	private void farmlands(Map<String, byte[]> served) {
+		for (String ns : pack.getNamespaces(PackType.CLIENT_RESOURCES)) {
+			pack.listResources(PackType.CLIENT_RESOURCES, ns, "models/block", (id, supplier) -> {
+				if (!id.getPath().endsWith(".json")) return;
+				try (InputStream in = supplier.get()) {
+					Map<String, Object> model = Json.parseObject(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+					if (!"minecraft:block/template_farmland".equals(model.get("parent")) || !(model.get("textures") instanceof Map<?, ?> old)) return;
+					Map<String, Object> textures = new LinkedHashMap<>();
+					textures.put("bottom", old.get("dirt"));
+					textures.put("side", old.get("dirt"));
+					textures.put("top", old.get("top"));
+					model.put("parent", "minecraft:block/template_cube_bottom_top_indented");
+					model.put("textures", textures);
+					served.put(ns + ":" + id.getPath(), Json.write(model).getBytes(StandardCharsets.UTF_8));
+					count("farmland models moved");
+				} catch (IOException | RuntimeException e) {
+					report.dataFailures.add(ns + ":" + id.getPath() + ": " + e);
+				}
+			});
 		}
 	}
 

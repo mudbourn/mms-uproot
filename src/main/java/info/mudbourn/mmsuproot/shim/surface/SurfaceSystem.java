@@ -17,15 +17,13 @@ import net.minecraft.world.level.levelgen.synth.NormalNoise;
  */
 public class SurfaceSystem {
 	private static final Identifier SURFACE = Identifier.withDefaultNamespace("surface");
-	/** Stands for the secondary surface noise: {@link LegacyNoise} samples the noise made for it. */
-	private static final NormalNoise SURFACE_SECONDARY = NormalNoise.createParity(-1000, 1.0);
-
 	public final PositionalRandomFactory noiseRandom;
 	private final NormalNoise surfaceSecondaryNoise;
 
 	SurfaceSystem(RandomState random) {
 		this.noiseRandom = random.getOrCreateRandomFactory(SURFACE);
-		this.surfaceSecondaryNoise = LegacyNoise.share(SURFACE_SECONDARY, random.getOrCreateNoise(Noises.SURFACE_SECONDARY));
+		// stands for the secondary surface noise: LegacyNoise samples the noise made for this object, one per system so each world has its own
+		this.surfaceSecondaryNoise = LegacyNoise.share(NormalNoise.createParity(-1000, 1.0), random.getOrCreateNoise(Noises.SURFACE_SECONDARY));
 	}
 
 	/**
