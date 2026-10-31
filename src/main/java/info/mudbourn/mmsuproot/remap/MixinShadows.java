@@ -55,6 +55,19 @@ final class MixinShadows extends ClassNode {
 			fixFields(target);
 			methods.addAll(adapters);
 		}
+		for (MethodNode m : methods) {
+			if (!namer.renames().optional(name, m.name)) continue;
+			for (List<AnnotationNode> list : java.util.Arrays.asList(m.visibleAnnotations, m.invisibleAnnotations)) {
+				if (list == null) continue;
+				for (AnnotationNode a : list) {
+					if (a.desc.startsWith("Lorg/spongepowered/asm/mixin/injection/") || a.desc.startsWith("Lcom/llamalad7/mixinextras/")) {
+						if (a.values == null) a.values = new ArrayList<>();
+						a.values.add("require");
+						a.values.add(0);
+					}
+				}
+			}
+		}
 		accept(next);
 	}
 

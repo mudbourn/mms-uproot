@@ -28,6 +28,16 @@ public final class LegacyNoise {
 		return description;
 	}
 
+	/**
+	 * Makes {@code made} the noise that {@code description} samples as. For a stand-in that holds a noise of the game's own
+	 * under a description of its own; every holder of an equal description shares the newest, which is the same
+	 * noise while all levels of a game use one seed.
+	 */
+	public static NormalNoise share(NormalNoise description, Noise made) {
+		MADE.put(description, made);
+		return description;
+	}
+
 	/** {@code normalNoise.getValue(x, y, z)} on a noise made by {@link #create}. */
 	public static double getValue(NormalNoise noise, double x, double y, double z) {
 		Noise made = MADE.get(noise);

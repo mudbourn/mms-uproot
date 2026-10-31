@@ -58,6 +58,7 @@ public final class Renames {
 	private final Map<String, String[]> fieldMoves = new HashMap<>(); // "owner.name" (26.3 names) -> {new owner, new name}
 	private final Map<String, String[]> fieldSets = new HashMap<>(); // "owner.name" (26.3 names) -> {helper owner or null, helper or setter name}
 	private final Set<String> callDrops = new HashSet<>(); // "owner.name desc" (26.3 names)
+	private final Set<String> optionals = new HashSet<>(); // "mixin class.handler"
 
 	public static Renames load() {
 		try (InputStream in = Renames.class.getResourceAsStream("/uproot/renames.txt")) {
@@ -94,6 +95,7 @@ public final class Renames {
 				int dot = p[3].lastIndexOf('.');
 				r.fieldSets.put(p[1] + "." + p[2], dot < 0 ? new String[] {null, p[3]} : helper(p[3], line));
 			}
+			case "optional" -> r.optionals.add(p[1] + "." + p[2]);
 			case "calldrop" -> r.callDrops.add(p[1] + "." + p[2] + " " + p[3]);
 			case "injectat" -> {
 				if (p.length != 7) throw new IllegalStateException("Bad injectat rule: " + line);
@@ -292,6 +294,11 @@ public final class Renames {
 	/** {helper owner or null, helper or setter name} for a write of the field {@code owner.name} (26.3 names), or null. */
 	public String[] fieldSet(String owner, String name) {
 		return fieldSets.get(owner + "." + name);
+	}
+
+	/** Whether the injector handler {@code method} of the mixin class is allowed to find no target even in strict mode. */
+	public boolean optional(String mixinClass, String method) {
+		return optionals.contains(mixinClass + "." + method);
 	}
 
 	/** Whether the call {@code owner.name desc} (26.3 names) is dropped. */

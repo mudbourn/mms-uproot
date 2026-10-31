@@ -6,7 +6,6 @@ import info.mudbourn.mmsuproot.shim.UprootIds;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.material.MaterialRuleContext;
@@ -20,8 +19,6 @@ import net.minecraft.world.level.levelgen.material.rule.RuleEvaluator;
  * It exists in memory only; the codec is registered so the registry holds an entry for the type.
  */
 public record LegacyRule(SurfaceRules.RuleSource source, HolderGetter<Biome> biomes) implements MaterialRule {
-	private static final Identifier SURFACE = Identifier.withDefaultNamespace("surface");
-
 	/** Never reads or writes data: the rule is made by a mod's code, not by a data pack. */
 	public static final MapCodec<LegacyRule> CODEC = SurfaceRules.Codecs.map("surface rule source");
 
@@ -33,7 +30,7 @@ public record LegacyRule(SurfaceRules.RuleSource source, HolderGetter<Biome> bio
 	@Override
 	public RuleEvaluator compile(MaterialRuleContext context) {
 		RandomState random = ((MaterialRuleContextAccess) (Object) context).mms_uproot$randomState();
-		SurfaceSystem system = new SurfaceSystem(random.getOrCreateRandomFactory(SURFACE));
+		SurfaceSystem system = new SurfaceSystem(random);
 		SurfaceRules.SurfaceRule rule = source.apply(new SurfaceRules.Context(system, context, biomes));
 		return rule::tryApply;
 	}

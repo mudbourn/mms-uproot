@@ -221,6 +221,15 @@ callmove net/fabricmc/fabric/api/registry/TillableBlockRegistry register (Lnet/m
 
 # Calls whose receiver or arguments moved. The helper takes the receiver first.
 callinst net/minecraft/world/level/storage/loot/LootPool$Builder setRolls (Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot.setRolls
+
+# Loot tables built in code (Fabric's LootTableEvents.MODIFY). Rolls and counts are int-provider holders now, a pool builder takes entry
+# builders and function holders, and the leaf-entry builder class is gone (lootTableItem returns its replacement). Fabric's pool-builder
+# helper add(entry) was called with(entry).
+class net/minecraft/world/level/storage/loot/providers/number/UniformGenerator info/mudbourn/mmsuproot/shim/compat/LegacyUniformGenerator
+class net/minecraft/world/level/storage/loot/entries/LootPoolSingletonContainer$Builder net/minecraft/world/level/storage/loot/entries/UniformContainerBase$Builder
+method net/minecraft/world/level/storage/loot/LootPool$Builder with add 1
+callinst net/minecraft/world/level/storage/loot/LootPool$Builder apply (Lnet/minecraft/world/level/storage/loot/functions/LootItemFunction$Builder;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot.apply
+callmove net/minecraft/world/level/storage/loot/functions/SetItemCountFunction setCount (Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/functions/LootItemConditionalFunction$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot setCount
 callinst net/minecraft/world/entity/EntityType is (Lnet/minecraft/tags/TagKey;)Z info/mudbourn/mmsuproot/shim/entity/LegacyEntities.isTagged
 callinst net/minecraft/world/entity/player/Player displayClientMessage (Lnet/minecraft/network/chat/Component;Z)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.displayClientMessage
 callinst net/minecraft/world/level/Level getDayTime ()J info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getDayTime
@@ -277,7 +286,9 @@ ctoradapt net/minecraft/world/level/block/grower/TreeGrower (Ljava/lang/String;L
 # Default components are bound after mod init; a mod asking for a default stack that early gets one without components
 callinst net/minecraft/world/item/Item getDefaultInstance ()Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/item/LegacyItems.getDefaultInstance
 
-# Structure processors: the type holder is gone and a mod's processor class cannot load, so its type decodes to a processor that does nothing
+# Structure processors: the type holder is gone, and 26.3's StructureProcessor is an interface whose codec() is the codec itself, so a mod's
+# processor extends the stand-in that answers codec() from getType() and its own codec is registered (a class that cannot load decodes to a processor that does nothing)
+class net/minecraft/world/level/levelgen/structure/templatesystem/StructureProcessor info/mudbourn/mmsuproot/shim/feature/LegacyStructureProcessor
 class net/minecraft/world/level/levelgen/structure/templatesystem/StructureProcessorType info/mudbourn/mmsuproot/shim/feature/StructureProcessorType
 fieldmove net/minecraft/core/registries/BuiltInRegistries STRUCTURE_PROCESSOR info/mudbourn/mmsuproot/shim/feature/LegacyRegistries STRUCTURE_PROCESSOR
 
@@ -289,6 +300,8 @@ class net/minecraft/world/level/levelgen/SurfaceSystem info/mudbourn/mmsuproot/s
 class net/minecraft/data/worldgen/SurfaceRuleData info/mudbourn/mmsuproot/shim/surface/SurfaceRuleData
 class net/minecraft/util/KeyDispatchDataCodec info/mudbourn/mmsuproot/shim/surface/KeyDispatchDataCodec
 class terrablender/api/SurfaceRuleManager info/mudbourn/mmsuproot/shim/surface/SurfaceRuleManager
+# BWG's mixin on the old surface system also injects into buildSurface, which the stand-in does not have; its pillars come from MaterialSystemMixin
+optional net/potionstudios/biomeswevegone/mixin/SurfaceSystemMixin injectShatteredGlacierExtension
 field net/minecraft/core/registries/BuiltInRegistries MATERIAL_RULE MATERIAL_RULE_TYPE
 # FloatProvider became an interface with min() and max(); a call of the old names has to be an interface call, which a helper makes
 callinst net/minecraft/util/valueproviders/FloatProvider getMinValue ()F info/mudbourn/mmsuproot/shim/surface/Thresholds.getMinValue
@@ -449,3 +462,18 @@ fieldmove net/minecraft/world/item/Items CYAN_BANNER info/mudbourn/mmsuproot/shi
 fieldget net/minecraft/client/renderer/entity/state/EndermanRenderState carriedBlock info/mudbourn/mmsuproot/shim/entity/LegacyRenderStates.carriedBlock
 fieldset net/minecraft/world/entity/npc/villager/Villager updateMerchantTimer info/mudbourn/mmsuproot/shim/entity/LegacyVillagers.updateMerchantTimer
 fieldset net/minecraft/world/entity/npc/villager/Villager increaseProfessionLevelOnUpdate info/mudbourn/mmsuproot/shim/entity/LegacyVillagers.increaseProfessionLevelOnUpdate
+
+# 26.3 moved these Slime methods up into AbstractCubeMob; Mob AI's slime mixin injects into them (see "inherited" above)
+inherited net/minecraft/world/entity/monster/cubemob/Slime registerGoals ()V
+inherited net/minecraft/world/entity/monster/cubemob/Slime push (Lnet/minecraft/world/entity/Entity;)V
+inherited net/minecraft/world/entity/monster/cubemob/Slime remove (Lnet/minecraft/world/entity/Entity$RemovalReason;)V
+inherited net/minecraft/world/entity/monster/cubemob/Slime tick ()V
+
+# Furnish's screens: the render pipeline type moved to the render library, and three container-screen draw calls were renamed
+class com/mojang/blaze3d/pipeline/RenderPipeline com/mojang/renderpearl/api/pipeline/RenderPipeline
+method net/minecraft/client/gui/screens/inventory/AbstractContainerScreen renderTooltip extractTooltip 3
+method net/minecraft/client/gui/GuiGraphicsExtractor renderItem item (Lnet/minecraft/world/item/ItemStack;II)V
+injectat net/minecraft/world/entity/monster/cubemob/Slime convertTo (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob; net/minecraft/world/entity/monster/cubemob/AbstractCubeMob convertTo (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob;
+# optional MIXINCLASS HANDLER      the injector may find no target, also in strict mode (-Duproot.strictMixins): its target call is inside
+#                                  a method the mixin's target only inherits, where Mixin cannot reach it. (Added with the Mob AI rules.)
+optional com/notunanancyowen/mait/mixin/SlimeEntityMixin copyOffhandItemIGuess

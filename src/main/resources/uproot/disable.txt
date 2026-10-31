@@ -21,10 +21,6 @@ noop net/potionstudios/biomeswevegone/world/level/block/entities/PumpkinBurrowBl
 noop net/potionstudios/biomeswevegone/world/level/block/entities/PumpkinBurrowBlockEntity emptyOccupant * | burrow cannot release a pumpkin warden
 noop net/potionstudios/biomeswevegone/world/level/block/entities/PumpkinBurrowBlockEntity serverTick * | burrow occupant tick is off with the mob
 
-# --- Biomes We've Gone: sniffer digging drops (R28) ---
-# Tentative: drop this rule once the loot helper from the plan exists. The loot API it uses was rebuilt.
-noop net/potionstudios/biomeswevegone/fabric/VanillaCompatFabric registerLootModifiers ()V | tentative: sniffer digging drops use the removed NumberProvider loot API
-
 # --- CorgiLib (blocks.md section 3.6 and 7) ---
 noop corgitaco/corgilib/server/commands/PlaceAllCommand register * | /placeall needs ConfiguredFeature.place and Structure.generate signatures that changed
 # Tentative: the whole class draws with the removed MultiBufferSource.getBuffer(RenderType).
@@ -43,15 +39,10 @@ skip legacy_state_provider_type biomeswevegone:between_noise_threshold_provider 
 # --- Biomes We've Gone: surface rules ---
 # 26.3 replaced SurfaceRules with material rules; Uproot's shim/surface stands in for the old API and converts what a
 # mod builds, so the rule sources and the TerraBlender call run (see renames.txt). What does not carry over is below.
-# The mixin on the 1.21.11 surface system gave two biomes the eroded-badlands pillars and let the bands source reach
-# the system's noise. The stand-in system is not that class, so the mixin is left out; Uproot's own MaterialSystemMixin
-# restores the pillars, and the bands source falls back to plain stone.
-mixin net/potionstudios/biomeswevegone/mixin/SurfaceSystemMixin | patches 1.21.11's surface system; pillars come from Uproot's MaterialSystemMixin, bands fall back to stone
-
-# --- Biomes We've Gone: extra village houses ---
-# The mod pushes its houses into the vanilla village pools by writing the pools' private lists. 26.3 gives no way to add to a
-# built pool, so the vanilla villages stay as they are; BWG's own village structures (village/*) are separate and unaffected.
-noop net/potionstudios/biomeswevegone/world/level/levelgen/structure/village/PlaceInVillage addBuildingToPool * | villages cannot take extra houses: the pool lists are private in 26.3
+# The mixin on the 1.21.11 surface system does two jobs. It gives the bands rule source the surface system's seeded random and
+# secondary noise (the stand-in system of shim/surface has both, and the mixin is applied to it), and it injects the
+# eroded-badlands pillars into the surface pass for two biomes. 26.3 has no such pass to inject into (renames.txt marks the
+# injector optional), and Uproot's own MaterialSystemMixin restores the pillars.
 
 # --- Biomes We've Gone: client model access (first client run) ---
 # The extra block-state models (BlockStateModel baked from a ResolvedModel through SingleVariant) have no 26.3 form.
@@ -61,13 +52,6 @@ noop net/potionstudios/biomeswevegone/client/BiomesWeveGoneClient registerWoodTy
 # The wreath draws its block model through SubmitNodeCollector.submitBlockModel with the removed BlockStateModel
 # GeckoLib 5.5 gave ItemInHandGeoLayer a render context the old call cannot supply; the mob is not spawned anyway
 stub net/potionstudios/biomeswevegone/client/renderer/entity/pumpkinwarden/PumpkinWardenRenderer | GeckoLib's ItemInHandGeoLayer constructor gained a render context; the mob it draws is switched off
-
-# Tentative: adds Furnish's items to vanilla loot tables with the removed NumberProvider loot API
-noop io/github/wouink/furnish/FurnishContents lambda$init$3 * | tentative: vanilla loot table additions use the removed UniformGenerator/NumberProvider API
-
-# --- Mob AI Tweaks: zombie villager and zombified piglin arms ---
-# These two inject at the animateZombieArms call inside their model's setupAnim. 26.3's models no longer make that call
-# (only ZombieModel does; the arm poses come from the render state), so there is nothing to inject at.
 
 # --- Furnish: furniture workbench recipe ---
 # The recipe's own serializer class cannot load (RecipeSerializer is a record in 26.3), so the recipe class must not build it; the

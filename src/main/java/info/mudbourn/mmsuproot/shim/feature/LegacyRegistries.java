@@ -10,6 +10,9 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvider;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProcessor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Stand-ins for the registries 1.21.11 mods register features and state providers in. A mod's
@@ -17,6 +20,8 @@ import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvi
  * the same id, so the mod's JSON ({@code "type"} naming it) decodes.
  */
 public final class LegacyRegistries {
+	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot");
+
 	/** Where 1.21.11's {@code BuiltInRegistries.FEATURE} reads now point. */
 	public static final Registry<LegacyFeature<?>> FEATURE = new MappedRegistry<>(
 			ResourceKey.createRegistryKey(UprootIds.id("legacy_feature")), Lifecycle.stable()) {
@@ -38,20 +43,30 @@ public final class LegacyRegistries {
 	};
 
 	/**
-	 * Where 1.21.11's {@code BuiltInRegistries.STRUCTURE_PROCESSOR} reads now point. A mod's processor
-	 * class cannot load on 26.3 (see {@link NoopStructureProcessor}), so its type is registered with the
-	 * do-nothing codec and the mod's own codec is never asked for.
+	 * Where 1.21.11's {@code BuiltInRegistries.STRUCTURE_PROCESSOR} reads now point. A mod's processor extends
+	 * {@link LegacyStructureProcessor}, so its own codec is registered. A processor whose class cannot load or
+	 * whose codec cannot be built decodes to the do-nothing processor of {@link NoopStructureProcessor} instead,
+	 * so the data that names it still reads.
 	 */
 	public static final Registry<StructureProcessorType<?>> STRUCTURE_PROCESSOR = new MappedRegistry<>(
 			ResourceKey.createRegistryKey(UprootIds.id("legacy_structure_processor")), Lifecycle.stable()) {
 		@Override
 		public Holder.Reference<StructureProcessorType<?>> register(ResourceKey<StructureProcessorType<?>> key, StructureProcessorType<?> value, RegistrationInfo info) {
-			Registry.register(BuiltInRegistries.STRUCTURE_PROCESSOR, key.identifier(), NoopStructureProcessor.newCodec());
+			Registry.register(BuiltInRegistries.STRUCTURE_PROCESSOR, key.identifier(), processorCodec(key, value));
 			return super.register(key, value, info);
 		}
 	};
 
 	private LegacyRegistries() { }
+
+	private static MapCodec<? extends StructureProcessor> processorCodec(ResourceKey<?> key, StructureProcessorType<?> type) {
+		try {
+			return type.codec();
+		} catch (LinkageError | RuntimeException e) {
+			LOGGER.warn("Structure processor {} cannot load on 26.3, so it will do nothing: {}", key.identifier(), e.toString());
+			return NoopStructureProcessor.newCodec();
+		}
+	}
 
 	/** The old settings sat under {@code config}, so the codec reads that field and wraps what it finds. */
 	@SuppressWarnings({"unchecked", "rawtypes"})

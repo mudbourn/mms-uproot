@@ -12,7 +12,7 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Dev-only, with {@code -Duproot.devUse=x,y,z,tick,slot}: once the world has been up for {@code tick} ticks the player
  * uses the block at x,y,z, as a right click would (this opens a block's screen for {@link info.mudbourn.mmsuproot.boot.DevShot}),
- * and 10 ticks later moves the stack in menu slot {@code slot} into menu slot 0. Without the property this does nothing.
+ * and 10 ticks later picks up the stack in menu slot {@code slot} and 10 more later puts it into menu slot 0. Without the property this does nothing.
  */
 public final class DevUse implements ClientModInitializer {
 	@Override
@@ -32,7 +32,8 @@ public final class DevUse implements ClientModInitializer {
 			} else if (t == at + 10 && mc.player.containerMenu != null) {
 				int id = mc.player.containerMenu.containerId;
 				mc.gameMode.handleContainerInput(id, slot, 0, ContainerInput.PICKUP, mc.player);
-				mc.gameMode.handleContainerInput(id, 0, 0, ContainerInput.PICKUP, mc.player);
+			} else if (t == at + 20 && mc.player.containerMenu != null) {
+				mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId, 0, 0, ContainerInput.PICKUP, mc.player);
 			}
 		});
 	}

@@ -1,6 +1,10 @@
 package info.mudbourn.mmsuproot.shim.recipe;
 
 import java.lang.reflect.Constructor;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemStackTemplate;
@@ -14,6 +18,8 @@ import net.minecraft.world.item.crafting.SingleItemRecipe;
  * built through its own (group, ingredient, result) constructor. Reads the same JSON the mod's codec did.
  */
 public final class FurnishRecipes {
+	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot");
+	private static final AtomicInteger BUILT = new AtomicInteger();
 	private static final String RECIPE_CLASS = "io.github.wouink.furnish.recipe.FurnitureRecipe";
 
 	/** What the mod's {@code SERIALIZER} field reads as; the remap moves the reads here. */
@@ -31,7 +37,10 @@ public final class FurnishRecipes {
 			Class<?> type = Class.forName(RECIPE_CLASS, true, FurnishRecipes.class.getClassLoader());
 			Constructor<?> ctor = type.getConstructor(String.class, Ingredient.class, ItemStack.class);
 			LegacySingleItemRecipe.PENDING.set(result);
-			return (SingleItemRecipe) ctor.newInstance("", ingredient, ItemStack.EMPTY);
+			SingleItemRecipe recipe = (SingleItemRecipe) ctor.newInstance("", ingredient, ItemStack.EMPTY);
+			int n = BUILT.incrementAndGet();
+			if (n % 100 == 0) LOGGER.info("Furnish workbench recipes built so far: {}", n);
+			return recipe;
 		} catch (ReflectiveOperationException e) {
 			throw new IllegalStateException("cannot build " + RECIPE_CLASS, e);
 		} finally {
