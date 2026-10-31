@@ -77,12 +77,19 @@ final class ModSource {
 
 	/**
 	 * Remaps every class once so the report lists all references to Minecraft members that 26.3 lacks,
-	 * not only those of classes the game happened to load. Only for {@code -Duproot.auditAll=true}.
+	 * not only those of classes the game happened to load. Only for {@code -Duproot.auditAll=true}; with
+	 * {@code -Duproot.dumpRemapped=<dir>} as well, each remapped class is also written under {@code <dir>/<mod id>/}.
 	 */
 	void auditAll() {
+		String dump = System.getProperty("uproot.dumpRemapped");
 		for (String name : new ArrayList<>(classes.keySet())) {
 			try {
-				remapped(name, false);
+				byte[] bytes = remapped(name, false);
+				if (dump != null && bytes != null) {
+					Path out = Path.of(dump, id, name + ".class");
+					Files.createDirectories(out.getParent());
+					Files.write(out, bytes);
+				}
 			} catch (IOException | RuntimeException | LinkageError e) {
 				report.notes.add("audit could not read " + name + ": " + e);
 			}

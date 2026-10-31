@@ -65,12 +65,15 @@ public final class CtorAdapters {
 		return key.isPresent() ? WeightedList.of((ResourceKey<Feature>) key.get()) : WeightedList.of();
 	}
 
-	/** {@code MapDecorationType}: the map colour and exploration flag were dropped. */
+	/**
+	 * {@code MapDecorationType}: the map colour and exploration flag were dropped. 26.3 has nowhere to keep the colour: the type
+	 * is only an asset and two flags, and the {@code map_color} item component is gone.
+	 */
 	public static Object[] mapDecorationType(Identifier assetId, boolean showOnItemFrame, int mapColor, boolean explorationMapElement, boolean trackCount) {
 		return new Object[] {assetId, showOnItemFrame, trackCount};
 	}
 
-	/** {@code VillagerProfession}: gained a mutable map of trade sets per level, which Uproot fills in later. */
+	/** {@code VillagerProfession}: gained a mutable map of trade sets per level, which data.gen.Trades fills with the levels that have trades. */
 	public static Object[] villagerProfession(Component name, Predicate<Holder<PoiType>> heldJobSite, Predicate<Holder<PoiType>> acquirableJobSite,
 		ImmutableSet<Item> requestedItems, ImmutableSet<Block> secondaryPoi, SoundEvent workSound) {
 		return new Object[] {name, heldJobSite, acquirableJobSite, requestedItems, secondaryPoi, workSound, new Int2ObjectOpenHashMap<>()};

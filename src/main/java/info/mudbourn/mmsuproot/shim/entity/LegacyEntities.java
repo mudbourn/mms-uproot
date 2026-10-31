@@ -1,10 +1,13 @@
 package info.mudbourn.mmsuproot.shim.entity;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.WeakHashMap;
 
@@ -13,6 +16,7 @@ import net.minecraft.core.particles.ParticleType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.Prediction;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.BossEvent;
 import net.minecraft.world.InteractionHand;
@@ -22,6 +26,7 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.cubemob.AbstractCubeMob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -49,6 +54,11 @@ public final class LegacyEntities {
 		}
 	}
 
+	/** {@code Player.drop(ItemStack, boolean)}: a menu drops as the player's own action, which 26.3 says is predicted by the client. */
+	public static ItemEntity drop(Player player, ItemStack stack, boolean randomly) {
+		return player.drop(stack, randomly, Prediction.PREDICTED);
+	}
+
 	/** The fixed one-per-entity value a mod kept in {@code LivingEntity.attackAnim}; 26.3 keeps the swing state there. */
 	private static final Map<LivingEntity, Float> ATTACK_ANIM = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -67,6 +77,42 @@ public final class LegacyEntities {
 
 	/** {@code LivingEntity.updateSwingTime()} ticked the swing by hand; 26.3 ticks it with the entity, so there is nothing to do. */
 	public static void updateSwingTime(LivingEntity entity) { }
+
+	/** The {@code updateSwingTime()} a mod class adds to a living entity, by class; empty when it has none. */
+	private static final ClassValue<Optional<MethodHandle>> SWING_TICK = new ClassValue<>() {
+		@Override
+		protected Optional<MethodHandle> computeValue(Class<?> type) {
+			try {
+				return Optional.of(MethodHandles.privateLookupIn(type, MethodHandles.lookup())
+						.findVirtual(type, "updateSwingTime", MethodType.methodType(void.class)));
+			} catch (NoSuchMethodException e) {
+				return Optional.empty();
+			} catch (IllegalAccessException e) {
+				throw new IllegalStateException("Uproot could not reach updateSwingTime of " + type.getName(), e);
+			}
+		}
+	};
+
+	/**
+	 * Called at the end of every living entity tick (mixin.LegacySwingMixin). 1.21.11 called {@code updateSwingTime()} there, and a
+	 * mod could override it to change how the swing ticks; the call is gone, so this makes it for a class that has the override.
+	 * The value the override kept in {@code attackAnim} lasts one tick, as the swing progress it replaced did.
+	 */
+	public static void tickSwing(LivingEntity entity) {
+		Optional<MethodHandle> tick = SWING_TICK.get(entity.getClass());
+		if (tick.isEmpty()) return;
+		ATTACK_ANIM.remove(entity);
+		try {
+			tick.get().invoke(entity);
+		} catch (Throwable t) {
+			throw new IllegalStateException("Uproot could not tick the swing of an entity", t);
+		}
+	}
+
+	/** The swing progress a mod set through {@code attackAnim}, which the entity is drawn with; null when none. */
+	public static Float swingOverride(LivingEntity entity) {
+		return ATTACK_ANIM.isEmpty() ? null : ATTACK_ANIM.get(entity);
+	}
 
 	/** {@code LivingEntity.onEquippedItemBroken(Item, EquipmentSlot)} took the item; 26.3 takes a stack of it. */
 	public static void onEquippedItemBroken(LivingEntity entity, net.minecraft.world.item.Item item, EquipmentSlot slot) {

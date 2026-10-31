@@ -7,10 +7,13 @@ import java.util.Map;
 import java.util.TreeSet;
 
 import net.fabricmc.fabric.api.item.v1.DefaultItemComponentEvents;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.component.Compostable;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider;
@@ -23,6 +26,7 @@ import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntPr
  */
 public final class Compost {
 	private static final Map<ItemLike, Float> CHANCES = new LinkedHashMap<>();
+	private static final Map<TagKey<Item>, Float> TAG_CHANCES = new LinkedHashMap<>();
 	private static final int[] TIERS = {30, 50, 65, 85};
 	private static final String[] TIER_NAMES = {"low", "low_medium", "medium", "medium_high"};
 
@@ -49,14 +53,42 @@ public final class Compost {
 		}
 	}
 
+	/** {@code CompostingChanceRegistry.INSTANCE.add(TagKey<Item>, Float)}: every item in the tag, found when the components are built. */
+	public static void add(TagKey<Item> tag, float chance) {
+		synchronized (CHANCES) {
+			TAG_CHANCES.put(tag, chance);
+		}
+	}
+
+	/** {@code CompostingChanceRegistry.INSTANCE.remove(TagKey<Item>)} and {@code clear}: the items of the tag no longer compost. */
+	public static void remove(TagKey<Item> tag) {
+		add(tag, 0f);
+	}
+
 	static void apply(DefaultItemComponentEvents.ModifyContext context) {
 		synchronized (CHANCES) {
+			// a tag is read through the lookup the components are built with, the one place its items are known; items named one by one come after
+			if (!TAG_CHANCES.isEmpty()) {
+				context.modify(item -> true, (builder, provider, item) -> {
+					synchronized (CHANCES) {
+						TAG_CHANCES.forEach((tag, chance) -> {
+							if (!in(provider, tag, item)) return;
+							int percent = percent(chance);
+							builder.set(DataComponents.COMPOSTABLE, percent <= 0 ? null : new Compostable(key(percent)));
+						});
+					}
+				});
+			}
 			CHANCES.forEach((item, chance) -> {
 				int percent = percent(chance);
 				if (percent <= 0) context.modify(item.asItem(), builder -> builder.set(DataComponents.COMPOSTABLE, null));
 				else context.modify(item.asItem(), builder -> builder.set(DataComponents.COMPOSTABLE, new Compostable(key(percent))));
 			});
 		}
+	}
+
+	private static boolean in(HolderLookup.Provider provider, TagKey<Item> tag, Item item) {
+		return provider.lookupOrThrow(Registries.ITEM).get(tag).map(set -> set.contains(item.builtInRegistryHolder())).orElse(false);
 	}
 
 	private static int percent(float chance) {
@@ -79,6 +111,7 @@ public final class Compost {
 		TreeSet<Integer> percents = new TreeSet<>();
 		synchronized (CHANCES) {
 			for (float chance : CHANCES.values()) percents.add(percent(chance));
+			for (float chance : TAG_CHANCES.values()) percents.add(percent(chance));
 		}
 		for (int percent : percents) {
 			ResourceKey<ContextIntProvider> key = key(percent);

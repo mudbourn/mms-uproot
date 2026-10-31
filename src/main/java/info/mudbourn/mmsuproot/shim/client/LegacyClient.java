@@ -6,6 +6,7 @@ import java.util.List;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.fabricmc.fabric.api.client.model.loading.v1.SimpleUnbakedExtraModel;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
@@ -21,6 +22,11 @@ public final class LegacyClient {
 	/** 1.21.11's static {@code Minecraft.renderNames()}: false while the HUD is hidden (F1). The flag lives on the HUD now. */
 	public static boolean renderNames() {
 		return !Minecraft.getInstance().gui.hud.isHidden();
+	}
+
+	/** {@code Minecraft.setScreen(Screen)}: the screen is the HUD's to open and close now. */
+	public static void setScreen(Minecraft minecraft, Screen screen) {
+		minecraft.gui.setScreen(screen);
 	}
 
 	/**

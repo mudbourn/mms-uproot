@@ -20,6 +20,7 @@ import net.minecraft.world.item.alchemy.Potion;
 public final class Brewing {
 	private static final List<Mix> MIXES = new ArrayList<>();
 	private static final List<Container> CONTAINERS = new ArrayList<>();
+	private static final List<Item> BOTTLES_ADDED = new ArrayList<>();
 	private static final String[] BOTTLES = {"potion", "splash_potion", "lingering_potion"};
 
 	private Brewing() { }
@@ -49,8 +50,22 @@ public final class Brewing {
 		}
 	}
 
+	/**
+	 * {@code PotionBrewing.Builder.addContainer(Item)}: a bottle of a mod that holds potions. It takes every mix that the three bottles of
+	 * the game take, which is what 1.21.11's builder did for it.
+	 */
+	public static void addContainer(Item container) {
+		synchronized (BOTTLES_ADDED) {
+			BOTTLES_ADDED.add(container);
+		}
+	}
+
 	static void files(Map<String, String> out) {
 		Map<String, Holder<Potion>> known = new LinkedHashMap<>();
+		List<Item> added;
+		synchronized (BOTTLES_ADDED) {
+			added = new ArrayList<>(BOTTLES_ADDED);
+		}
 		synchronized (MIXES) {
 			for (Mix m : MIXES) {
 				Identifier from = id(m.from);
@@ -59,6 +74,11 @@ public final class Brewing {
 				known.put(to.toString(), m.to);
 				for (String bottle : BOTTLES) {
 					Identifier recipe = Identifier.fromNamespaceAndPath(Gen.NS, "brewing/" + bottle + "_" + Gen.flat(from) + "_" + Gen.flat(to) + "_" + path(m.reagent));
+					out.put(Gen.path(recipe, "recipe"), Gen.json(recipe("minecraft:" + bottle, from, Gen.itemId(m.reagent), "minecraft:" + bottle, to)));
+				}
+				for (Item container : added) {
+					String bottle = Gen.itemId(container);
+					Identifier recipe = Identifier.fromNamespaceAndPath(Gen.NS, "brewing/" + path(container) + "_" + Gen.flat(from) + "_" + Gen.flat(to) + "_" + path(m.reagent));
 					out.put(Gen.path(recipe, "recipe"), Gen.json(recipe(bottle, from, Gen.itemId(m.reagent), bottle, to)));
 				}
 			}
@@ -67,27 +87,29 @@ public final class Brewing {
 			Identifier id = Identifier.parse(potion);
 			if (id.getNamespace().equals("minecraft")) continue;
 			Identifier splash = Identifier.fromNamespaceAndPath(Gen.NS, "brewing/splash_" + Gen.flat(id));
-			out.put(Gen.path(splash, "recipe"), Gen.json(recipe("potion", id, "minecraft:gunpowder", "splash_potion", id)));
+			out.put(Gen.path(splash, "recipe"), Gen.json(recipe("minecraft:potion", id, "minecraft:gunpowder", "minecraft:splash_potion", id)));
 			Identifier lingering = Identifier.fromNamespaceAndPath(Gen.NS, "brewing/lingering_" + Gen.flat(id));
-			out.put(Gen.path(lingering, "recipe"), Gen.json(recipe("splash_potion", id, "minecraft:dragon_breath", "lingering_potion", id)));
+			out.put(Gen.path(lingering, "recipe"), Gen.json(recipe("minecraft:splash_potion", id, "minecraft:dragon_breath", "minecraft:lingering_potion", id)));
 		}
 		synchronized (CONTAINERS) {
 			int n = 0;
 			for (Container c : CONTAINERS) {
-				Identifier recipe = Identifier.fromNamespaceAndPath(Gen.NS, "brewing/container_" + n++);
-				out.put(Gen.path(recipe, "recipe"), Gen.json(Gen.obj("type", "minecraft:brewing",
-						"input", Gen.obj("item", Gen.itemId(c.from)),
-						"reagent", Gen.obj("item", Gen.itemId(c.reagent)),
-						"output", Gen.obj("id", Gen.itemId(c.to)))));
+				// the potion in the bottle stays the same through the change of bottle, so each potion has its own recipe
+				for (Holder.Reference<Potion> potion : BuiltInRegistries.POTION.listElements().toList()) {
+					Identifier id = potion.key().identifier();
+					Identifier recipe = Identifier.fromNamespaceAndPath(Gen.NS, "brewing/container_" + n + "_" + Gen.flat(id));
+					out.put(Gen.path(recipe, "recipe"), Gen.json(recipe(Gen.itemId(c.from), id, Gen.itemId(c.reagent), Gen.itemId(c.to), id)));
+				}
+				n++;
 			}
 		}
 	}
 
 	private static Map<String, Object> recipe(String inBottle, Identifier inPotion, String reagent, String outBottle, Identifier outPotion) {
 		return Gen.obj("type", "minecraft:brewing",
-				"input", Gen.obj("item", "minecraft:" + inBottle, "potion_contents", Gen.obj("potions", inPotion.toString())),
+				"input", Gen.obj("item", inBottle, "potion_contents", Gen.obj("potions", inPotion.toString())),
 				"reagent", Gen.obj("item", reagent),
-				"output", Gen.obj("id", "minecraft:" + outBottle,
+				"output", Gen.obj("id", outBottle,
 						"components", Gen.obj("minecraft:potion_contents", Gen.obj("potion", outPotion.toString()))));
 	}
 

@@ -25,11 +25,49 @@ public final class ClassRemap {
 	public static byte[] remap(byte[] bytes, Namer namer) {
 		ClassReader reader = new ClassReader(bytes);
 		ClassWriter writer = new ClassWriter(0);
-		ClassVisitor chain = new MixinShadows(new MixinParams(new CtorAdapters(new CallRules(new FieldMoves(writer, namer), namer), namer), namer), namer);
+		ClassVisitor chain = new MixinShadows(new MixinParams(new CtorAdapters(new CallRules(new FieldMoves(new SuperSwap(writer, namer), namer), namer), namer), namer), namer);
 		chain = new ClassRemapper(chain, new NameRemapper(namer));
 		chain = new AnnotationStrings(chain, namer);
 		reader.accept(chain, 0);
 		return writer.toByteArray();
+	}
+
+	/**
+	 * A {@code super} rule: the mod class extends the stand-in the rule names, which itself extends what the class extended.
+	 * The class's calls of its old superclass's constructor and methods (invokespecial) go to the stand-in, which inherits them.
+	 */
+	private static final class SuperSwap extends ClassVisitor {
+		private final Namer namer;
+		private String oldSuper;
+		private String newSuper;
+
+		SuperSwap(ClassVisitor next, Namer namer) {
+			super(API, next);
+			this.namer = namer;
+		}
+
+		@Override
+		public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+			String swap = namer.renames().superSwap(name);
+			if (swap != null) {
+				oldSuper = superName;
+				newSuper = swap;
+				superName = swap;
+			}
+			super.visit(version, access, name, signature, superName, interfaces);
+		}
+
+		@Override
+		public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+			MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+			if (mv == null || newSuper == null) return mv;
+			return new MethodVisitor(API, mv) {
+				@Override
+				public void visitMethodInsn(int opcode, String owner, String methodName, String methodDesc, boolean itf) {
+					super.visitMethodInsn(opcode, opcode == Opcodes.INVOKESPECIAL && owner.equals(oldSuper) ? newSuper : owner, methodName, methodDesc, itf);
+				}
+			};
+		}
 	}
 
 	/** Maps names through the {@link Namer}; intermediary names are unique, so owners do not matter. */

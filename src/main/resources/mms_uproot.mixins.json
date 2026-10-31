@@ -5,10 +5,16 @@
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"GenPackMixin",
+		"LegacySwingMixin",
 		"MaterialRuleContextAccess",
 		"MaterialSystemMixin",
 		"ModPackResourcesFactoryMixin",
-		"PackCompatibilityMixin"
+		"PackCompatibilityMixin",
+		"SlimeSplitMixin"
+	],
+	"client": [
+		"EntityRenderersMixin",
+		"ScreenBackgroundMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

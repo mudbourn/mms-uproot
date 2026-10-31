@@ -7,9 +7,12 @@ import java.util.List;
 import java.util.Map;
 
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.entity.npc.villager.VillagerType;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.saveddata.maps.MapDecorationType;
@@ -107,6 +110,7 @@ public final class Trades {
 		int n = 0;
 		synchronized (VILLAGER) {
 			for (Villager v : VILLAGER) {
+				if (!v.profession.getNamespace().equals("minecraft")) tradeSet(v.profession, v.level);
 				String set = v.profession.getPath() + "/level_" + v.level;
 				Identifier tag = Identifier.fromNamespaceAndPath(v.profession.getNamespace(), set);
 				for (Map<String, Object> entry : v.trade.entries()) {
@@ -131,6 +135,17 @@ public final class Trades {
 			}
 		}
 		tags.forEach((tag, values) -> out.put(Gen.path(Identifier.parse(tag), "tags/villager_trade"), Gen.json(Gen.obj("values", values))));
+	}
+
+	/**
+	 * A modded profession is built with an empty map of trade sets by level (shim.compat.CtorAdapters), since its id is not known
+	 * until it is registered. Each level that has trades gets the set written above, once the profession is in the registry.
+	 */
+	private static void tradeSet(Identifier profession, int level) {
+		VillagerProfession built = BuiltInRegistries.VILLAGER_PROFESSION.getOptional(profession).orElse(null);
+		if (built == null) return;
+		built.tradeSetsByLevel().putIfAbsent(level, ResourceKey.create(Registries.TRADE_SET,
+				Identifier.fromNamespaceAndPath(profession.getNamespace(), profession.getPath() + "/level_" + level)));
 	}
 
 	private static Map<String, Object> stack(ItemLike item, int count) {

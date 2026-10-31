@@ -4,29 +4,21 @@
 # Descriptors that mention Minecraft use 26.3 names (the rules run after the remap); * avoids that.
 
 # --- Biomes We've Gone: pumpkin warden (blocks.md R36) ---
-# The brain is built imperatively on an API that no longer exists, so the whole mob goes.
-stub net/potionstudios/biomeswevegone/world/entity/pumpkinwarden/PumpkinWarden | pumpkin warden brain uses the removed Brain builder API
-stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/PumpkinWardenGoalPackages | pumpkin warden brain activities
-stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/PumpkinWardenPanicTrigger | pumpkin warden brain activities
-stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/EnterPumpkinBurrow | pumpkin warden brain activities
-stub net/potionstudios/biomeswevegone/world/entity/ai/behavior/SetClosestPumpkinBurrowAsWalkTarget | pumpkin warden brain activities
-stub net/potionstudios/biomeswevegone/world/entity/ai/sensing/PumpkinWardenSensor | pumpkin warden sensor on the reworked sensor API
-
-# The entity type stays registered: 26.3 entity types hold intrusive holders, and the registry refuses to freeze with
-# one unregistered. Nothing spawns it (no biome lists it); only /summon or a saved entity would make the empty shell.
-# The egg stays registered for the same reason; it spawns the empty shell.
-
-# Burrow occupants: the block entity keeps working but never releases or ticks a warden.
-noop net/potionstudios/biomeswevegone/world/level/block/entities/PumpkinBurrowBlockEntity addOccupant * | burrow cannot take a pumpkin warden occupant
-noop net/potionstudios/biomeswevegone/world/level/block/entities/PumpkinBurrowBlockEntity emptyOccupant * | burrow cannot release a pumpkin warden
-noop net/potionstudios/biomeswevegone/world/level/block/entities/PumpkinBurrowBlockEntity serverTick * | burrow occupant tick is off with the mob
+# Not disabled any more: its brain is built on 1.21.11 Brain calls, which the stand-ins of shim/entity (LegacyBrainMob, LegacyBrains)
+# answer, and the burrow's occupants are the same mob. Its renderer needed the context GeckoLib 5.5's item layer asks for, which a
+# ctor rule of renames.txt passes.
+# Known limits, with no rule to lift them:
+# - The warden's day schedule is the timeline biomeswevegone:pumpkin_warden. No tag in the mod's data lists it, so no dimension runs it and the
+#   mob stays on its core and idle activities (panic after a hit still works). Adding it to data/minecraft/tags/timeline/in_overworld.json
+#   makes it follow the schedule and shelter in a burrow at rest time (tried on a server).
+# - Map marker colour: 26.3's MapDecorationType has no colour and the map_color item component is gone (MapColorComponentRemovalFix
+#   deletes it), so the explorer maps keep the vanilla tint. The constructor adapter in renames.txt drops the argument.
 
 # --- CorgiLib (blocks.md section 3.6 and 7) ---
-noop corgitaco/corgilib/server/commands/PlaceAllCommand register * | /placeall needs ConfiguredFeature.place and Structure.generate signatures that changed
-# Tentative: the whole class draws with the removed MultiBufferSource.getBuffer(RenderType).
-stub corgitaco/corgilib/client/RenderUtils | tentative: debug sphere and ring rendering uses the removed render API
-# Tentative: the handler's target (Minecraft.getOverlay) is gone; keeping the handler empty is safe if the mixin still applies.
-noop corgitaco/corgilib/mixin/client/MixinMouseHandler editor * | tentative: mouse scroll tweak for the structure box editor
+# /placeall runs: its two changed calls are answered by LegacyWorld (see renames.txt).
+# The debug sphere and ring helpers (client/RenderUtils) are not disabled: every render call they make exists in 26.3 (the audit lists none
+# missing). Nothing in CorgiLib calls them, and nothing has drawn with them on a client yet.
+# The scroll hook of the structure box editor (MixinMouseHandler) runs: its target call is Gui.overlay() now (see renames.txt).
 
 # Map decoration tint (R32) needs no rule: the remapper's constructor rule drops the colour argument.
 
@@ -50,8 +42,6 @@ noop net/potionstudios/biomeswevegone/fabric/client/BiomesWeveGoneClientFabric l
 # Sign sprites: 26.3 has no Sheets material table to fill; see the client audit in the report.
 noop net/potionstudios/biomeswevegone/client/BiomesWeveGoneClient registerWoodTypes * | tentative: fills the removed Sheets sign material tables
 # The wreath draws its block model through SubmitNodeCollector.submitBlockModel with the removed BlockStateModel
-# GeckoLib 5.5 gave ItemInHandGeoLayer a render context the old call cannot supply; the mob is not spawned anyway
-stub net/potionstudios/biomeswevegone/client/renderer/entity/pumpkinwarden/PumpkinWardenRenderer | GeckoLib's ItemInHandGeoLayer constructor gained a render context; the mob it draws is switched off
 
 # --- Furnish: furniture workbench recipe ---
 # The recipe's own serializer class cannot load (RecipeSerializer is a record in 26.3), so the recipe class must not build it; the

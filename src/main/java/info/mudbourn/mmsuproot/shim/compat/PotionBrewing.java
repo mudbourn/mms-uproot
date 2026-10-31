@@ -21,6 +21,10 @@ public final class PotionBrewing {
 			Brewing.addStartMix(ingredient, to);
 		}
 
+		public void addContainer(Item container) {
+			Brewing.addContainer(container);
+		}
+
 		public void addContainerRecipe(Item from, Item ingredient, Item to) {
 			Brewing.addContainerRecipe(from, ingredient, to);
 		}

@@ -72,6 +72,10 @@
 #                                  javac would have, so the game's call reaches the injectors. TARGET and descriptors are 26.3
 #                                  names. Skipped when TARGET declares the method itself.
 #                                  e.g. inherited net/minecraft/client/model/monster/zombie/DrownedModel setupAnim (Lnet/minecraft/client/renderer/entity/state/ZombieRenderState;)V (Lnet/minecraft/client/renderer/entity/state/HumanoidRenderState;)V
+# super CLASS NEWSUPER             a mod class (its own name, as it is in the mod) extends NEWSUPER, an internal name, where it extended its own
+#                                  superclass; NEWSUPER must extend that superclass and have its constructors. The class's invokespecial calls
+#                                  of the old superclass (constructors, super.m()) go to NEWSUPER. For a mod class whose superclass lost methods
+#                                  that the class overrides, which a stand-in superclass can keep.
 # Not a rule: a call of a Minecraft class that is now an interface (or no longer one) switches between invokevirtual and
 # invokeinterface on its own, method references and static calls included; see remap.CallRules.
 # Classes that moved package and kept their simple name are found on their own at load time.
@@ -286,6 +290,16 @@ ctoradapt net/minecraft/world/level/block/grower/TreeGrower (Ljava/lang/String;L
 # Default components are bound after mod init; a mod asking for a default stack that early gets one without components
 callinst net/minecraft/world/item/Item getDefaultInstance ()Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/item/LegacyItems.getDefaultInstance
 
+# Brains. 26.3 makes a brain from the saved memories and the entity, and an activity is added with its memory conditions. The pumpkin warden
+# builds its brain by hand on the 1.21.11 calls, which the stand-ins of shim/entity answer, and extends the mob that keeps makeBrain(Dynamic).
+super net/potionstudios/biomeswevegone/world/entity/pumpkinwarden/PumpkinWarden info/mudbourn/mmsuproot/shim/entity/LegacyBrainMob
+callmove net/minecraft/world/entity/ai/Brain provider (Ljava/util/Collection;Ljava/util/Collection;)Lnet/minecraft/world/entity/ai/Brain$Provider; info/mudbourn/mmsuproot/shim/entity/LegacyBrains provider
+callinst net/minecraft/world/entity/ai/Brain addActivity (Lnet/minecraft/world/entity/schedule/Activity;Lcom/google/common/collect/ImmutableList;)V info/mudbourn/mmsuproot/shim/entity/LegacyBrains.addActivity
+callinst net/minecraft/world/entity/ai/Brain addActivityWithConditions (Lnet/minecraft/world/entity/schedule/Activity;Lcom/google/common/collect/ImmutableList;Ljava/util/Set;)V info/mudbourn/mmsuproot/shim/entity/LegacyBrains.addActivityWithConditions
+callinst net/minecraft/world/entity/ai/Brain copyWithoutBehaviors ()Lnet/minecraft/world/entity/ai/Brain; info/mudbourn/mmsuproot/shim/entity/LegacyBrains.copyWithoutBehaviors
+# GeckoLib 5.5's item-in-hand layer takes the renderer context (it reads the item and block model resolvers from it); the warden's renderer made it without
+ctor com/geckolib/renderer/layer/builtin/ItemInHandGeoLayer (Lcom/geckolib/renderer/base/GeoRenderer;)V (Lnet/minecraft/client/renderer/entity/EntityRendererProvider$Context;Lcom/geckolib/renderer/base/GeoRenderer;)V 0=info/mudbourn/mmsuproot/shim/client/LegacyContexts.rendererContext:Lnet/minecraft/client/renderer/entity/EntityRendererProvider$Context;
+
 # Structure processors: the type holder is gone, and 26.3's StructureProcessor is an interface whose codec() is the codec itself, so a mod's
 # processor extends the stand-in that answers codec() from getType() and its own codec is registered (a class that cannot load decodes to a processor that does nothing)
 class net/minecraft/world/level/levelgen/structure/templatesystem/StructureProcessor info/mudbourn/mmsuproot/shim/feature/LegacyStructureProcessor
@@ -473,7 +487,23 @@ inherited net/minecraft/world/entity/monster/cubemob/Slime tick ()V
 class com/mojang/blaze3d/pipeline/RenderPipeline com/mojang/renderpearl/api/pipeline/RenderPipeline
 method net/minecraft/client/gui/screens/inventory/AbstractContainerScreen renderTooltip extractTooltip 3
 method net/minecraft/client/gui/GuiGraphicsExtractor renderItem item (Lnet/minecraft/world/item/ItemStack;II)V
+# ...and the screen background hooks (a container screen's renderBg has no caller now: mixin.ScreenBackgroundMixin calls it), the setter of the
+# open screen, and the player drop that a menu uses
+method net/minecraft/client/gui/screens/Screen renderBackground extractBackground 4
+method net/minecraft/client/gui/screens/Screen renderTransparentBackground extractTransparentBackground 1
+callinst net/minecraft/client/Minecraft setScreen (Lnet/minecraft/client/gui/screens/Screen;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.setScreen
+callinst net/minecraft/world/entity/player/Player drop (Lnet/minecraft/world/item/ItemStack;Z)Lnet/minecraft/world/entity/item/ItemEntity; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.drop
+bridge net/minecraft/client/renderer/entity/EntityRenderer shouldRender (Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDD)Z (Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDDF)Z
 injectat net/minecraft/world/entity/monster/cubemob/Slime convertTo (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob; net/minecraft/world/entity/monster/cubemob/AbstractCubeMob convertTo (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob;
 # optional MIXINCLASS HANDLER      the injector may find no target, also in strict mode (-Duproot.strictMixins): its target call is inside
 #                                  a method the mixin's target only inherits, where Mixin cannot reach it. (Added with the Mob AI rules.)
 optional com/notunanancyowen/mait/mixin/SlimeEntityMixin copyOffhandItemIGuess
+# (mixin.SlimeSplitMixin does that copy instead, on AbstractCubeMob, where the call is.)
+
+# CorgiLib's /placeall: the template manager that ServerLevel.structureManager() returned is getStructureTemplateManager() now, and
+# Structure.generate takes the climate sampler after the biome source
+callinst net/minecraft/server/level/ServerLevel structureManager ()Lnet/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.templateManager
+callinst net/minecraft/world/level/levelgen/structure/Structure generate (Lnet/minecraft/core/Holder;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/core/RegistryAccess;Lnet/minecraft/world/level/chunk/ChunkGenerator;Lnet/minecraft/world/level/biome/BiomeSource;Lnet/minecraft/world/level/levelgen/RandomState;Lnet/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager;JLnet/minecraft/world/level/ChunkPos;ILnet/minecraft/world/level/LevelHeightAccessor;Ljava/util/function/Predicate;)Lnet/minecraft/world/level/levelgen/structure/StructureStart; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.generate
+fieldget net/minecraft/world/level/Level random getRandom
+# ...and the scroll hook of its structure box editor: the overlay of the screen is asked of the Gui now
+injectat net/minecraft/client/Minecraft getOverlay ()Lnet/minecraft/client/gui/screens/Overlay; net/minecraft/client/gui/Gui overlay ()Lnet/minecraft/client/gui/screens/Overlay;

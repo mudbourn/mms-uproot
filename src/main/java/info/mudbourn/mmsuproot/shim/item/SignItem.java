@@ -7,7 +7,8 @@ import net.minecraft.world.level.block.Block;
 
 /**
  * 1.21.11's {@code SignItem}. 26.3 removed it and builds sign items from a standing and wall block
- * item whose properties carry empty sign text, so this is that, under the old constructor.
+ * item whose properties carry empty sign text, so this is that, under the old constructor. The
+ * attachment direction is down, the value 26.3's own sign items pass (hanging signs have their own item class).
  */
 public class SignItem extends StandingAndWallBlockItem {
 	public SignItem(Block standing, Block wall, Item.Properties properties) {

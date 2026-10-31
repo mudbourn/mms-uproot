@@ -2,6 +2,7 @@ package info.mudbourn.mmsuproot.shim.compat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -9,11 +10,17 @@ import info.mudbourn.mmsuproot.shim.feature.ConfiguredFeature;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.chat.TextColor;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelHeightAccessor;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.levelgen.synth.SimplexNoise;
 import net.minecraft.world.level.block.state.BlockState;
@@ -32,6 +39,7 @@ import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 
 /** World calls that moved or changed argument shape. */
 public final class LegacyWorld {
@@ -76,6 +84,19 @@ public final class LegacyWorld {
 	/** {@code RandomState.sampler()}, now made on demand; an uncached context is enough for a point lookup. */
 	public static Climate.Sampler sampler(RandomState state) {
 		return state.createClimateSampler(SamplerContext.EMPTY_UNCACHED);
+	}
+
+	/** {@code ServerLevel.structureManager()} gave the template manager; that one is {@code getStructureTemplateManager()} now. */
+	public static StructureTemplateManager templateManager(ServerLevel level) {
+		return level.getStructureTemplateManager();
+	}
+
+	/** {@code Structure.generate(...)} without the climate sampler, which 26.3 takes after the biome source. */
+	public static StructureStart generate(Structure structure, Holder<Structure> holder, ResourceKey<Level> dimension, RegistryAccess registries,
+			ChunkGenerator generator, BiomeSource biomes, RandomState randomState, StructureTemplateManager templates, long seed, ChunkPos chunk,
+			int references, LevelHeightAccessor height, Predicate<Holder<Biome>> validBiome) {
+		return structure.generate(holder, dimension, registries, generator, biomes, sampler(randomState), randomState, templates, seed, chunk,
+				references, height, validBiome);
 	}
 
 	/** {@code BiomeSource.getNoiseBiome(x, y, z, sampler)}, now answered by a resolver made from the sampler. */
