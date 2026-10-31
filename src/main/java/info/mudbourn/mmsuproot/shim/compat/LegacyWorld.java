@@ -69,11 +69,11 @@ public final class LegacyWorld {
 	}
 
 	/**
-	 * {@code Level.getDayTime()}. 26.3 has several world clocks; the dimension's own default clock is
-	 * what the single 1.21.11 day time became, so conditions on "time of day" read that one.
+	 * {@code Level.getDayTime()}. 26.3 has several world clocks, but 1.21.11 kept one day time in the level data and
+	 * every dimension read it, so this is the overworld's clock whichever level asks, not the default clock of the level.
 	 */
 	public static long getDayTime(Level level) {
-		return level.getDefaultClockTime();
+		return level.getOverworldClockTime();
 	}
 
 	/** {@code StructureManager.startsForStructure(SectionPos, Structure)}, now taking the chunk coordinates. */

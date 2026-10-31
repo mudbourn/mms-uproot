@@ -33,6 +33,8 @@ public final class LegacyConfiguredFeature<FC extends FeatureConfiguration> impl
 
 	@Override
 	public boolean place(WorldGenLevel level, ChunkGenerator generator, RandomSource random, BlockPos origin) {
+		// 1.21.11's Feature.place(config, ...) refused an origin the level cannot write to before it placed anything
+		if (!level.ensureCanWrite(origin)) return false;
 		return feature.place(new FeaturePlaceContext<>(level, generator, random, origin, config));
 	}
 }

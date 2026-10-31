@@ -1,5 +1,6 @@
 package info.mudbourn.mmsuproot.shim.noise;
 
+import it.unimi.dsi.fastutil.doubles.DoubleArrayList;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
 
 /**
@@ -9,9 +10,6 @@ import net.minecraft.world.level.levelgen.synth.NormalNoise;
  * of the providers that took it get the {@link NormalNoise} this makes.
  */
 public final class NoiseParameters {
-	/** The factor 26.3's own data uses for one octave; see the data converter, which applies the same one. */
-	private static final double ONE_OCTAVE = 0.955388882960065;
-
 	private final int firstOctave;
 	private final double[] amplitudes;
 	private final NormalNoise made;
@@ -39,15 +37,12 @@ public final class NoiseParameters {
 		return (NoiseParameters) o;
 	}
 
-	/** The 26.3 noise: the first amplitude is the base one, the others become modifiers relative to it. */
+	/**
+	 * The 26.3 noise that samples as 1.21.11's {@code NormalNoise.create(random, firstOctave, amplitudes)} did:
+	 * {@code createParity} keeps the old normalisation, which differs from what the builder does by default.
+	 */
 	public NormalNoise toNoise() {
 		if (made != null) return made;
-		NormalNoise.Builder b = NormalNoise.builder().setBaseOctave(firstOctave).setOctaveCount(amplitudes.length);
-		double base = amplitudes[0];
-		b.setBaseAmplitude(amplitudes.length == 1 ? base * ONE_OCTAVE : base);
-		if (base != 0) {
-			for (int i = 1; i < amplitudes.length; i++) b.setAmplitudeModifier(i, amplitudes[i] / base);
-		}
-		return b.build();
+		return NormalNoise.createParity(firstOctave, new DoubleArrayList(amplitudes));
 	}
 }

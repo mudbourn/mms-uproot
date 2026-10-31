@@ -1,5 +1,7 @@
 package info.mudbourn.mmsuproot.shim.compat;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 
@@ -28,6 +30,9 @@ import net.minecraft.world.level.levelgen.feature.Feature;
 public final class CtorAdapters {
 	private static final ResourceKey<Feature> UNUSED_TREE = ResourceKey.create(Registries.FEATURE, Identifier.fromNamespaceAndPath("uproot", "unused_tree"));
 
+	/** The weight a certain key would get; a chance becomes its share of this. */
+	private static final int WEIGHT_SCALE = 100000;
+
 	private CtorAdapters() { }
 
 	/** {@code new ChunkPos(BlockPos)} became the factory {@code ChunkPos.containing}; the record's own constructor takes the chunk coordinates. */
@@ -41,12 +46,55 @@ public final class CtorAdapters {
 	}
 
 	/**
-	 * {@code TreeGrower}: 1.21.11 took six optional feature keys and a mega chance; 26.3 takes three
-	 * weighted lists and the key of the smallest tree. A subclass supplies its trees by overriding
-	 * the getters, so the lists are empty and the key is a placeholder that is never read.
+	 * {@code TreeGrower}: 1.21.11 took six optional feature keys and a chance for the secondary ones; 26.3 takes three
+	 * weighted lists and the key of the smallest tree. The lists give each key the chance 1.21.11's
+	 * {@code getConfiguredFeature} and {@code getConfiguredMegaFeature} gave it: the secondary tree at {@code megaChance}
+	 * (the same chance for the mega tree, and for flowers), the plain one otherwise. Where 1.21.11 found no key at all
+	 * (a secondary mega tree but no mega tree, say) it fell back to the plain tree, which the lists cannot say, so
+	 * that share goes to the keys that are there. The random draws differ, since 26.3 draws one weighted int.
 	 */
-	public static Object[] treeGrower(String name, float megaChance, Optional<?> a, Optional<?> b, Optional<?> c, Optional<?> d, Optional<?> e, Optional<?> f) {
-		return new Object[] {name, WeightedList.of(), WeightedList.of(), WeightedList.of(), UNUSED_TREE};
+	public static Object[] treeGrower(String name, float megaChance, Optional<?> mega, Optional<?> secondaryMega, Optional<?> tree, Optional<?> secondaryTree,
+			Optional<?> flowers, Optional<?> secondaryFlowers) {
+		Map<Object, Double> megaChances = new LinkedHashMap<>();
+		// getConfiguredMegaFeature: the secondary mega tree at the chance, else the mega tree
+		if (secondaryMega.isPresent()) {
+			add(megaChances, secondaryMega.get(), megaChance);
+			add(megaChances, mega.orElse(null), 1.0 - megaChance);
+		} else {
+			add(megaChances, mega.orElse(null), 1.0);
+		}
+		Map<Object, Double> plain = featureChances(megaChance, false, tree, secondaryTree, flowers, secondaryFlowers);
+		Map<Object, Double> withFlowers = featureChances(megaChance, true, tree, secondaryTree, flowers, secondaryFlowers);
+		Object shortest = firstPresent(tree, mega, flowers, secondaryTree, secondaryMega, secondaryFlowers);
+		return new Object[] {name, weighted(plain), weighted(megaChances), withFlowers.equals(plain) ? WeightedList.of() : weighted(withFlowers), shortest};
+	}
+
+	/** {@code getConfiguredFeature(random, hasFlowers)} as the chance of each key; a draw that finds no key is left out. */
+	private static Map<Object, Double> featureChances(float chance, boolean hasFlowers, Optional<?> tree, Optional<?> secondaryTree, Optional<?> flowers,
+			Optional<?> secondaryFlowers) {
+		Object plain = hasFlowers && flowers.isPresent() ? flowers.get() : tree.orElse(null);
+		Object secondary = hasFlowers && secondaryFlowers.isPresent() ? secondaryFlowers.get() : (secondaryTree.isPresent() ? secondaryTree.get() : plain);
+		Map<Object, Double> chances = new LinkedHashMap<>();
+		add(chances, secondary, chance);
+		add(chances, plain, 1.0 - chance);
+		return chances;
+	}
+
+	private static Object firstPresent(Optional<?>... keys) {
+		for (Optional<?> key : keys) if (key.isPresent()) return key.get();
+		return UNUSED_TREE;
+	}
+
+	private static void add(Map<Object, Double> chances, Object key, double chance) {
+		if (key != null && chance > 0) chances.merge(key, chance, Double::sum);
+	}
+
+	@SuppressWarnings("unchecked")
+	private static WeightedList<ResourceKey<Feature>> weighted(Map<Object, Double> chances) {
+		if (chances.size() == 1) return WeightedList.of((ResourceKey<Feature>) chances.keySet().iterator().next());
+		WeightedList.Builder<ResourceKey<Feature>> list = WeightedList.builder();
+		chances.forEach((key, chance) -> list.add((ResourceKey<Feature>) key, Math.max(1, (int) Math.round(chance * WEIGHT_SCALE))));
+		return list.build();
 	}
 
 	/**

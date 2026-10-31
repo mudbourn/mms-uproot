@@ -28,6 +28,11 @@ public final class FuelValues {
 			return this;
 		}
 
+		/** 1.21.11's descriptor, {@code (TagKey;I)}. */
+		public Builder add(TagKey<Item> tag, int ticks) {
+			return this.add(tag, Integer.valueOf(ticks));
+		}
+
 		public Builder remove(ItemLike item) {
 			Fuel.remove(item);
 			return this;

@@ -329,6 +329,8 @@ callinst net/minecraft/world/level/biome/BiomeSource getNoiseBiome (IIILnet/mine
 callinst net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider getState (Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getState
 callinst net/minecraft/world/level/StructureManager hasAnyStructureAt (Lnet/minecraft/core/BlockPos;)Z info/mudbourn/mmsuproot/shim/compat/LegacyWorld.hasAnyStructureAt
 callinst net/minecraft/core/BlockPos getCenter ()Lnet/minecraft/world/phys/Vec3; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getCenter
+# 1.21.11's SimplexNoise sampled without its random offset (callers added xo themselves); 26.3 adds it unless told to discard it
+ctor net/minecraft/world/level/levelgen/synth/SimplexNoise (Lnet/minecraft/util/RandomSource;)V (Lnet/minecraft/util/RandomSource;Z)V 1=#1
 callinst net/minecraft/world/level/levelgen/synth/SimplexNoise getValue (DD)D info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getValue
 callinst net/minecraft/world/level/levelgen/synth/SimplexNoise getValue (DDD)D info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getValue
 # NormalNoise.NoiseParameters is package-private now (see the class rule above) and the noise providers take the made noise
@@ -462,6 +464,7 @@ fieldset net/minecraft/world/entity/LivingEntity attackAnim info/mudbourn/mmsupr
 fieldset net/minecraft/world/entity/Entity invulnerableTime setInvulnerableTime
 callinst net/minecraft/world/entity/LivingEntity swingForAttack (Lnet/minecraft/world/InteractionHand;)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swingForAttack
 callinst net/minecraft/world/entity/LivingEntity swing (Lnet/minecraft/world/InteractionHand;Z)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swing
+callinst net/minecraft/world/entity/Entity calculateViewVector (FF)Lnet/minecraft/world/phys/Vec3; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.calculateViewVector
 calldrop net/minecraft/world/entity/LivingEntity updateSwingTime ()V
 callinst net/minecraft/world/entity/LivingEntity onEquippedItemBroken (Lnet/minecraft/world/item/Item;Lnet/minecraft/world/entity/EquipmentSlot;)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.onEquippedItemBroken
 callinst net/minecraft/world/entity/LivingEntity entityAttackRange ()Lnet/minecraft/world/item/component/AttackRange; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.entityAttackRange

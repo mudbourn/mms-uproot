@@ -1,39 +1,29 @@
 package info.mudbourn.mmsuproot.shim.entity;
 
-import java.lang.reflect.Field;
-import java.util.Collection;
+import java.util.Map;
+import java.util.WeakHashMap;
 
-import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.entity.state.EndermanRenderState;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 /** Render state fields that 26.3 changed the type of. Client only; nothing here loads on a server. */
 public final class LegacyRenderStates {
-	private static Field modelParts;
-	private static Field specialRenderer;
+	/** The block each enderman render state was last filled with, kept by mixin.EndermanCarriedMixin; the render thread only. */
+	private static final Map<EndermanRenderState, BlockState> CARRIED = new WeakHashMap<>();
 
 	private LegacyRenderStates() { }
 
-	/**
-	 * {@code EndermanRenderState.carriedBlock}: the block the enderman carries. 26.3 keeps what to draw of it, not the block,
-	 * so a mod that only asks whether there is one gets air for none and some block for one.
-	 */
-	public static BlockState carriedBlock(EndermanRenderState state) {
-		return hasModel(state.carriedBlock) ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState();
+	/** Called when an enderman fills its render state (mixin.EndermanCarriedMixin); {@code block} is null when it carries none. */
+	public static void setCarriedBlock(EndermanRenderState state, BlockState block) {
+		if (block == null) CARRIED.remove(state);
+		else CARRIED.put(state, block);
 	}
 
-	private static boolean hasModel(BlockModelRenderState model) {
-		try {
-			if (modelParts == null) {
-				modelParts = BlockModelRenderState.class.getDeclaredField("modelParts");
-				modelParts.setAccessible(true);
-				specialRenderer = BlockModelRenderState.class.getDeclaredField("specialRenderer");
-				specialRenderer.setAccessible(true);
-			}
-			return !((Collection<?>) modelParts.get(model)).isEmpty() || specialRenderer.get(model) != null;
-		} catch (ReflectiveOperationException e) {
-			throw new IllegalStateException("Uproot could not read the carried block of an enderman", e);
-		}
+	/**
+	 * {@code EndermanRenderState.carriedBlock}: the block the enderman carries, null when it carries none. 26.3 keeps what to
+	 * draw of it, not the block, so the block is taken from the enderman as the renderer extracts the state.
+	 */
+	public static BlockState carriedBlock(EndermanRenderState state) {
+		return CARRIED.get(state);
 	}
 }

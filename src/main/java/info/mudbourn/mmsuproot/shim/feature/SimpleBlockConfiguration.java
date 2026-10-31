@@ -3,4 +3,8 @@ package info.mudbourn.mmsuproot.shim.feature;
 import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvider;
 
 /** 1.21.11's settings of the simple block feature. */
-public record SimpleBlockConfiguration(BlockStateProvider toPlace) implements FeatureConfiguration { }
+public record SimpleBlockConfiguration(BlockStateProvider toPlace, boolean scheduleTick) implements FeatureConfiguration {
+	public SimpleBlockConfiguration(BlockStateProvider toPlace) {
+		this(toPlace, false);
+	}
+}

@@ -35,6 +35,7 @@ import net.minecraft.world.item.component.AttackRange;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.phys.Vec3;
 
 /** Entity and player calls that 26.3 removed or split. */
 public final class LegacyEntities {
@@ -70,9 +71,15 @@ public final class LegacyEntities {
 		entity.swing(hand, entity.getItemInHand(hand).getAttackAnimation(), false);
 	}
 
-	/** {@code LivingEntity.swing(InteractionHand, boolean)}: the flag said whether to tell the swinging player too. */
+	/**
+	 * {@code LivingEntity.swing(InteractionHand, boolean)}: the flag said whether to tell the swinging player too. 1.21.11 took the
+	 * length of the swing from the main hand item ({@code getCurrentSwingDuration}) and drew the kind from the item in the swinging
+	 * hand, so the animation is made of those two.
+	 */
 	public static void swing(LivingEntity entity, InteractionHand hand, boolean updateSelf) {
-		entity.swing(hand, SwingAnimation.DEFAULT, updateSelf);
+		SwingAnimation held = entity.getItemInHand(hand).getAttackAnimation();
+		int duration = entity.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation().duration();
+		entity.swing(hand, duration == held.duration() ? held : new SwingAnimation(held.type(), duration), updateSelf);
 	}
 
 	/** {@code LivingEntity.updateSwingTime()} ticked the swing by hand; 26.3 ticks it with the entity, so there is nothing to do. */
@@ -96,12 +103,13 @@ public final class LegacyEntities {
 	/**
 	 * Called at the end of every living entity tick (mixin.LegacySwingMixin). 1.21.11 called {@code updateSwingTime()} there, and a
 	 * mod could override it to change how the swing ticks; the call is gone, so this makes it for a class that has the override.
-	 * The value the override kept in {@code attackAnim} lasts one tick, as the swing progress it replaced did.
+	 * The value a mod kept in {@code attackAnim} lasts one tick for every entity, as the swing progress it replaced did: 1.21.11
+	 * recomputed it each tick.
 	 */
 	public static void tickSwing(LivingEntity entity) {
+		if (!ATTACK_ANIM.isEmpty()) ATTACK_ANIM.remove(entity);
 		Optional<MethodHandle> tick = SWING_TICK.get(entity.getClass());
 		if (tick.isEmpty()) return;
-		ATTACK_ANIM.remove(entity);
 		try {
 			tick.get().invoke(entity);
 		} catch (Throwable t) {
@@ -114,14 +122,22 @@ public final class LegacyEntities {
 		return ATTACK_ANIM.isEmpty() ? null : ATTACK_ANIM.get(entity);
 	}
 
-	/** {@code LivingEntity.onEquippedItemBroken(Item, EquipmentSlot)} took the item; 26.3 takes a stack of it. */
-	public static void onEquippedItemBroken(LivingEntity entity, net.minecraft.world.item.Item item, EquipmentSlot slot) {
-		entity.onEquippedItemBroken(new ItemStack(item), slot);
+	/** {@code Entity.calculateViewVector(float, float)}: 26.3 made it static. */
+	public static Vec3 calculateViewVector(Entity entity, float xRot, float yRot) {
+		return Entity.calculateViewVector(xRot, yRot);
 	}
 
-	/** {@code LivingEntity.entityAttackRange()}: the reach with whatever the entity holds in its main hand. */
+	/**
+	 * {@code LivingEntity.onEquippedItemBroken(Item, EquipmentSlot)} took the item and ignored it, ending the effects of what the slot
+	 * holds ({@code getItemBySlot}); 26.3 takes that stack.
+	 */
+	public static void onEquippedItemBroken(LivingEntity entity, net.minecraft.world.item.Item item, EquipmentSlot slot) {
+		entity.onEquippedItemBroken(entity.getItemBySlot(slot), slot);
+	}
+
+	/** {@code LivingEntity.entityAttackRange()}: the reach with the item in use, else the main hand ({@code getActiveItem}). */
 	public static AttackRange entityAttackRange(LivingEntity entity) {
-		return entity.getAttackRangeWith(entity.getMainHandItem());
+		return entity.getAttackRangeWith(entity.getActiveItem());
 	}
 
 	/**
@@ -156,7 +172,11 @@ public final class LegacyEntities {
 	private static Field swingState;
 	private static Field swingTicks;
 
-	/** {@code LivingEntity.swingTime}, the ticks into the current swing; 26.3 keeps them in the swing state. */
+	/**
+	 * {@code LivingEntity.swingTime}, the ticks into the current swing; 26.3 keeps them in the swing state. 1.21.11 set it to -1
+	 * when a swing began and counted from there, 0 when there was none; 26.3 begins at 0, so the count is one behind. Mods
+	 * test for the -1 to act once on a fresh swing.
+	 */
 	public static int swingTime(LivingEntity entity) {
 		try {
 			if (swingTicks == null) {
@@ -165,7 +185,10 @@ public final class LegacyEntities {
 				swingTicks = swingState.getType().getDeclaredField("ticks");
 				swingTicks.setAccessible(true);
 			}
-			return swingTicks.getInt(swingState.get(entity));
+			LivingEntity.SwingDescription swing = entity.getCurrentSwing();
+			if (swing == null) return 0;
+			int old = swingTicks.getInt(swingState.get(entity)) - 1;
+			return old < swing.durationTicks() ? old : 0;
 		} catch (ReflectiveOperationException e) {
 			throw new IllegalStateException("Uproot could not read the swing ticks of an entity", e);
 		}

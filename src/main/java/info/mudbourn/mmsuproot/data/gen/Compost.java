@@ -17,6 +17,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.component.Compostable;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt;
 
 /**
  * Compost chances. 1.21.11 mods called Fabric's {@code CompostingChanceRegistry} with a chance per
@@ -46,11 +47,29 @@ public final class Compost {
 		}
 	}
 
-	/** {@code CompostingChanceRegistry.INSTANCE.get(ItemLike)}: what mods registered, null when nothing. */
+	/**
+	 * {@code CompostingChanceRegistry.INSTANCE.get(ItemLike)}: Fabric read the vanilla map and returned 0 for an item not in it, so a
+	 * chance a mod registered comes first, then the item's compostable component (vanilla's tiers, or one of ours), then 0.
+	 */
 	public static Float get(ItemLike item) {
 		synchronized (CHANCES) {
-			return CHANCES.get(item);
+			Float registered = CHANCES.get(item);
+			if (registered != null) return registered;
 		}
+		Compostable compostable = item.asItem().components().get(DataComponents.COMPOSTABLE);
+		if (compostable != null && compostable.layers() instanceof ResolvableInt.Reference reference) {
+			String path = reference.key().identifier().getPath();
+			if (path.equals("compostable/always_add_one")) return 1f;
+			for (int i = 0; i < TIERS.length; i++) if (path.equals("compostable/" + TIER_NAMES[i])) return TIERS[i] / 100f;
+			if (reference.key().identifier().getNamespace().equals(Gen.NS) && path.startsWith("compostable/")) {
+				try {
+					return Integer.parseInt(path.substring("compostable/".length())) / 100f;
+				} catch (NumberFormatException e) {
+					return 0f;
+				}
+			}
+		}
+		return 0f;
 	}
 
 	/** {@code CompostingChanceRegistry.INSTANCE.add(TagKey<Item>, Float)}: every item in the tag, found when the components are built. */

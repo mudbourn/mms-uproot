@@ -61,6 +61,8 @@ public final class ConfiguredFeature<FC extends FeatureConfiguration, F extends 
 	}
 
 	public boolean place(WorldGenLevel level, ChunkGenerator generator, RandomSource random, BlockPos origin) {
+		// 1.21.11's Feature.place(config, ...) refused an origin the level cannot write to before it placed anything
+		if (!level.ensureCanWrite(origin)) return false;
 		if (delegate != null) return delegate.place(level, generator, random, origin);
 		return feature.place(new FeaturePlaceContext<>(level, generator, random, origin, config));
 	}

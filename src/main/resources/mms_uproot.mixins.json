@@ -15,6 +15,7 @@
 		"VillagerLevelUpMixin"
 	],
 	"client": [
+		"EndermanCarriedMixin",
 		"EntityRenderersMixin",
 		"ScreenBackgroundMixin"
 	],
