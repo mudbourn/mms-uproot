@@ -15,6 +15,7 @@
 		"client": ["info.mudbourn.mmsuproot.boot.DevShot", "info.mudbourn.mmsuproot.shim.client.DevUse"]
 	},
 	"mixins": ["mms_uproot.mixins.json"],
+	"accessWidener": "mms_uproot.accesswidener",
 	"depends": {
 		"fabricloader": ">=0.20.1",
 		"minecraft": "~26.3",

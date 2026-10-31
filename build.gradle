@@ -10,6 +10,7 @@ base {
 }
 
 loom {
+	accessWidenerPath = file("src/main/resources/mms_uproot.accesswidener")
 	mods {
 		"mms_uproot" {
 			sourceSet sourceSets.main
