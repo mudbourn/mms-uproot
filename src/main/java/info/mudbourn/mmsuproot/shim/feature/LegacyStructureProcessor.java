@@ -14,10 +14,11 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  * this answers {@code codec()} from {@code getType()}.
  *
  * <p>{@code processBlock} changed: 1.21.11 passed the template's block as it was (position, state and tag) and the block as
- * the processors before had left it; 26.3 passes only the position of the first. The method a mod overrides is the old one,
- * which the 26.3 call reaches through a block rebuilt from that position and the block it was given. That is the template's
- * block exactly for the first processor of the list, and for a later one differs where an earlier processor changed the
- * state or tag, which 26.3 no longer hands on.
+ * the processors before had left it; 26.3 passes only the position of the first. The method a mod overrides is the old one.
+ * While 26.3 runs the processor chain, {@code StructureProcessorChainMixin} hands this the loop's own original block info,
+ * so every processor reads the true original. Any other caller reaches the old method through the {@code BlockPos} override
+ * below, which rebuilds the original from that position and the block it was given: the template's block exactly for the
+ * first processor, and for a later one off wherever an earlier processor changed the state or tag.
  */
 public abstract class LegacyStructureProcessor implements StructureProcessor {
 	protected LegacyStructureProcessor() { }

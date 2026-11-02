@@ -15,9 +15,9 @@ import net.minecraft.world.entity.npc.villager.VillagerProfession;
 
 /**
  * Fabric's old trade registration. Listings are handed straight to {@link Trades}, which writes
- * them as {@code villager_trade} data and tags. The wandering trader of 26.3 reads three fixed trade sets,
- * so the pools Fabric let a mod add are not kept apart: a pool's listings join the set its id names (or
- * the common one), where the trader picks from them at random rather than offering all of them.
+ * them as {@code villager_trade} data and tags. The wandering trader of 26.3 reads three fixed trade sets;
+ * listings for the three vanilla pools join those, while a mod's own pool becomes a trade set of its own
+ * that {@code WanderingTraderTradesMixin} rolls in addition, keeping the per-pool count Fabric honoured.
  */
 public final class TradeOfferHelper {
 	private TradeOfferHelper() { }
@@ -85,13 +85,13 @@ public final class TradeOfferHelper {
 			if (count <= 0) throw new IllegalArgumentException("count must be positive");
 			Objects.requireNonNull(id, "id cannot be null");
 			if (!POOLS.add(id)) throw new IllegalArgumentException("pool id %s is already registered".formatted(id));
-			Trades.addWandering(id, Arrays.asList(factories));
+			Trades.addWandering(id, count, Arrays.asList(factories));
 			return this;
 		}
 
 		@Override
 		public WanderingTraderOffersBuilder addOffersToPool(Identifier pool, LegacyVillagerTrades.ItemListing... factories) {
-			Trades.addWandering(pool, Arrays.asList(factories));
+			Trades.addWandering(pool, factories.length, Arrays.asList(factories));
 			return this;
 		}
 	}

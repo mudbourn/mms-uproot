@@ -188,6 +188,9 @@ class net/minecraft/world/entity/npc/villager/VillagerTrades$ItemListing info/mu
 class net/minecraft/world/entity/npc/villager/VillagerTrades$EmeraldForItems info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$EmeraldForItems
 class net/minecraft/world/entity/npc/villager/VillagerTrades$ItemsForEmeralds info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$ItemsForEmeralds
 class net/minecraft/world/entity/npc/villager/VillagerTrades$EmeraldsForVillagerTypeItem info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$EmeraldsForVillagerTypeItem
+class net/minecraft/world/entity/npc/villager/VillagerTrades$ItemsAndEmeraldsToItems info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$ItemsAndEmeraldsToItems
+class net/minecraft/world/entity/npc/villager/VillagerTrades$SuspiciousStewForEmerald info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$SuspiciousStewForEmerald
+class net/minecraft/world/entity/npc/villager/VillagerTrades$TypeSpecificTrade info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$TypeSpecificTrade
 class net/minecraft/world/entity/npc/villager/VillagerTrades$TreasureMapForEmeralds info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$TreasureMapForEmeralds
 class net/fabricmc/fabric/api/object/builder/v1/trade/TradeOfferHelper info/mudbourn/mmsuproot/shim/compat/TradeOfferHelper
 class net/fabricmc/fabric/api/object/builder/v1/trade/TradeOfferHelper$WanderingTraderOffersBuilder info/mudbourn/mmsuproot/shim/compat/TradeOfferHelper$WanderingTraderOffersBuilder

@@ -52,6 +52,12 @@ public final class LegacyWorld {
 		return new Vec3(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
 	}
 
+	/** The running server's registries, for data.gen to serialize item components faithfully; null before a server is up. */
+	public static RegistryAccess registries() {
+		MinecraftServer s = server;
+		return s == null ? null : s.registryAccess();
+	}
+
 	/** Remembers the running server, for calls that used to find it through an object that no longer leads there. */
 	public static void register() {
 		ServerLifecycleEvents.SERVER_STARTING.register(s -> server = s);

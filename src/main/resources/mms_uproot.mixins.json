@@ -12,7 +12,9 @@
 		"ModPackResourcesFactoryMixin",
 		"PackCompatibilityMixin",
 		"SlimeSplitMixin",
-		"VillagerLevelUpMixin"
+		"StructureProcessorChainMixin",
+		"VillagerLevelUpMixin",
+		"WanderingTraderTradesMixin"
 	],
 	"client": [
 		"EndermanCarriedMixin",

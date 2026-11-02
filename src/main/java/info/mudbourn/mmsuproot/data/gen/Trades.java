@@ -5,8 +5,18 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import com.google.gson.JsonElement;
+import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.JsonOps;
+
+import info.mudbourn.mmsuproot.shim.compat.LegacyWorld;
+import info.mudbourn.mmsuproot.util.Json;
 import net.minecraft.core.Holder;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -14,6 +24,8 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.entity.npc.villager.VillagerType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.trading.TradeSet;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.saveddata.maps.MapDecorationType;
 
@@ -25,8 +37,13 @@ import net.minecraft.world.level.saveddata.maps.MapDecorationType;
  * Item ids are resolved then too, so listings may be built before their items are registered.
  */
 public final class Trades {
+	/** The ids of the three pools the 26.3 wandering trader reads as fixed trade sets; a mod's own pools stay apart. */
+	private static final Set<String> VANILLA_POOLS = Set.of("minecraft:buy_items", "minecraft:sell_special_items", "minecraft:sell_common_items");
+
 	private static final List<Villager> VILLAGER = new ArrayList<>();
 	private static final List<Wandering> WANDERING = new ArrayList<>();
+	private static final Map<Identifier, List<Trade>> WANDERING_POOLS = new LinkedHashMap<>();
+	private static final Map<Identifier, Integer> WANDERING_POOL_COUNTS = new LinkedHashMap<>();
 
 	private Trades() { }
 
@@ -46,10 +63,47 @@ public final class Trades {
 		return () -> List.of(trade(stack(item, cost), null, stack(net.minecraft.world.item.Items.EMERALD, 1), maxUses, xp, 0.05f, null, null));
 	}
 
-	/** {@code new VillagerTrades.ItemsForEmeralds(Item item, int emeraldCost, int numberOfItems, int maxUses, int villagerXp, float priceMultiplier)} */
-	public static Trade itemsForEmeralds(ItemLike item, int emeraldCost, int count, int maxUses, int xp, float priceMultiplier) {
-		return () -> List.of(trade(stack(net.minecraft.world.item.Items.EMERALD, emeraldCost), null, stack(item, count), maxUses, xp, priceMultiplier, null, null));
+	/**
+	 * {@code new VillagerTrades.ItemsForEmeralds(ItemStack stack, int emeraldCost, int numberOfItems, int maxUses, int villagerXp, float priceMultiplier)}.
+	 * The stack keeps its data components, as 1.21.11 stored and offered the whole stack, with only its count set to {@code numberOfItems}.
+	 */
+	public static Trade itemsForEmeralds(ItemStack stack, int emeraldCost, int count, int maxUses, int xp, float priceMultiplier) {
+		return () -> List.of(trade(stack(net.minecraft.world.item.Items.EMERALD, emeraldCost), null, stack(stack, count), maxUses, xp, priceMultiplier, null, null));
 	}
+
+	/**
+	 * {@code new VillagerTrades.ItemsAndEmeraldsToItems(ItemLike fromItem, int fromCount, int emeraldCost, Item toItem, int toCount, int maxUses,
+	 * int villagerXp, float priceMultiplier)}. Emeralds and {@code fromItem} are wanted; {@code toItem} is given with its components kept.
+	 */
+	public static Trade itemsAndEmeraldsToItems(ItemLike fromItem, int fromCount, int emeraldCost, ItemStack toItem, int toCount, int maxUses, int xp,
+			float priceMultiplier) {
+		return () -> List.of(trade(stack(net.minecraft.world.item.Items.EMERALD, emeraldCost), stack(fromItem, fromCount), stack(toItem, toCount),
+				maxUses, xp, priceMultiplier, null, null));
+	}
+
+	/**
+	 * {@code VillagerTrades.TypeSpecificTrade}: each wrapped listing is offered only to the villager types it was mapped to. A merchant
+	 * predicate on the villager's variant restricts it; the types that share a listing collapse into one entry, as 1.21.11 offered one trade.
+	 */
+	public static Trade typeSpecific(List<TypedTrade> trades) {
+		return () -> {
+			List<Map<String, Object>> out = new ArrayList<>();
+			for (TypedTrade typed : trades) {
+				Object variant = typed.types().size() == 1 ? typed.types().get(0).toString()
+						: typed.types().stream().map(Identifier::toString).collect(Collectors.toList());
+				Map<String, Object> predicate = villagerVariant(variant);
+				for (Map<String, Object> entry : typed.trade().entries()) {
+					Map<String, Object> copy = new LinkedHashMap<>(entry);
+					copy.putIfAbsent("merchant_predicate", predicate);
+					out.add(copy);
+				}
+			}
+			return out;
+		};
+	}
+
+	/** One {@code TypeSpecificTrade} listing, paired with the villager-type ids it is offered to. */
+	public record TypedTrade(List<Identifier> types, Trade trade) { }
 
 	/** {@code new VillagerTrades.EmeraldsForVillagerTypeItem(int cost, int maxUses, int villagerXp, Map<ResourceKey<VillagerType>, Item> trades)} */
 	public static Trade emeraldsForVillagerTypeItem(int cost, int maxUses, int xp, Map<ResourceKey<VillagerType>, ? extends ItemLike> items) {
@@ -93,13 +147,40 @@ public final class Trades {
 	}
 
 	/**
-	 * {@code WanderingTraderOffersBuilder.addAll(Identifier pool, Collection<ItemListing>)}, also {@code pool(...)} and
-	 * {@code addOffersToPool(...)}. The pool is Fabric's id; 26.3 names the pools buying, common and uncommon.
+	 * {@code WanderingTraderOffersBuilder.pool(Identifier pool, int count, ItemListing...)}, also {@code addAll(...)} and
+	 * {@code addOffersToPool(...)}. Fabric kept every pool apart, each picking {@code count} of its own offers, so a
+	 * modded pool's offers all got a chance to appear. 26.3's wandering trader reads three fixed trade sets, so Uproot
+	 * merges the three vanilla pools into them (buying, common, uncommon) but keeps a modded pool as its own trade set,
+	 * with its own count, for {@link #wanderingExtraSets()} and {@code WanderingTraderTradesMixin} to roll in addition.
 	 */
-	public static void addWandering(Identifier pool, Collection<? extends Trade> trades) {
-		String name = pool.getPath().contains("buy") ? "buying" : pool.getPath().contains("special") ? "uncommon" : "common";
-		synchronized (WANDERING) {
-			for (Trade t : trades) WANDERING.add(new Wandering(name, t));
+	public static void addWandering(Identifier pool, int count, Collection<? extends Trade> trades) {
+		if (VANILLA_POOLS.contains(pool.toString())) {
+			String name = pool.getPath().contains("buy") ? "buying" : pool.getPath().contains("special") ? "uncommon" : "common";
+			synchronized (WANDERING) {
+				for (Trade t : trades) WANDERING.add(new Wandering(name, t));
+			}
+			return;
+		}
+		synchronized (WANDERING_POOLS) {
+			WANDERING_POOL_COUNTS.putIfAbsent(pool, count);
+			WANDERING_POOLS.computeIfAbsent(pool, k -> new ArrayList<>()).addAll(trades);
+		}
+	}
+
+	/** The trade set id Uproot gives a mod's wandering-trader pool. */
+	private static Identifier wanderingSetId(Identifier pool) {
+		return Identifier.fromNamespaceAndPath(Gen.NS, "wandering_trader/" + Gen.flat(pool));
+	}
+
+	/**
+	 * The trade sets of the modded wandering-trader pools, which {@code WanderingTraderTradesMixin} rolls after the three
+	 * vanilla ones. Each keeps its own count, so all of a pool's offers are reached as 1.21.11 reached them.
+	 */
+	public static List<ResourceKey<TradeSet>> wanderingExtraSets() {
+		synchronized (WANDERING_POOLS) {
+			List<ResourceKey<TradeSet>> keys = new ArrayList<>();
+			for (Identifier pool : WANDERING_POOLS.keySet()) keys.add(ResourceKey.create(Registries.TRADE_SET, wanderingSetId(pool)));
+			return keys;
 		}
 	}
 
@@ -134,6 +215,20 @@ public final class Trades {
 				}
 			}
 		}
+		synchronized (WANDERING_POOLS) {
+			for (Map.Entry<Identifier, List<Trade>> e : WANDERING_POOLS.entrySet()) {
+				Identifier set = wanderingSetId(e.getKey());
+				for (Trade t : e.getValue()) {
+					for (Map<String, Object> entry : t.entries()) {
+						Identifier id = Identifier.fromNamespaceAndPath(Gen.NS, "trade/" + n++);
+						out.put(Gen.path(id, "villager_trade"), Gen.json(entry));
+						tags.computeIfAbsent(set.toString(), k -> new ArrayList<>()).add(id.toString());
+					}
+				}
+				out.put(Gen.path(set, "trade_set"), Gen.json(Gen.obj("amount", WANDERING_POOL_COUNTS.get(e.getKey()),
+						"random_sequence", Gen.NS + ":trade_set/" + Gen.flat(set), "trades", "#" + set)));
+			}
+		}
 		tags.forEach((tag, values) -> out.put(Gen.path(Identifier.parse(tag), "tags/villager_trade"), Gen.json(Gen.obj("values", values))));
 	}
 
@@ -154,9 +249,34 @@ public final class Trades {
 		return m;
 	}
 
+	/** A stack as the item-stack codec writes it, keeping the stack's data components but taking its count from {@code count}. */
+	private static Map<String, Object> stack(ItemStack stack, int count) {
+		Map<String, Object> m = Gen.obj("id", Gen.itemId(stack.getItem()));
+		if (count != 1) m.put("count", count);
+		Map<String, Object> components = components(stack);
+		if (components != null) m.put("components", components);
+		return m;
+	}
+
+	/** The stack's non-default components, in the shape the item-stack codec writes under {@code components}, or null when it has none. */
+	@SuppressWarnings("unchecked")
+	private static Map<String, Object> components(ItemStack stack) {
+		DataComponentPatch patch = stack.getComponentsPatch();
+		if (patch.isEmpty()) return null;
+		RegistryAccess registries = LegacyWorld.registries();
+		DynamicOps<JsonElement> ops = registries == null ? JsonOps.INSTANCE : registries.createSerializationContext(JsonOps.INSTANCE);
+		JsonElement json = DataComponentPatch.CODEC.encodeStart(ops, patch).getOrThrow();
+		return (Map<String, Object>) Json.parse(json.toString());
+	}
+
 	private static Map<String, Object> villagerType(Identifier type) {
+		return villagerVariant(type.toString());
+	}
+
+	/** An {@code entity_properties} merchant predicate on the villager's variant; {@code variant} is a single id string or a list of them. */
+	private static Map<String, Object> villagerVariant(Object variant) {
 		return Gen.obj("type", "minecraft:entity_properties", "entity", "this",
-				"predicate", Gen.obj("minecraft:predicates", Gen.obj("minecraft:villager/variant", type.toString())));
+				"predicate", Gen.obj("minecraft:predicates", Gen.obj("minecraft:villager/variant", variant)));
 	}
 
 	private static Map<String, Object> trade(Map<String, Object> wants, Map<String, Object> more, Map<String, Object> gives, int maxUses, int xp,
