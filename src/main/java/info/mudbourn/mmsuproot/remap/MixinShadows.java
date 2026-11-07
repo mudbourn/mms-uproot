@@ -48,6 +48,7 @@ final class MixinShadows extends ClassNode {
 	@Override
 	public void visitEnd() {
 		super.visitEnd();
+		retargetMixin();
 		String target = singleTarget();
 		if (target != null && namer.game().has(target)) {
 			fixSuper(target);
@@ -69,6 +70,28 @@ final class MixinShadows extends ClassNode {
 			}
 		}
 		accept(next);
+	}
+
+	/** A {@code mixintarget} rule: the mixin's {@code @Mixin} names the class that now holds what it injects into. */
+	@SuppressWarnings("unchecked")
+	private void retargetMixin() {
+		for (List<AnnotationNode> list : java.util.Arrays.asList(invisibleAnnotations, visibleAnnotations)) {
+			if (list == null) continue;
+			for (AnnotationNode a : list) {
+				if (!MIXIN.equals(a.desc) || a.values == null) continue;
+				for (int i = 0; i + 1 < a.values.size(); i += 2) {
+					if (!(a.values.get(i + 1) instanceof List<?> l) || !"value".equals(a.values.get(i))) continue;
+					List<Object> targets = (List<Object>) l;
+					for (int k = 0; k < targets.size(); k++) {
+						if (!(targets.get(k) instanceof Type t) || t.getSort() != Type.OBJECT) continue;
+						String now = namer.renames().mixinTarget(name, t.getInternalName());
+						if (now == null) continue;
+						targets.set(k, Type.getObjectType(now));
+						namer.note("mixin " + simple() + " targets " + now.substring(now.lastIndexOf('/') + 1) + " now, " + t.getInternalName().substring(t.getInternalName().lastIndexOf('/') + 1) + " no longer holds what it injects into");
+					}
+				}
+			}
+		}
 	}
 
 	/** The one class the mixin targets by class literal, or null. */

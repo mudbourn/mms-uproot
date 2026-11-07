@@ -3,11 +3,13 @@ package info.mudbourn.mmsuproot.mixin;
 import info.mudbourn.mmsuproot.data.gen.Trades;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.npc.villager.AbstractVillager;
 import net.minecraft.world.entity.npc.wanderingtrader.WanderingTrader;
 import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.item.trading.TradeSet;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -19,14 +21,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * so a mod's pool, merged into one of those, only competes for that set's fixed slots and shows up at random.
  * Uproot keeps each modded pool as a trade set of its own (see {@link Trades}); this rolls those after the vanilla
  * three, with each pool's own count, so every modded pool gets its own picks again.
+ *
+ * <p>{@code getOffers} and {@code addOffersFromTradeSet} are declared on {@code AbstractVillager}, not on the trader,
+ * so the mixin extends that class to call them instead of shadowing them.
  */
 @Mixin(WanderingTrader.class)
-public abstract class WanderingTraderTradesMixin {
-	@Shadow
-	public abstract MerchantOffers getOffers();
-
-	@Shadow
-	protected abstract void addOffersFromTradeSet(ServerLevel level, MerchantOffers offers, ResourceKey<TradeSet> set);
+public abstract class WanderingTraderTradesMixin extends AbstractVillager {
+	private WanderingTraderTradesMixin(EntityType<? extends AbstractVillager> type, Level level) {
+		super(type, level);
+	}
 
 	@Inject(method = "updateTrades", at = @At("TAIL"))
 	private void mms_uproot$addModdedPools(ServerLevel level, CallbackInfo ci) {

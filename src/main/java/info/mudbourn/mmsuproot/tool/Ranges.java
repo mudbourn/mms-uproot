@@ -7,11 +7,11 @@ import java.util.List;
  * {@code java} dependency admits one given version. Anything it cannot read counts as satisfied,
  * so the tool never rewrites a range it does not understand.
  */
-final class Ranges {
+public final class Ranges {
 	private Ranges() { }
 
 	/** {@code spec} is a range string or a list of them (any may match). */
-	static boolean admits(Object spec, int[] version) {
+	public static boolean admits(Object spec, int[] version) {
 		if (spec instanceof List<?> list) {
 			for (Object o : list) if (admits(o, version)) return true;
 			return list.isEmpty();

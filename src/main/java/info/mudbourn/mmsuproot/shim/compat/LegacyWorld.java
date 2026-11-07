@@ -33,6 +33,7 @@ import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.storage.WorldData;
+import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvider;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
@@ -159,5 +160,13 @@ public final class LegacyWorld {
 	public static Integer getColor(ChatFormatting format) {
 		TextColor color = TextColor.fromLegacyFormat(format);
 		return color == null ? null : color.getValue();
+	}
+
+	/**
+	 * {@code PlayerTeam.getColor()}: 26.3 gives an optional {@code TeamColor}, whose constants share their names with the
+	 * colour formats. A team without a colour gave {@code RESET}.
+	 */
+	public static ChatFormatting teamColor(PlayerTeam team) {
+		return team.getColor().map(c -> ChatFormatting.valueOf(c.name())).orElse(ChatFormatting.RESET);
 	}
 }

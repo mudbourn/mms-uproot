@@ -18,6 +18,8 @@ import info.mudbourn.mmsuproot.remap.AccessWideners;
 import info.mudbourn.mmsuproot.disable.Disabler;
 import info.mudbourn.mmsuproot.remap.ClassRemap;
 import info.mudbourn.mmsuproot.remap.Namer;
+import info.mudbourn.mmsuproot.tool.Ranges;
+import info.mudbourn.mmsuproot.util.Json;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModMetadata;
@@ -30,6 +32,18 @@ import org.slf4j.LoggerFactory;
 final class ModSource {
 	private static final byte[] MARKER = "net/minecraft/class_".getBytes(StandardCharsets.ISO_8859_1);
 	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot");
+	private static final int[] MINECRAFT = {26, 3, 0};
+	/**
+	 * Names that exist only before 26.3 (absent from its jar), the left-hand sides of renames-26x.txt that a class file can show
+	 * on its own: the GPU buffer slice and render pipeline moved into renderpearl, the locator bar renderer was renamed, and
+	 * ResourceManager.listResources took a Predicate. Every string of an entry must be present in the same class file.
+	 */
+	private static final byte[][][] OLDER_26 = {
+		{ascii("com/mojang/blaze3d/buffers/GpuBufferSlice")},
+		{ascii("com/mojang/blaze3d/pipeline/RenderPipeline")},
+		{ascii("net/minecraft/client/gui/contextualbar/LocatorBarRenderer")},
+		{ascii("listResources"), ascii("(Ljava/lang/String;Ljava/util/function/Predicate;)Ljava/util/Map;")},
+	};
 	private static volatile Set<String> fabricApiIds;
 
 	final ModContainerImpl mod;
@@ -131,6 +145,55 @@ final class ModSource {
 			report.note(meta.getId() + ": could not be scanned for intermediary names, so it was not remapped: " + e);
 		}
 		return false;
+	}
+
+	/**
+	 * True when the mod was built for a 26.x older than 26.3, by what its own {@code fabric.mod.json} and class files say.
+	 * Loader's dependency overrides rewrite the metadata in memory, so the file in the jar is read instead. A mod that names
+	 * no Minecraft version is left alone. A range that excludes 26.3 counts when it admits 26.1 or 26.2. An open range such
+	 * as {@code >=26.2} admits 26.3 and says nothing about the build, so such a mod counts only when a class file names
+	 * something 26.3 no longer has ({@link #OLDER_26}); a 26.3 build never does.
+	 */
+	static boolean builtForOlder26(ModContainerImpl mod, Report report) {
+		try {
+			for (Path root : mod.getRootPaths()) {
+				Path file = root.resolve("fabric.mod.json");
+				if (!Files.isRegularFile(file)) continue;
+				Object depends = Json.parseObject(Files.readString(file)).get("depends");
+				if (!(depends instanceof Map<?, ?> deps) || !deps.containsKey("minecraft")) return false;
+				Object range = deps.get("minecraft");
+				if (!Ranges.admits(range, MINECRAFT)) return Ranges.admits(range, new int[] {26, 1, 0}) || Ranges.admits(range, new int[] {26, 2, 0});
+				return namesPre263(mod);
+			}
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("Could not tell whether {} was built for an older 26.x; not remapping it", mod.getMetadata().getId(), e);
+			report.note(mod.getMetadata().getId() + ": could not be scanned for an older 26.x build, so it was not remapped: " + e);
+		}
+		return false;
+	}
+
+	/** Whether any class file of the mod contains every byte string of one entry of {@link #OLDER_26}. Each file is read once. */
+	private static boolean namesPre263(ModContainerImpl mod) throws IOException {
+		for (Path root : mod.getRootPaths()) {
+			try (Stream<Path> walk = Files.walk(root)) {
+				for (Path p : (Iterable<Path>) walk::iterator) {
+					if (p.getFileName() == null || !p.getFileName().toString().endsWith(".class")) continue;
+					byte[] data = Files.readAllBytes(p);
+					for (byte[][] names : OLDER_26) {
+						boolean all = true;
+						for (byte[] name : names) {
+							if (indexOf(data, name) < 0) { all = false; break; }
+						}
+						if (all) return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	private static byte[] ascii(String s) {
+		return s.getBytes(StandardCharsets.ISO_8859_1);
 	}
 
 	private static int indexOf(byte[] data, byte[] pat) {

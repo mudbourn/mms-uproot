@@ -139,6 +139,12 @@ final class MixinParams extends ClassVisitor {
 	 * renames it, and returns the replacement that carries them; otherwise returns null and leaves {@code m}.
 	 */
 	private MethodNode adapt(MethodNode m) {
+		Renames.Handler handlerRule = namer.renames().handler(className, m.name);
+		if (handlerRule != null) {
+			AnnotationNode any = findInjector(m.invisibleAnnotations);
+			if (any == null) any = findInjector(m.visibleAnnotations);
+			return any == null ? null : adaptHandler(m, any, handlerRule);
+		}
 		AnnotationNode inject = find(m.invisibleAnnotations);
 		if (inject == null) inject = find(m.visibleAnnotations);
 		if (inject == null) return null;
@@ -186,40 +192,119 @@ final class MixinParams extends ClassVisitor {
 		Type[] widened = new Type[args.length + extra];
 		System.arraycopy(now, 0, widened, 0, now.length);
 		System.arraycopy(args, callback, widened, now.length, args.length - callback);
-		String newDesc = Type.getMethodDescriptor(Type.getReturnType(m.desc), widened);
 
+		// every old parameter is passed on from the same place; the added ones are dropped
+		Renames.Arg[] sources = new Renames.Arg[args.length];
+		for (int i = 0; i < args.length; i++) sources[i] = Renames.Arg.param(i < callback ? i : i + extra);
+
+		StringBuilder added = new StringBuilder();
+		for (int i = callback; i < now.length; i++) added.append(added.length() > 0 ? ", " : "").append(now[i].getClassName());
+		namer.note("mixin handler " + className.substring(className.lastIndexOf('/') + 1) + "." + m.name + " takes the parameters its target gained (" + added + ")");
+		return rewrap(m, inject, widened, sources, now, "mms_uproot$" + m.name + "$" + callback, callback, extra);
+	}
+
+	/**
+	 * A {@code handler} rule: the handler of this mixin takes the parameters of the rule's descriptor, the target's in 26.3,
+	 * and passes its old ones on as the argument map says. Returns the replacement, or null when the rule does not fit the handler.
+	 */
+	private MethodNode adaptHandler(MethodNode m, AnnotationNode inject, Renames.Handler rule) {
+		Type[] args = Type.getArgumentTypes(m.desc);
+		Type[] widened = Type.getArgumentTypes(rule.newDesc());
+		int callback = callbackIndex(args);
+		int newCallback = callbackIndex(widened);
+		String where = className.substring(className.lastIndexOf('/') + 1) + "." + m.name;
+		if (callback != args.length - 1 || newCallback != widened.length - 1 || rule.args().size() != callback) {
+			namer.note("handler rule for " + where + " does not fit the handler: it takes " + args.length + " parameters, the callback last, and the rule maps " + rule.args().size());
+			return null;
+		}
+		Renames.Arg[] sources = new Renames.Arg[args.length];
+		for (int i = 0; i < callback; i++) {
+			sources[i] = rule.args().get(i);
+			if (sources[i].index() >= newCallback) {
+				namer.note("handler rule for " + where + " maps parameter " + i + " to " + sources[i].index() + ", past the target's parameters");
+				return null;
+			}
+			if (sources[i].index() >= 0 && !compatible(widened[sources[i].index()], args[i])) {
+				namer.note("handler rule for " + where + " maps parameter " + i + " (" + args[i].getClassName() + ") to a " + widened[sources[i].index()].getClassName());
+				return null;
+			}
+		}
+		sources[callback] = Renames.Arg.param(newCallback);
+		Type[] now = new Type[newCallback];
+		System.arraycopy(widened, 0, now, 0, newCallback);
+		namer.note("mixin handler " + where + " takes the target's 26.3 parameters (" + rule.newDesc().substring(0, rule.newDesc().indexOf(')') + 1) + ")");
+		return rewrap(m, inject, widened, sources, now, "mms_uproot$" + m.name + "$handler", -1, 0);
+	}
+
+	private static int callbackIndex(Type[] args) {
+		for (int i = 0; i < args.length; i++) {
+			if (args[i].getSort() == Type.OBJECT && (args[i].getInternalName().equals(CALLBACK) || args[i].getInternalName().equals(CALLBACK_RETURNABLE))) return i;
+		}
+		return -1;
+	}
+
+	/** Whether a value of type {@code have} can be passed where {@code want} is taken: the same type, or objects where one extends the other. */
+	private boolean compatible(Type have, Type want) {
+		if (have.equals(want)) return true;
+		if (have.getSort() != Type.OBJECT || want.getSort() != Type.OBJECT) return false;
+		return namer.ancestorsOf(have.getInternalName()).contains(want.getInternalName()) || namer.ancestorsOf(want.getInternalName()).contains(have.getInternalName());
+	}
+
+	/**
+	 * Strips the annotations from {@code m}, renames it, and returns a method with the parameters {@code newArgs} that carries
+	 * them and calls it. {@code sources} says, per parameter of {@code m}, where its value comes from. {@code now} are the target's
+	 * parameters, which a method named with its old descriptor in the annotation is rewritten to. {@code callback} and {@code extra}
+	 * place the parameter annotations of a handler whose parameters grew (callback is -1 when they do not).
+	 */
+	private MethodNode rewrap(MethodNode m, AnnotationNode inject, Type[] newArgs, Renames.Arg[] sources, Type[] now, String renamed, int callback, int extra) {
 		boolean isStatic = (m.access & Opcodes.ACC_STATIC) != 0;
-		MethodNode w = new MethodNode(API, m.access, m.name, newDesc, null, m.exceptions.toArray(new String[0]));
+		MethodNode w = new MethodNode(API, m.access, m.name, Type.getMethodDescriptor(Type.getReturnType(m.desc), newArgs), null, m.exceptions.toArray(new String[0]));
 		w.visibleAnnotations = m.visibleAnnotations;
 		w.invisibleAnnotations = m.invisibleAnnotations;
-		w.visibleParameterAnnotations = widen(m.visibleParameterAnnotations, callback, extra);
-		w.invisibleParameterAnnotations = widen(m.invisibleParameterAnnotations, callback, extra);
-		w.visibleAnnotableParameterCount = m.visibleAnnotableParameterCount == 0 ? 0 : m.visibleAnnotableParameterCount + extra;
-		w.invisibleAnnotableParameterCount = m.invisibleAnnotableParameterCount == 0 ? 0 : m.invisibleAnnotableParameterCount + extra;
+		if (callback >= 0) {
+			w.visibleParameterAnnotations = widen(m.visibleParameterAnnotations, callback, extra);
+			w.invisibleParameterAnnotations = widen(m.invisibleParameterAnnotations, callback, extra);
+			w.visibleAnnotableParameterCount = m.visibleAnnotableParameterCount == 0 ? 0 : m.visibleAnnotableParameterCount + extra;
+			w.invisibleAnnotableParameterCount = m.invisibleAnnotableParameterCount == 0 ? 0 : m.invisibleAnnotableParameterCount + extra;
+			m.visibleParameterAnnotations = null;
+			m.invisibleParameterAnnotations = null;
+			m.visibleAnnotableParameterCount = 0;
+			m.invisibleAnnotableParameterCount = 0;
+		}
 		m.visibleAnnotations = null;
 		m.invisibleAnnotations = null;
-		m.visibleParameterAnnotations = null;
-		m.invisibleParameterAnnotations = null;
-		m.visibleAnnotableParameterCount = 0;
-		m.invisibleAnnotableParameterCount = 0;
-		String original = m.name;
-		m.name = "mms_uproot$" + original + "$" + callback;
+		m.name = renamed;
 		if ((m.access & Opcodes.ACC_PUBLIC) != 0 || (m.access & Opcodes.ACC_PROTECTED) != 0) m.access = (m.access & ~(Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) | Opcodes.ACC_PRIVATE;
 
-		w.visitCode();
-		int slot = 0;
-		if (!isStatic) {
-			w.visitVarInsn(Opcodes.ALOAD, 0);
-			slot = 1;
+		Type[] old = Type.getArgumentTypes(m.desc);
+		int[] slots = new int[newArgs.length];
+		int slot = isStatic ? 0 : 1;
+		for (int i = 0; i < newArgs.length; i++) {
+			slots[i] = slot;
+			slot += newArgs[i].getSize();
 		}
-		int pushed = slot;
-		for (int i = 0; i < widened.length; i++) {
-			boolean added = i >= callback && i < callback + extra;
-			if (!added) {
-				w.visitVarInsn(widened[i].getOpcode(Opcodes.ILOAD), slot);
-				pushed += widened[i].getSize();
+		w.visitCode();
+		if (!isStatic) w.visitVarInsn(Opcodes.ALOAD, 0);
+		int pushed = isStatic ? 0 : 1;
+		for (int i = 0; i < old.length; i++) {
+			Renames.Arg from = sources[i];
+			if (from.index() >= 0) {
+				w.visitVarInsn(newArgs[from.index()].getOpcode(Opcodes.ILOAD), slots[from.index()]);
+				if (!newArgs[from.index()].equals(old[i]) && old[i].getSort() == Type.OBJECT && !namer.ancestorsOf(newArgs[from.index()].getInternalName()).contains(old[i].getInternalName())) {
+					w.visitTypeInsn(Opcodes.CHECKCAST, old[i].getInternalName());
+				}
+			} else if (from.helperOwner() != null) {
+				w.visitMethodInsn(Opcodes.INVOKESTATIC, from.helperOwner(), from.helperName(), "()" + old[i].getDescriptor(), false);
+			} else {
+				switch (old[i].getSort()) {
+				case Type.LONG -> w.visitInsn(Opcodes.LCONST_0);
+				case Type.FLOAT -> w.visitInsn(Opcodes.FCONST_0);
+				case Type.DOUBLE -> w.visitInsn(Opcodes.DCONST_0);
+				case Type.OBJECT, Type.ARRAY -> w.visitInsn(Opcodes.ACONST_NULL);
+				default -> w.visitInsn(Opcodes.ICONST_0);
+				}
 			}
-			slot += widened[i].getSize();
+			pushed += old[i].getSize();
 		}
 		int op = isStatic ? Opcodes.INVOKESTATIC : (m.access & Opcodes.ACC_PRIVATE) != 0 ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL;
 		w.visitMethodInsn(op, className, m.name, m.desc, false);
@@ -240,16 +325,21 @@ final class MixinParams extends ClassVisitor {
 				}
 			}
 		}
-
-		StringBuilder added = new StringBuilder();
-		for (int i = callback; i < now.length; i++) added.append(added.length() > 0 ? ", " : "").append(now[i].getClassName());
-		namer.note("mixin handler " + className.substring(className.lastIndexOf('/') + 1) + "." + original + " takes the parameters its target gained (" + added + ")");
 		return w;
 	}
 
 	/** Whether {@code narrow} is a class that is, or extends, the class {@code wide}. */
 	private boolean narrower(Type narrow, Type wide) {
 		return narrow.getSort() == Type.OBJECT && wide.getSort() == Type.OBJECT && namer.ancestorsOf(narrow.getInternalName()).contains(wide.getInternalName());
+	}
+
+	/** The injector annotation of a method, whichever kind: Mixin's own or MixinExtras'. */
+	private static AnnotationNode findInjector(List<AnnotationNode> list) {
+		if (list == null) return null;
+		for (AnnotationNode a : list) {
+			if (a.desc.startsWith("Lorg/spongepowered/asm/mixin/injection/") || a.desc.startsWith("Lcom/llamalad7/mixinextras/injector/")) return a;
+		}
+		return null;
 	}
 
 	private static AnnotationNode find(List<AnnotationNode> list) {

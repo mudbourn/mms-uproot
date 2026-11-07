@@ -7,6 +7,7 @@ import java.util.Map;
 
 import info.mudbourn.mmsuproot.data.gen.Trades;
 import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -81,26 +82,37 @@ public final class LegacyVillagerTrades {
 	/**
 	 * Sells {@code numberOfItems} of a stack for some emeralds. 1.21.11 kept the whole stack, with its data components, and set only its
 	 * count to {@code numberOfItems} when it offered it; the constructors that take a block or an item build a plain stack, as they did.
+	 * 26.3 binds item components only after mods are initialised, and mods build their trades during that, so a plain stack is built
+	 * when the trade data is written, not in the constructor. {@code given} is the stack a mod passed in, or null.
 	 */
-	public record ItemsForEmeralds(ItemStack stack, int emeraldCost, int numberOfItems, int maxUses, int villagerXp, float priceMultiplier) implements ItemListing {
+	public record ItemsForEmeralds(ItemLike item, ItemStack given, int emeraldCost, int numberOfItems, int maxUses, int villagerXp,
+			float priceMultiplier) implements ItemListing {
 		public ItemsForEmeralds {
-			stack = stack.copy();
+			if (given != null) given = given.copy();
 		}
 
 		public ItemsForEmeralds(Item item, int emeraldCost, int numberOfItems, int villagerXp) {
-			this(new ItemStack(item), emeraldCost, numberOfItems, 12, villagerXp, 0.05F);
+			this(item, null, emeraldCost, numberOfItems, 12, villagerXp, 0.05F);
 		}
 
 		public ItemsForEmeralds(Item item, int emeraldCost, int numberOfItems, int maxUses, int villagerXp) {
-			this(new ItemStack(item), emeraldCost, numberOfItems, maxUses, villagerXp, 0.05F);
+			this(item, null, emeraldCost, numberOfItems, maxUses, villagerXp, 0.05F);
 		}
 
 		public ItemsForEmeralds(Block block, int emeraldCost, int numberOfItems, int maxUses, int villagerXp) {
-			this(new ItemStack(block), emeraldCost, numberOfItems, maxUses, villagerXp, 0.05F);
+			this(block, null, emeraldCost, numberOfItems, maxUses, villagerXp, 0.05F);
 		}
 
 		public ItemsForEmeralds(ItemStack stack, int emeraldCost, int numberOfItems, int maxUses, int villagerXp) {
 			this(stack, emeraldCost, numberOfItems, maxUses, villagerXp, 0.05F);
+		}
+
+		public ItemsForEmeralds(Item item, int emeraldCost, int numberOfItems, int maxUses, int villagerXp, float priceMultiplier) {
+			this(item, null, emeraldCost, numberOfItems, maxUses, villagerXp, priceMultiplier);
+		}
+
+		public ItemsForEmeralds(ItemStack stack, int emeraldCost, int numberOfItems, int maxUses, int villagerXp, float priceMultiplier) {
+			this(stack.getItem(), stack, emeraldCost, numberOfItems, maxUses, villagerXp, priceMultiplier);
 		}
 
 		@Override
@@ -110,7 +122,11 @@ public final class LegacyVillagerTrades {
 
 		@Override
 		public List<Map<String, Object>> entries() {
-			return Trades.itemsForEmeralds(this.stack, this.emeraldCost, this.numberOfItems, this.maxUses, this.villagerXp, this.priceMultiplier).entries();
+			if (this.given != null) {
+				return Trades.itemsForEmeralds(this.given, this.emeraldCost, this.numberOfItems, this.maxUses, this.villagerXp, this.priceMultiplier).entries();
+			}
+			return Trades.itemsForEmeralds(this.item, DataComponentPatch.EMPTY, this.emeraldCost, this.numberOfItems, this.maxUses, this.villagerXp,
+					this.priceMultiplier).entries();
 		}
 	}
 
@@ -118,16 +134,8 @@ public final class LegacyVillagerTrades {
 	 * Buys {@code fromCount} of an item together with emeralds for {@code toCount} of another, kept with its components. The constructor
 	 * taking an {@code Item} for the given item is 1.21.11's; the enchantment-provider form is not shimmed (see the class note).
 	 */
-	public record ItemsAndEmeraldsToItems(ItemLike fromItem, int fromCount, int emeraldCost, ItemStack toItem, int toCount, int maxUses,
+	public record ItemsAndEmeraldsToItems(ItemLike fromItem, int fromCount, int emeraldCost, Item toItem, int toCount, int maxUses,
 			int villagerXp, float priceMultiplier) implements ItemListing {
-		public ItemsAndEmeraldsToItems {
-			toItem = toItem.copy();
-		}
-
-		public ItemsAndEmeraldsToItems(ItemLike fromItem, int fromCount, int emeraldCost, Item toItem, int toCount, int maxUses, int villagerXp,
-				float priceMultiplier) {
-			this(fromItem, fromCount, emeraldCost, new ItemStack(toItem), toCount, maxUses, villagerXp, priceMultiplier);
-		}
 
 		@Override
 		public MerchantOffer getOffer(Entity trader, RandomSource random) {
@@ -154,9 +162,10 @@ public final class LegacyVillagerTrades {
 
 		@Override
 		public List<Map<String, Object>> entries() {
-			ItemStack stew = new ItemStack(Items.SUSPICIOUS_STEW);
-			stew.set(DataComponents.SUSPICIOUS_STEW_EFFECTS, new SuspiciousStewEffects(List.of(new SuspiciousStewEffects.Entry(this.effect, this.duration))));
-			return Trades.itemsForEmeralds(stew, 1, 1, 12, this.villagerXp, this.priceMultiplier).entries();
+			// a patch, not a stack: no ItemStack can be made before 26.3 binds item components
+			DataComponentPatch effects = DataComponentPatch.builder().set(DataComponents.SUSPICIOUS_STEW_EFFECTS,
+					new SuspiciousStewEffects(List.of(new SuspiciousStewEffects.Entry(this.effect, this.duration)))).build();
+			return Trades.itemsForEmeralds(Items.SUSPICIOUS_STEW, effects, 1, 1, 12, this.villagerXp, this.priceMultiplier).entries();
 		}
 	}
 

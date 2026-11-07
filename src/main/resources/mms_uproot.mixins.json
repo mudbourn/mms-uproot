@@ -19,6 +19,10 @@
 	"client": [
 		"EndermanCarriedMixin",
 		"EntityRenderersMixin",
+		"GuiScreenMixin",
+		"LegacyTextInputCloseMixin",
+		"LegacyTextInputMixin",
+		"MinecraftScreenMixin",
 		"ScreenBackgroundMixin"
 	],
 	"injectors": {

@@ -1,0 +1,65 @@
+# Names that changed between Minecraft 26.1/26.2 and 26.3, for mods built for those versions. They already use Mojang names, so this
+# table holds only what 26.3 changed since; Uproot applies it to them in place of renames.txt, in the same format (see the top of that file).
+# Which mods count as built for an older 26.x: those whose Minecraft range excludes 26.3 but admits 26.1 or 26.2, and those with an open range
+# whose classes name something only the older versions have (see ModSource.OLDER_26).
+
+# Screen changes go through the HUD now (Gui.setScreen); shim.client.LegacyClient sends the call there
+callinst net/minecraft/client/Minecraft setScreen (Lnet/minecraft/client/gui/screens/Screen;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.setScreen
+
+# Keyboard keys: 26.3 reads the keyboard through SDL, so a key code is an SDL scancode instead of a GLFW key code (see shim.client.LegacyKeyCodes),
+# and the keyboard key type is called KEYBOARD (26.2 had KEYSYM and SCANCODE)
+field com/mojang/blaze3d/platform/InputConstants$Type KEYSYM KEYBOARD
+field com/mojang/blaze3d/platform/InputConstants$Type SCANCODE KEYBOARD
+ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;ILnet/minecraft/client/KeyMapping$Category;)V (Ljava/lang/String;ILnet/minecraft/client/KeyMapping$Category;)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyMapping
+ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;)V (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyMapping
+ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;I)V (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;I)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyMapping
+callinst com/mojang/blaze3d/platform/InputConstants$Type getOrCreate (I)Lcom/mojang/blaze3d/platform/InputConstants$Key; info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.getOrCreate
+
+# The F1 flag (Options.hideGui, read) lives on the HUD now; shim.client.LegacyClient answers it
+fieldget net/minecraft/client/Options hideGui info/mudbourn/mmsuproot/shim/client/LegacyClient.hideGui
+# The open screen (Minecraft.screen, read) lives on the HUD now; shim.client.LegacyClient answers it
+fieldget net/minecraft/client/Minecraft screen info/mudbourn/mmsuproot/shim/client/LegacyClient.screen
+
+# The GPU abstraction moved into com.mojang.renderpearl. GpuBufferSlice is the one class a mod names on its own: mixin targets of the
+# projection and level render calls take it as a parameter.
+class com/mojang/blaze3d/buffers/GpuBufferSlice com/mojang/renderpearl/api/buffers/GpuBufferSlice
+
+# MouseHandler.onMove also reports the movement since the last event now; a mixin handler that takes the old parameters gets them dropped
+bridge net/minecraft/client/MouseHandler onMove (JDD)V (JDDDD)V
+
+# The render pipeline classes moved with the GPU abstraction
+class com/mojang/blaze3d/pipeline/RenderPipeline com/mojang/renderpearl/api/pipeline/RenderPipeline
+
+# Renamed, same descriptor
+method net/minecraft/client/renderer/GameRenderer getMainCamera mainCamera 0
+
+# Resource listing takes a Selector now, and opening a link is Blaze3D's job; shim.client.LegacyClient answers both
+callinst net/minecraft/server/packs/resources/ResourceManager listResources (Ljava/lang/String;Ljava/util/function/Predicate;)Ljava/util/Map; info/mudbourn/mmsuproot/shim/client/LegacyClient.listResources
+callinst net/minecraft/util/Util$OS openUri (Ljava/lang/String;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.openUri
+
+# The locator bar is a contextual bar like the others; same constructor and render methods
+class net/minecraft/client/gui/contextualbar/LocatorBarRenderer net/minecraft/client/gui/contextualbar/LocatorBar
+# The HUD (hotbar, contextual bars, the overlay pass) moved from Gui to Hud
+mixintarget dev/liqw/locatorborder/mixin/GuiMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+
+# Camera.extractRenderState takes the DeltaTracker where it took a float partial tick; Perspective API's handler never reads the float
+handler io/github/leawind/perspectiveapi/internal/bridge/mixin/projection/CameraMixin perspective_api$modifyExtractedProjection (Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lnet/minecraft/client/DeltaTracker;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,null
+
+# LevelRenderer.render lost the DeltaTracker and the frustum matrix, and gained a parameter; Immersive Optimization's handler reads only the camera state
+handler net/conczin/immersive_optimization/mixin/client/LevelRendererMixin immersiveOptimization$render (Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;ZLnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lorg/joml/Vector4f;ZZLorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,null,1,2,null,3,4,5
+
+# 26.3 does not ship the GLFW bindings; the game's own clock reads the same seconds
+callmove org/lwjgl/glfw/GLFW glfwGetTime ()D com/mojang/blaze3d/Blaze3D getTime
+
+# JOML: 26.2 shipped a JOML with Quaternionf.dot(Quaternionf); 26.3's JOML 1.10.9 has only dot(Quaternionfc). Perspective API calls it.
+calldesc org/joml/Quaternionf dot (Lorg/joml/Quaternionf;)F (Lorg/joml/Quaternionfc;)F
+
+# 26.3 moved the waypoint styles to the HUD, and team colours became an optional TeamColor. Locator Border uses both.
+callinst net/minecraft/client/Minecraft getWaypointStyles ()Lnet/minecraft/client/resources/WaypointStyleManager; info/mudbourn/mmsuproot/shim/client/LegacyClient.waypointStyles
+callinst net/minecraft/world/scores/PlayerTeam getColor ()Lnet/minecraft/ChatFormatting; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.teamColor
+callinst net/minecraft/ChatFormatting getColor ()Ljava/lang/Integer; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getColor
+
+# owo's "copium" ore hook (Copenhagen): 26.3's OreFeature.doPlace walks BlockReplacement where 26.2 walked OreConfiguration.TargetBlockState, so the
+# injector's captured locals cannot be matched. It only records ore positions for blocks that a mod registered through Maldenhagen.injectCopium,
+# a niche opt-in; losing it changes no vanilla or owo behaviour.
+optional io/wispforest/owo/mixin/Copenhagen malding

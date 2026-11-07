@@ -72,6 +72,25 @@
 #                                  javac would have, so the game's call reaches the injectors. TARGET and descriptors are 26.3
 #                                  names. Skipped when TARGET declares the method itself.
 #                                  e.g. inherited net/minecraft/client/model/monster/zombie/DrownedModel setupAnim (Lnet/minecraft/client/renderer/entity/state/ZombieRenderState;)V (Lnet/minecraft/client/renderer/entity/state/HumanoidRenderState;)V
+# handler MIXINCLASS HANDLERNAME NEWDESC ARGMAP
+#                                  the injector handler HANDLERNAME of the mod's mixin class MIXINCLASS (its own internal name) was
+#                                  written for a target whose parameters changed in ways bridge cannot say: removed, reordered or retyped.
+#                                  NEWDESC is the handler's descriptor in 26.3: the target's parameters, then the callback, void return. The
+#                                  old handler loses its annotations and becomes private; a new method with NEWDESC takes them and calls it
+#                                  (see remap.MixinParams). ARGMAP has one comma-separated entry per old parameter before the old callback
+#                                  (which must be last): the index of the new parameter that gives the value (cast when the type differs
+#                                  in class only), null or false for the default of the parameter's type (null, 0 or false), or
+#                                  pkg/Helper.method, an internal class name, a dot and a static no-argument method of Uproot's own whose
+#                                  return type is the old parameter's. "-" for a handler that had no parameters but the callback. A method
+#                                  named with its old descriptor in the annotation is rewritten to the target's new parameters.
+#                                  Choose entries after reading which old parameters the handler body uses; an unused one may default.
+#                                  e.g. handler net/conczin/immersive_optimization/mixin/client/LevelRendererMixin immersiveOptimization$render (Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;ZLnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lorg/joml/Vector4f;ZZLorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,null,1,2,null,3,4,5
+# mixintarget MIXINCLASS OLDTARGET NEWTARGET
+#                                  the mixin class MIXINCLASS (its own internal name) names OLDTARGET in its @Mixin, and what it injects
+#                                  into lives in NEWTARGET now (a class that took over part of the old one). Both are 26.3 names. Its
+#                                  shadows and handlers are then read against NEWTARGET; pair it with method and handler rules where the
+#                                  members changed too.
+#                                  e.g. mixintarget dev/liqw/locatorborder/mixin/GuiMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
 # super CLASS NEWSUPER             a mod class (its own name, as it is in the mod) extends NEWSUPER, an internal name, where it extended its own
 #                                  superclass; NEWSUPER must extend that superclass and have its constructors. The class's invokespecial calls
 #                                  of the old superclass (constructors, super.m()) go to NEWSUPER. For a mod class whose superclass lost methods
@@ -513,3 +532,21 @@ callinst net/minecraft/world/level/levelgen/structure/Structure generate (Lnet/m
 fieldget net/minecraft/world/level/Level random getRandom
 # ...and the scroll hook of its structure box editor: the overlay of the screen is asked of the Gui now
 injectat net/minecraft/client/Minecraft getOverlay ()Lnet/minecraft/client/gui/screens/Overlay; net/minecraft/client/gui/Gui overlay ()Lnet/minecraft/client/gui/screens/Overlay;
+
+# Keyboard keys: 26.3 reads the keyboard through SDL, so a key code is an SDL scancode instead of a GLFW key code (see shim.client.LegacyKeyCodes),
+# and the two keyboard key types became one
+field com/mojang/blaze3d/platform/InputConstants$Type KEYSYM KEYBOARD
+field com/mojang/blaze3d/platform/InputConstants$Type SCANCODE KEYBOARD
+ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;ILnet/minecraft/client/KeyMapping$Category;)V (Ljava/lang/String;ILnet/minecraft/client/KeyMapping$Category;)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyMapping
+ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;)V (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyMapping
+ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;I)V (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;I)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyMapping
+callinst com/mojang/blaze3d/platform/InputConstants$Type getOrCreate (I)Lcom/mojang/blaze3d/platform/InputConstants$Key; info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.getOrCreate
+
+# The F1 flag (Options.hideGui, read) lives on the HUD now; shim.client.LegacyClient answers it
+fieldget net/minecraft/client/Options hideGui info/mudbourn/mmsuproot/shim/client/LegacyClient.hideGui
+# The open screen (Minecraft.screen, read) lives on the HUD now; shim.client.LegacyClient answers it
+fieldget net/minecraft/client/Minecraft screen info/mudbourn/mmsuproot/shim/client/LegacyClient.screen
+
+# 26.3 moved the waypoint styles to the HUD, and team colours became an optional TeamColor. Locator Border uses both.
+callinst net/minecraft/client/Minecraft getWaypointStyles ()Lnet/minecraft/client/resources/WaypointStyleManager; info/mudbourn/mmsuproot/shim/client/LegacyClient.waypointStyles
+callinst net/minecraft/world/scores/PlayerTeam getColor ()Lnet/minecraft/ChatFormatting; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.teamColor

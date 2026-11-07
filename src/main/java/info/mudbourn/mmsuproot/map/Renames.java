@@ -17,7 +17,10 @@ import java.util.regex.Pattern;
 
 import org.objectweb.asm.Type;
 
-/** The hand-made 1.21.11 to 26.3 Mojang rename table, read from a names-only resource. */
+/**
+ * A hand-made Mojang rename table, read from a names-only resource: {@code renames.txt} takes 1.21.11 to 26.3,
+ * {@code renames-26x.txt} takes the 26.1 and 26.2 builds (already Mojang-named) to 26.3.
+ */
 public final class Renames {
 	/**
 	 * One member rename. It applies to {@code owner} and to everything that extends or implements it.
@@ -37,6 +40,19 @@ public final class Renames {
 	/** An override whose 26.3 descriptor differs: {@code owner} is the 26.3 type that declares {@code newDesc}. */
 	public record Bridge(String owner, String name, String oldDesc, String newDesc) { }
 
+	/**
+	 * Where one old handler parameter gets its value: the new parameter {@code index} (when not negative), the static no-argument
+	 * helper {@code helperOwner.helperName} (when set), or else the default, null, 0 or false by the parameter's type.
+	 */
+	public record Arg(int index, String helperOwner, String helperName) {
+		public static Arg param(int index) {
+			return new Arg(index, null, null);
+		}
+	}
+
+	/** A mixin handler (by its mixin class and name) that takes the target's {@code newDesc} parameters, a callback last, and calls the old handler with {@code args}, one per old parameter before its callback. */
+	public record Handler(String mixin, String name, String newDesc, List<Arg> args) { }
+
 	/** A mixin target (26.3 name) that inherits {@code name} where 1.21.11 declared it as {@code desc}; the superclass declares it as {@code superDesc}. */
 	public record Inherited(String target, String name, String desc, String superDesc) { }
 
@@ -45,6 +61,8 @@ public final class Renames {
 	private final Map<String, String[]> callInsts = new HashMap<>(); // "owner.name desc" -> {helper owner, helper name}
 	private final List<Bridge> bridges = new ArrayList<>();
 	private final List<Inherited> inherited = new ArrayList<>();
+	private final Map<String, Handler> handlers = new HashMap<>(); // "mixin class.handler" -> rule
+	private final Map<String, String> mixinTargets = new HashMap<>(); // "mixin class old target" -> new target (26.3 names)
 	private final Map<String, List<Ctor>> ctors = new HashMap<>(); // owner (26.3 name) -> adapters
 	private final Map<String, String> classes = new HashMap<>();
 	private final List<String[]> packages = new ArrayList<>();
@@ -62,11 +80,16 @@ public final class Renames {
 	private final Map<String, String> superSwaps = new HashMap<>(); // mod class -> the class it extends in place of its own superclass
 
 	public static Renames load() {
-		try (InputStream in = Renames.class.getResourceAsStream("/uproot/renames.txt")) {
+		return load("/uproot/renames.txt");
+	}
+
+	/** Reads the table in the class path resource {@code resource}; a missing one gives an empty table. */
+	public static Renames load(String resource) {
+		try (InputStream in = Renames.class.getResourceAsStream(resource)) {
 			if (in == null) return new Renames();
 			return parse(new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8)));
 		} catch (IOException e) {
-			throw new RuntimeException("Could not read the rename table", e);
+			throw new RuntimeException("Could not read the rename table " + resource, e);
 		}
 	}
 
@@ -106,6 +129,14 @@ public final class Renames {
 			case "calldesc" -> r.callDescs.put(p[1] + "." + p[2] + " " + p[3], p[4]);
 			case "callinst" -> r.callInsts.put(p[1] + "." + p[2] + " " + p[3], helper(p[4], line));
 			case "bridge" -> r.bridges.add(bridge(p, line));
+			case "handler" -> {
+				Handler h = handler(p, line);
+				r.handlers.put(h.mixin() + "." + h.name(), h);
+			}
+			case "mixintarget" -> {
+				if (p.length != 4) throw new IllegalStateException("Bad mixintarget rule: " + line);
+				r.mixinTargets.put(p[1] + " " + p[2], p[3]);
+			}
 			case "inherited" -> {
 				if (p.length != 4 && p.length != 5) throw new IllegalStateException("Bad inherited rule: " + line);
 				r.inherited.add(new Inherited(p[1], p[2], p[3], p.length == 5 ? p[4] : p[3]));
@@ -183,6 +214,37 @@ public final class Renames {
 			if (old[i].getSort() != now[i].getSort() || (old[i].getSort() < Type.ARRAY && !old[i].equals(now[i]))) throw new IllegalStateException("A bridge may only narrow object parameters: " + line);
 		}
 		return new Bridge(p[1], p[2], p[3], p[4]);
+	}
+
+	/**
+	 * Reads {@code handler MIXIN NAME NEWDESC ARGMAP}. NEWDESC lists the target's parameters and then the callback; ARGMAP has one
+	 * comma-separated entry per old parameter before the old callback: a new parameter index, or null or false for the default of the
+	 * parameter's type (null, 0 or false), or {@code pkg/Helper.method} for a static no-argument helper that returns the value.
+	 */
+	private static Handler handler(String[] p, String line) {
+		if (p.length != 5 || !p[3].startsWith("(")) throw new IllegalStateException("Bad handler rule: " + line);
+		List<Arg> args = new ArrayList<>();
+		if (!p[4].equals("-")) {
+			for (String entry : p[4].split(",")) {
+				if (entry.matches("\\d+")) args.add(Arg.param(Integer.parseInt(entry)));
+				else if (entry.equals("null") || entry.equals("false")) args.add(new Arg(-1, null, null));
+				else {
+					String[] h = helper(entry, line);
+					args.add(new Arg(-1, h[0], h[1]));
+				}
+			}
+		}
+		return new Handler(p[1], p[2], p[3], args);
+	}
+
+	/** The {@code handler} rule for the handler method {@code name} of the mixin class {@code mixin}, or null. */
+	public Handler handler(String mixin, String name) {
+		return handlers.isEmpty() ? null : handlers.get(mixin + "." + name);
+	}
+
+	/** The 26.3 class a mixin class targets in place of {@code oldTarget} (see the {@code mixintarget} rule), or null. */
+	public String mixinTarget(String mixin, String oldTarget) {
+		return mixinTargets.isEmpty() ? null : mixinTargets.get(mixin + " " + oldTarget);
 	}
 
 	/** The adapter for {@code invokespecial owner.<init>desc}, both in 26.3 names, or null. */

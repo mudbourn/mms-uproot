@@ -68,14 +68,24 @@ public final class Trades {
 	 * The stack keeps its data components, as 1.21.11 stored and offered the whole stack, with only its count set to {@code numberOfItems}.
 	 */
 	public static Trade itemsForEmeralds(ItemStack stack, int emeraldCost, int count, int maxUses, int xp, float priceMultiplier) {
-		return () -> List.of(trade(stack(net.minecraft.world.item.Items.EMERALD, emeraldCost), null, stack(stack, count), maxUses, xp, priceMultiplier, null, null));
+		return itemsForEmeralds(stack.getItem(), stack.getComponentsPatch(), emeraldCost, count, maxUses, xp, priceMultiplier);
+	}
+
+	/**
+	 * The same trade for an item and the components to set on it. This builds no {@code ItemStack}: 26.3 writes this data before it has
+	 * bound item components, and a stack cannot be made until then.
+	 */
+	public static Trade itemsForEmeralds(ItemLike item, DataComponentPatch components, int emeraldCost, int count, int maxUses, int xp,
+			float priceMultiplier) {
+		return () -> List.of(trade(stack(net.minecraft.world.item.Items.EMERALD, emeraldCost), null, stack(item, count, components), maxUses, xp,
+				priceMultiplier, null, null));
 	}
 
 	/**
 	 * {@code new VillagerTrades.ItemsAndEmeraldsToItems(ItemLike fromItem, int fromCount, int emeraldCost, Item toItem, int toCount, int maxUses,
 	 * int villagerXp, float priceMultiplier)}. Emeralds and {@code fromItem} are wanted; {@code toItem} is given with its components kept.
 	 */
-	public static Trade itemsAndEmeraldsToItems(ItemLike fromItem, int fromCount, int emeraldCost, ItemStack toItem, int toCount, int maxUses, int xp,
+	public static Trade itemsAndEmeraldsToItems(ItemLike fromItem, int fromCount, int emeraldCost, ItemLike toItem, int toCount, int maxUses, int xp,
 			float priceMultiplier) {
 		return () -> List.of(trade(stack(net.minecraft.world.item.Items.EMERALD, emeraldCost), stack(fromItem, fromCount), stack(toItem, toCount),
 				maxUses, xp, priceMultiplier, null, null));
@@ -249,19 +259,17 @@ public final class Trades {
 		return m;
 	}
 
-	/** A stack as the item-stack codec writes it, keeping the stack's data components but taking its count from {@code count}. */
-	private static Map<String, Object> stack(ItemStack stack, int count) {
-		Map<String, Object> m = Gen.obj("id", Gen.itemId(stack.getItem()));
-		if (count != 1) m.put("count", count);
-		Map<String, Object> components = components(stack);
-		if (components != null) m.put("components", components);
+	/** A stack as the item-stack codec writes it: the item, {@code count}, and the components set on it. */
+	private static Map<String, Object> stack(ItemLike item, int count, DataComponentPatch components) {
+		Map<String, Object> m = stack(item, count);
+		Map<String, Object> written = components(components);
+		if (written != null) m.put("components", written);
 		return m;
 	}
 
-	/** The stack's non-default components, in the shape the item-stack codec writes under {@code components}, or null when it has none. */
+	/** A component patch in the shape the item-stack codec writes under {@code components}, or null when it is empty. */
 	@SuppressWarnings("unchecked")
-	private static Map<String, Object> components(ItemStack stack) {
-		DataComponentPatch patch = stack.getComponentsPatch();
+	private static Map<String, Object> components(DataComponentPatch patch) {
 		if (patch.isEmpty()) return null;
 		RegistryAccess registries = LegacyWorld.registries();
 		DynamicOps<JsonElement> ops = registries == null ? JsonOps.INSTANCE : registries.createSerializationContext(JsonOps.INSTANCE);

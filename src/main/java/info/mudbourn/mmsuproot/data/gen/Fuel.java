@@ -32,7 +32,45 @@ public final class Fuel {
 	private static final Map<TagKey<Item>, Integer> TAGS = new LinkedHashMap<>();
 	private static final Set<TagKey<Item>> REMOVED_TAGS = new LinkedHashSet<>();
 
+	/**
+	 * 1.21.11's {@code FuelValues.vanillaBurnTimes} gave these tags their burn times (with a base time of 200 ticks), so a
+	 * mod's planks or logs burned by being in the tag. 26.3 sets the fuel component item by item, so only vanilla's own
+	 * items burn. These go to the items of other namespaces in the tags, before anything a mod adds; vanilla keeps 26.3's values.
+	 */
+	private static final Map<TagKey<Item>, Integer> LEGACY_TAGS = new LinkedHashMap<>();
+	private static final TagKey<Item> NON_FLAMMABLE_WOOD = tag("non_flammable_wood");
+
+	static {
+		legacy("logs", 300);
+		legacy("bamboo_blocks", 300);
+		legacy("planks", 300);
+		legacy("wooden_stairs", 300);
+		legacy("wooden_slabs", 150);
+		legacy("wooden_trapdoors", 300);
+		legacy("wooden_pressure_plates", 300);
+		legacy("wooden_shelves", 300);
+		legacy("wooden_fences", 300);
+		legacy("fence_gates", 300);
+		legacy("banners", 300);
+		legacy("signs", 200);
+		legacy("hanging_signs", 800);
+		legacy("wooden_doors", 200);
+		legacy("boats", 1200);
+		legacy("wool", 100);
+		legacy("wooden_buttons", 100);
+		legacy("saplings", 100);
+		legacy("wool_carpets", 67);
+	}
+
 	private Fuel() { }
+
+	private static TagKey<Item> tag(String path) {
+		return TagKey.create(Registries.ITEM, Identifier.withDefaultNamespace(path));
+	}
+
+	private static void legacy(String path, int ticks) {
+		LEGACY_TAGS.put(tag(path), ticks);
+	}
 
 	/** {@code FuelValues.Builder.add(ItemLike item, int burnTicks)Lnet/minecraft/world/level/block/entity/FuelValues$Builder;} */
 	public static void add(ItemLike item, int ticks) {
@@ -72,6 +110,12 @@ public final class Fuel {
 
 	static void apply(DefaultItemComponentEvents.ModifyContext context) {
 		synchronized (FUEL) {
+			context.modify(item -> !item.builtInRegistryHolder().key().identifier().getNamespace().equals("minecraft"), (builder, provider, item) -> {
+				LEGACY_TAGS.forEach((tag, ticks) -> {
+					if (in(provider, tag, item)) builder.set(DataComponents.COOKING_FUEL, new CookingFuel(key(ticks), ContextFloatProviders.COOKING_DEFAULT_SPEED_MULTIPLIER));
+				});
+				if (in(provider, NON_FLAMMABLE_WOOD, item)) builder.set(DataComponents.COOKING_FUEL, null);
+			});
 			// a tag is read through the lookup the components are built with, the one place its items are known; items named one by one come after
 			if (!TAGS.isEmpty() || !REMOVED_TAGS.isEmpty()) {
 				context.modify(item -> true, (builder, provider, item) -> {
@@ -98,6 +142,7 @@ public final class Fuel {
 		synchronized (FUEL) {
 			times = new TreeSet<>(FUEL.values());
 			times.addAll(TAGS.values());
+			times.addAll(LEGACY_TAGS.values());
 		}
 		for (int ticks : times) {
 			out.put(Gen.path(key(ticks).identifier(), "context_int_provider"), Gen.json(Gen.obj("type", "minecraft:div", "left", ticks,

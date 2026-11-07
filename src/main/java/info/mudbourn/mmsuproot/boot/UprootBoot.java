@@ -54,49 +54,51 @@ public final class UprootBoot implements LanguageAdapter {
 		LOGGER.info("Uproot boot hook running, runtime namespace {}", runtimeNs);
 
 		List<ModContainerImpl> targets = new ArrayList<>();
+		List<ModContainerImpl> modern = new ArrayList<>(); // 26.1 and 26.2 builds: Mojang names already, 26.3 API changes only
 		for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
 			ModContainerImpl impl = (ModContainerImpl) mod;
 			if (ModSource.skip(impl)) continue;
 			if (ModSource.refersToIntermediary(impl, report)) targets.add(impl);
+			else if (ModSource.builtForOlder26(impl, report)) modern.add(impl);
 		}
 
-		if (targets.isEmpty()) {
-			LOGGER.info("No mod refers to intermediary names; Uproot has nothing to remap");
+		if (targets.isEmpty() && modern.isEmpty()) {
+			LOGGER.info("No mod refers to intermediary names or targets an older 26.x; Uproot has nothing to remap");
 			report.note("No target mods found.");
 			report.write();
 			return;
 		}
-		LOGGER.info("Uproot target mods: {}", targets.stream().map(m -> m.getMetadata().getId()).toList());
+		LOGGER.info("Uproot target mods: {}, 26.x builds: {}", targets.stream().map(m -> m.getMetadata().getId()).toList(),
+				modern.stream().map(m -> m.getMetadata().getId()).toList());
 
-		NameTable table = MappingFetcher.obtain(dir.resolve("cache"));
+		// Only intermediary names need the name table; a 26.x build is already in Mojang names.
+		NameTable table = targets.isEmpty() ? new NameTable() : MappingFetcher.obtain(dir.resolve("cache"));
 		if (table == null) {
-			report.note("The 1.21.11 name table could not be built, so no mod was remapped. Targets: "
+			report.note("The 1.21.11 name table could not be built, so no 1.21.11 mod was remapped. Targets: "
 					+ targets.stream().map(m -> m.getMetadata().getId()).toList());
 			for (ModContainerImpl mod : targets) detachAccessWidener(mod.getInfo());
-			report.write();
-			return;
+			targets.clear();
+			table = new NameTable();
+			if (modern.isEmpty()) {
+				report.write();
+				return;
+			}
 		}
 
 		GameClasses game = new GameClasses(launcher.getTargetClassLoader(), launcher.getClassPath());
-		Renames renames = Renames.load();
+		Renames renames = targets.isEmpty() ? null : Renames.load();
+		Renames renames26 = modern.isEmpty() ? null : Renames.load("/uproot/renames-26x.txt");
 		report.note("Minecraft classes indexed: " + game.size());
 
 		// Index every target before any name is mapped, so a class of one target is never renamed for another.
 		ModClasses modClasses = new ModClasses();
 		List<ModSource> sources = new ArrayList<>();
-		for (ModContainerImpl mod : targets) {
+		for (ModContainerImpl mod : targets) prepare(mod, new Namer(table, renames, game, modClasses, report.mod(mod.getMetadata().getId())), true, sources);
+		for (ModContainerImpl mod : modern) {
 			String id = mod.getMetadata().getId();
 			Report.Entry entry = report.mod(id);
-			ModSource src = new ModSource(mod, new Namer(table, renames, game, modClasses, entry), entry);
-			DataShim.target(id, entry);
-			try {
-				src.index();
-				sources.add(src);
-				entry.notes.add("indexed " + src.classes.size() + " classes");
-			} catch (IOException | RuntimeException e) {
-				LOGGER.error("Uproot could not prepare {}", id, e);
-				entry.notes.add("could not prepare: " + e);
-			}
+			entry.notes.add("built for an older 26.x: Mojang names kept, 26.3 rules from renames-26x.txt");
+			prepare(mod, new Namer(table, renames26, game, modClasses, entry), false, sources);
 		}
 		for (ModSource src : new ArrayList<>(sources)) {
 			try {
@@ -130,6 +132,22 @@ public final class UprootBoot implements LanguageAdapter {
 			audit.start();
 		}
 		report.write();
+	}
+
+	/** Indexes one mod. Only a 1.21.11 mod has data in the old formats, so only it gets the data shim. */
+	private static void prepare(ModContainerImpl mod, Namer namer, boolean legacyData, List<ModSource> sources) {
+		String id = mod.getMetadata().getId();
+		Report.Entry entry = report.mod(id);
+		ModSource src = new ModSource(mod, namer, entry);
+		if (legacyData) DataShim.target(id, entry);
+		try {
+			src.index();
+			sources.add(src);
+			entry.notes.add("indexed " + src.classes.size() + " classes");
+		} catch (IOException | RuntimeException e) {
+			LOGGER.error("Uproot could not prepare {}", id, e);
+			entry.notes.add("could not prepare: " + e);
+		}
 	}
 
 	/** Called once the game and mods are initialising; see {@link Hooks#release()}. */
