@@ -59,7 +59,90 @@ callinst net/minecraft/client/Minecraft getWaypointStyles ()Lnet/minecraft/clien
 callinst net/minecraft/world/scores/PlayerTeam getColor ()Lnet/minecraft/ChatFormatting; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.teamColor
 callinst net/minecraft/ChatFormatting getColor ()Ljava/lang/Integer; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getColor
 
-# owo's "copium" ore hook (Copenhagen): 26.3's OreFeature.doPlace walks BlockReplacement where 26.2 walked OreConfiguration.TargetBlockState, so the
-# injector's captured locals cannot be matched. It only records ore positions for blocks that a mod registered through Maldenhagen.injectCopium,
-# a niche opt-in; losing it changes no vanilla or owo behaviour.
-optional io/wispforest/owo/mixin/Copenhagen malding
+# The rest of the GPU abstraction moved into com.mojang.renderpearl as well (owo-lib's UI pipelines and Braid renderer name these)
+class com/mojang/blaze3d/GpuFormat com/mojang/renderpearl/api/GpuFormat
+class com/mojang/blaze3d/PrimitiveTopology com/mojang/renderpearl/api/pipeline/PrimitiveTopology
+class com/mojang/blaze3d/opengl/GlTexture com/mojang/renderpearl/backend/opengl/GlTexture
+class com/mojang/blaze3d/pipeline/BindGroupLayout com/mojang/renderpearl/api/pipeline/BindGroupLayout
+class com/mojang/blaze3d/pipeline/BlendFunction com/mojang/renderpearl/api/pipeline/BlendFunction
+class com/mojang/blaze3d/pipeline/ColorTargetState com/mojang/renderpearl/api/pipeline/ColorTargetState
+class com/mojang/blaze3d/shaders/UniformType com/mojang/renderpearl/api/pipeline/UniformType
+class com/mojang/blaze3d/systems/BackendCreationException com/mojang/renderpearl/api/device/BackendCreationException
+class com/mojang/blaze3d/systems/DeviceInfo com/mojang/renderpearl/api/device/DeviceInfo
+class com/mojang/blaze3d/systems/GpuDevice com/mojang/renderpearl/api/device/GpuDevice
+class com/mojang/blaze3d/systems/GpuSurface com/mojang/renderpearl/api/device/GpuSurface
+class com/mojang/blaze3d/systems/SurfaceException com/mojang/renderpearl/api/device/SurfaceException
+class com/mojang/blaze3d/systems/CommandEncoder com/mojang/renderpearl/api/commands/CommandEncoder
+class com/mojang/blaze3d/systems/RenderPass com/mojang/renderpearl/api/commands/RenderPass
+class com/mojang/blaze3d/textures/AddressMode com/mojang/renderpearl/api/textures/AddressMode
+class com/mojang/blaze3d/textures/FilterMode com/mojang/renderpearl/api/textures/FilterMode
+class com/mojang/blaze3d/textures/GpuTexture com/mojang/renderpearl/api/textures/GpuTexture
+class com/mojang/blaze3d/textures/GpuTextureView com/mojang/renderpearl/api/textures/GpuTextureView
+class com/mojang/blaze3d/textures/GpuSampler com/mojang/renderpearl/api/textures/GpuSampler
+class com/mojang/blaze3d/vertex/VertexFormat com/mojang/renderpearl/api/vertex/VertexFormat
+class com/mojang/blaze3d/vertex/VertexFormatElement com/mojang/renderpearl/api/vertex/VertexFormatElement
+class com/mojang/blaze3d/systems/GpuBackend com/mojang/renderpearl/api/device/GpuBackend
+class com/mojang/blaze3d/systems/CommandEncoderBackend com/mojang/renderpearl/backend/api/CommandEncoderBackend
+class com/mojang/blaze3d/opengl/GlProgram com/mojang/renderpearl/backend/opengl/GlProgram
+class com/mojang/blaze3d/opengl/Uniform com/mojang/renderpearl/backend/opengl/Uniform
+
+# Loot, brewing and axes: the 26.2 mods use the same APIs that 26.3 replaced as the 1.21.11 ones (see renames.txt), so the same stand-ins answer
+class net/minecraft/world/item/alchemy/PotionBrewing info/mudbourn/mmsuproot/shim/compat/PotionBrewing
+class net/minecraft/world/item/alchemy/PotionBrewing$Builder info/mudbourn/mmsuproot/shim/compat/PotionBrewing$Builder
+# Fabric API 26.2 called the brewing event FabricPotionBrewingBuilder; same shape as 1.21.11's FabricBrewingRecipeRegistryBuilder
+class net/fabricmc/fabric/api/registry/FabricPotionBrewingBuilder info/mudbourn/mmsuproot/shim/compat/FabricBrewingRecipeRegistryBuilder
+class net/fabricmc/fabric/api/registry/FabricPotionBrewingBuilder$BuildCallback info/mudbourn/mmsuproot/shim/compat/FabricBrewingRecipeRegistryBuilder$BuildCallback
+class net/minecraft/world/level/storage/loot/providers/number/NumberProvider info/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider
+class net/minecraft/world/level/storage/loot/providers/number/ConstantValue info/mudbourn/mmsuproot/shim/compat/LegacyConstantValue
+class net/minecraft/world/level/storage/loot/providers/number/UniformGenerator info/mudbourn/mmsuproot/shim/compat/LegacyUniformGenerator
+class net/minecraft/world/level/storage/loot/entries/LootPoolSingletonContainer$Builder net/minecraft/world/level/storage/loot/entries/UniformContainerBase$Builder
+callinst net/minecraft/world/level/storage/loot/LootPool$Builder setRolls (Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot.setRolls
+# The builders' when/apply(Builder) are default methods of the user-builder interfaces now, erased to those interfaces
+calldesc net/minecraft/world/level/storage/loot/LootPool$Builder when (Lnet/minecraft/world/level/storage/loot/predicates/LootItemCondition$Builder;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; (Lnet/minecraft/world/level/storage/loot/predicates/LootItemCondition$Builder;)Lnet/minecraft/world/level/storage/loot/predicates/ConditionUserBuilder;
+calldesc net/minecraft/world/level/storage/loot/LootPool$Builder apply (Lnet/minecraft/world/level/storage/loot/functions/LootItemFunction$Builder;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; (Lnet/minecraft/world/level/storage/loot/functions/LootItemFunction$Builder;)Lnet/minecraft/world/level/storage/loot/functions/FunctionUserBuilder;
+calldesc net/minecraft/world/level/storage/loot/entries/UniformContainerBase$Builder when (Lnet/minecraft/world/level/storage/loot/predicates/LootItemCondition$Builder;)Lnet/minecraft/world/level/storage/loot/entries/LootPoolEntryContainer$Builder; (Lnet/minecraft/world/level/storage/loot/predicates/LootItemCondition$Builder;)Lnet/minecraft/world/level/storage/loot/predicates/ConditionUserBuilder;
+calldesc net/minecraft/world/level/storage/loot/entries/UniformContainerBase$Builder apply (Lnet/minecraft/world/level/storage/loot/functions/LootItemFunction$Builder;)Lnet/minecraft/world/level/storage/loot/entries/UniformContainerBase$Builder; (Lnet/minecraft/world/level/storage/loot/functions/LootItemFunction$Builder;)Lnet/minecraft/world/level/storage/loot/functions/FunctionUserBuilder;
+callmove net/minecraft/world/level/storage/loot/functions/SetItemCountFunction setCount (Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/functions/LootItemConditionalFunction$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot setCount
+callmove io/wispforest/owo/mixin/SetComponentsFunctionAccessor createSetComponentsLootFunction (Ljava/util/List;Lnet/minecraft/core/component/DataComponentPatch;)Lnet/minecraft/world/level/storage/loot/functions/SetComponentsFunction; info/mudbourn/mmsuproot/shim/compat/LegacyLoot setComponents
+# 26.3 has no tool classes; an axe is an item of the axes tag
+instanceadapt net/minecraft/world/item/AxeItem info/mudbourn/mmsuproot/shim/item/LegacyTools.isAxe
+
+# A sampler is a combined image sampler uniform of the bind group layout now
+callinst com/mojang/renderpearl/api/pipeline/BindGroupLayout$Builder withSampler (Ljava/lang/String;)Lcom/mojang/renderpearl/api/pipeline/BindGroupLayout$Builder; info/mudbourn/mmsuproot/shim/client/LegacyGpu.withSampler
+
+# Key events: 26.3's key() is an SDL scancode and its scancode() is gone; a mod compares key() with GLFW codes (see shim.client.LegacyKeyCodes)
+callinst net/minecraft/client/input/KeyEvent key ()I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.key
+callinst net/minecraft/client/input/KeyEvent scancode ()I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.scancode
+ctoradapt net/minecraft/client/input/KeyEvent (III)V (III)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyEvent
+
+# Polling a key: 26.3 has no GLFW and InputConstants.isKeyDown takes no window; the key is converted to its SDL scancode (see shim.client.LegacyKeyCodes)
+callmove com/mojang/blaze3d/platform/InputConstants isKeyDown (Lcom/mojang/blaze3d/platform/Window;I)Z info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes isKeyDown
+callmove org/lwjgl/glfw/GLFW glfwGetKeyScancode (I)I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes glfwGetKeyScancode
+callmove org/lwjgl/glfw/GLFW glfwGetKey (JI)I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes glfwGetKey
+
+# Cursors: 26.3 has no GLFW; the mouse cursor is SDL's (see shim.client.LegacyCursors)
+callmove org/lwjgl/glfw/GLFW glfwCreateStandardCursor (I)J info/mudbourn/mmsuproot/shim/client/LegacyCursors createStandardCursor
+callmove org/lwjgl/glfw/GLFW glfwSetCursor (JJ)V info/mudbourn/mmsuproot/shim/client/LegacyCursors setCursor
+callmove org/lwjgl/glfw/GLFW glfwDestroyCursor (J)V info/mudbourn/mmsuproot/shim/client/LegacyCursors destroyCursor
+
+# owo-lib's JSON5 listing: a pack search that also finds .json5 files wraps the call that lists resources, and 26.3's listing filter is a
+# Selector, not a Predicate, so these wraps find no call to wrap. A data pack or resource pack that names a file .json5 is not found by a
+# directory listing then (a file asked for by name still is: owo's own en_us.json5 loads through the stack lookup, which is unchanged)
+optional io/wispforest/owo/mixin/extension/json5/FileToIdConverterMixin json5$findResources
+optional io/wispforest/owo/mixin/extension/json5/FileToIdConverterMixin json5$findAllResources
+optional io/wispforest/owo/mixin/extension/json5/FallbackResourceManagerMixin json5$findResources
+optional io/wispforest/owo/mixin/extension/json5/FallbackResourceManagerMixin json5$findAllResources
+# Braid's texture filter override sits on a RenderPass.bindTexture call that 26.3 replaced by setUniform; only Braid texture surfaces lose their filter choice
+optional io/wispforest/owo/mixin/braid/GuiRendererMixin injectTextureFilter
+
+# GuiGraphicsExtractor.tooltip takes one more flag after the style; its default is false
+invokerparam io/wispforest/owo/mixin/ui/access/GuiGraphicsExtractorAccessor owo$tooltip (Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipPositioner;Lnet/minecraft/resources/Identifier;)V Z
+
+# A fake player for a UI entity component, a link confirmation and a returned item: three calls that gained or retyped an argument
+ctoradapt net/minecraft/client/player/LocalPlayer (Lnet/minecraft/client/Minecraft;Lnet/minecraft/client/multiplayer/ClientLevel;Lnet/minecraft/client/multiplayer/ClientPacketListener;Lnet/minecraft/stats/StatsCounter;Lnet/minecraft/client/ClientRecipeBook;Lnet/minecraft/world/entity/player/Input;ZLnet/minecraft/client/multiplayer/chat/ChatAbilities;)V (Lnet/minecraft/client/Minecraft;Lnet/minecraft/client/multiplayer/ClientLevel;Lnet/minecraft/client/multiplayer/ClientPacketListener;Lnet/minecraft/stats/StatsCounter;Lnet/minecraft/client/ClientRecipeBook;Lnet/minecraft/world/entity/player/Input;ZLnet/minecraft/client/multiplayer/chat/ChatAbilities;Lnet/minecraft/client/player/ItemActivation;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.localPlayer
+ctoradapt net/minecraft/client/gui/screens/ConfirmLinkScreen (Lit/unimi/dsi/fastutil/booleans/BooleanConsumer;Ljava/lang/String;Z)V (Lit/unimi/dsi/fastutil/booleans/BooleanConsumer;Ljava/net/URI;Z)V info/mudbourn/mmsuproot/shim/client/LegacyClient.confirmLinkScreen
+callinst net/minecraft/world/entity/player/Inventory placeItemBackInInventory (Lnet/minecraft/world/item/ItemStack;)V info/mudbourn/mmsuproot/shim/compat/LegacyWorld.placeItemBackInInventory
+
+# A plain swing is the attack swing in 26.3; the full swing call takes the animation too (see renames.txt)
+method net/minecraft/world/entity/LivingEntity swing swingForAttack (Lnet/minecraft/world/InteractionHand;)V
+callinst net/minecraft/world/entity/LivingEntity swingForAttack (Lnet/minecraft/world/InteractionHand;)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swingForAttack

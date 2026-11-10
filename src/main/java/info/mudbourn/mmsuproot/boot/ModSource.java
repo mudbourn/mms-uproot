@@ -36,13 +36,15 @@ final class ModSource {
 	/**
 	 * Names that exist only before 26.3 (absent from its jar), the left-hand sides of renames-26x.txt that a class file can show
 	 * on its own: the GPU buffer slice and render pipeline moved into renderpearl, the locator bar renderer was renamed, and
-	 * ResourceManager.listResources took a Predicate. Every string of an entry must be present in the same class file.
+	 * ResourceManager.listResources took a Predicate, Fabric API's brewing event was renamed and AxeItem was removed. Every string of an entry must be present in the same class file.
 	 */
 	private static final byte[][][] OLDER_26 = {
 		{ascii("com/mojang/blaze3d/buffers/GpuBufferSlice")},
 		{ascii("com/mojang/blaze3d/pipeline/RenderPipeline")},
 		{ascii("net/minecraft/client/gui/contextualbar/LocatorBarRenderer")},
 		{ascii("listResources"), ascii("(Ljava/lang/String;Ljava/util/function/Predicate;)Ljava/util/Map;")},
+		{ascii("net/fabricmc/fabric/api/registry/FabricPotionBrewingBuilder")},
+		{ascii("net/minecraft/world/item/AxeItem")},
 	};
 	private static volatile Set<String> fabricApiIds;
 

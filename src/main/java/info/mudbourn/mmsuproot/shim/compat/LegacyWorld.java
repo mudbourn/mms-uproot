@@ -169,4 +169,13 @@ public final class LegacyWorld {
 	public static ChatFormatting teamColor(PlayerTeam team) {
 		return team.getColor().map(c -> ChatFormatting.valueOf(c.name())).orElse(ChatFormatting.RESET);
 	}
+
+	/**
+	 * {@code Inventory.placeItemBackInInventory(stack)}: 26.3 also says whether the client predicts the placement. This always passes
+	 * {@code PREDICTED}, which is right for a remainder handed back from a result slot (vanilla's {@code ResultSlot} does the same); vanilla's
+	 * close and remove paths pass {@code SERVER_ONLY}, so a mod that calls this from one of those places predicts a placement the server decides.
+	 */
+	public static void placeItemBackInInventory(net.minecraft.world.entity.player.Inventory inventory, net.minecraft.world.item.ItemStack stack) {
+		inventory.placeItemBackInInventory(stack, net.minecraft.util.Prediction.PREDICTED);
+	}
 }

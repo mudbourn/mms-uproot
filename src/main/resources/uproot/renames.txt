@@ -62,6 +62,10 @@
 #                                  old arguments to the static HELPER.method(OLDDESC arguments) that returns the new
 #                                  ones as an Object[]; each element is cast (or unboxed) to its NEWDESC type.
 #                                  e.g. ctoradapt net/minecraft/world/level/block/grower/TreeGrower (Ljava/lang/String;F...)V (Ljava/lang/String;...)V info/mudbourn/mmsuproot/shim/block/LegacyBlocks.treeGrowerArgs
+# instanceadapt CLASS HELPER.method
+#                                  an instanceof test of CLASS (26.3 name) becomes invokestatic HELPER.method(Object)Z. For a class that 26.3
+#                                  dropped and whose meaning a check can still answer (an axe is an item in the axes tag).
+#                                  e.g. instanceadapt net/minecraft/world/item/AxeItem info/mudbourn/mmsuproot/shim/item/LegacyTools.isAxe
 # inherited TARGET NAME DESC [SUPERDESC]
 #                                  a mixin class targeting TARGET has injectors on NAME DESC, which 26.3's TARGET no longer
 #                                  declares but a superclass does. Mixin cannot inject into an inherited method, so the mixin
@@ -85,6 +89,11 @@
 #                                  named with its old descriptor in the annotation is rewritten to the target's new parameters.
 #                                  Choose entries after reading which old parameters the handler body uses; an unused one may default.
 #                                  e.g. handler net/conczin/immersive_optimization/mixin/client/LevelRendererMixin immersiveOptimization$render (Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;ZLnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lorg/joml/Vector4f;ZZLorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,null,1,2,null,3,4,5
+# invokerparam MIXINCLASS NAME OLDDESC EXTRA
+#                                  the @Invoker method NAME (descriptor OLDDESC) of the mod's mixin interface MIXINCLASS targets a method that gained
+#                                  trailing parameters, EXTRA (parameter types in descriptor syntax). The interface method takes them too, and every
+#                                  call of it in the mod passes the zero value of each (false, 0, null).
+#                                  e.g. invokerparam io/wispforest/owo/mixin/ui/access/GuiGraphicsExtractorAccessor owo$tooltip (Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipPositioner;Lnet/minecraft/resources/Identifier;)V Z
 # mixintarget MIXINCLASS OLDTARGET NEWTARGET
 #                                  the mixin class MIXINCLASS (its own internal name) names OLDTARGET in its @Mixin, and what it injects
 #                                  into lives in NEWTARGET now (a class that took over part of the old one). Both are 26.3 names. Its
@@ -541,6 +550,11 @@ ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;ILnet/minecraft/cli
 ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;)V (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyMapping
 ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;I)V (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;I)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyMapping
 callinst com/mojang/blaze3d/platform/InputConstants$Type getOrCreate (I)Lcom/mojang/blaze3d/platform/InputConstants$Key; info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.getOrCreate
+
+# Polling a key: 26.3 has no GLFW and InputConstants.isKeyDown takes no window; the key is converted to its SDL scancode (see shim.client.LegacyKeyCodes)
+callmove com/mojang/blaze3d/platform/InputConstants isKeyDown (Lcom/mojang/blaze3d/platform/Window;I)Z info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes isKeyDown
+callmove org/lwjgl/glfw/GLFW glfwGetKeyScancode (I)I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes glfwGetKeyScancode
+callmove org/lwjgl/glfw/GLFW glfwGetKey (JI)I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes glfwGetKey
 
 # The F1 flag (Options.hideGui, read) lives on the HUD now; shim.client.LegacyClient answers it
 fieldget net/minecraft/client/Options hideGui info/mudbourn/mmsuproot/shim/client/LegacyClient.hideGui

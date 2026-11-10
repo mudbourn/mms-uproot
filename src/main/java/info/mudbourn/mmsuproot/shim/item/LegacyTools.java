@@ -8,6 +8,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -26,6 +28,11 @@ public final class LegacyTools {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot");
 
 	private LegacyTools() { }
+
+	/** {@code obj instanceof AxeItem}: 26.3 has no axe class, an axe is an item of the axes tag. */
+	public static boolean isAxe(Object obj) {
+		return obj instanceof Item item && item.builtInRegistryHolder().is(ItemTags.AXES);
+	}
 
 	/** {@code HoeItem.changeIntoState(BlockState)}: a callback that tills into {@code state}. */
 	public static Consumer<UseOnContext> changeIntoState(BlockState state) {

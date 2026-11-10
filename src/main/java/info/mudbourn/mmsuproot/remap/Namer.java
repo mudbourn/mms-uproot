@@ -30,8 +30,8 @@ import org.objectweb.asm.Type;
  * the class hierarchy, so an override in a mod class or a call through a subclass is caught too.
  */
 public final class Namer {
-	private static final Pattern SLASH_CLASS = Pattern.compile("net/minecraft/[\\w/$]*\\w");
-	private static final Pattern DOT_CLASS = Pattern.compile("net\\.minecraft\\.[\\w.$]*\\w");
+	private static final Pattern SLASH_CLASS = Pattern.compile("(?:net/minecraft|com/mojang/blaze3d)/[\\w/$]*\\w");
+	private static final Pattern DOT_CLASS = Pattern.compile("(?:net\\.minecraft|com\\.mojang\\.blaze3d)\\.[\\w.$]*\\w");
 	private static final Pattern MEMBER = Pattern.compile("\\b(method|field)_\\d+\\b");
 	private static final Pattern DESC_CLASS = Pattern.compile("L([^;<]+)");
 	/** {@code Lowner;name(} or {@code Lowner;name:}, the member reference form Mixin reads. */
@@ -291,7 +291,7 @@ public final class Namer {
 	 * {@code field} says whether a bare name with no parenthesis is a field.
 	 */
 	public String rewrite(String s, String mixinClass, boolean field) {
-		if (!(s.contains("net/minecraft") || s.contains("net.minecraft") || s.contains("method_") || s.contains("field_")
+		if (!(s.contains("net/minecraft") || s.contains("net.minecraft") || s.contains("com/mojang/blaze3d") || s.contains("com.mojang.blaze3d") || s.contains("method_") || s.contains("field_")
 				|| mixinClass != null && (renames.hasMethod(bareName(s)) || renames.hasField(bareName(s))))) return s;
 
 		if (mixinClass != null) {

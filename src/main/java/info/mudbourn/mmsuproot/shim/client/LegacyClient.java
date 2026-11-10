@@ -82,4 +82,24 @@ public final class LegacyClient {
 	public static Map<Identifier, Resource> listResources(ResourceManager manager, String path, Predicate<Identifier> filter) {
 		return manager.listResources(path, filter::test);
 	}
+
+	/** {@code new LocalPlayer(...)}: 26.3 also takes the item-activation animation the player shows, a fresh one for a player that is only drawn. */
+	public static Object[] localPlayer(Minecraft minecraft, net.minecraft.client.multiplayer.ClientLevel level,
+			net.minecraft.client.multiplayer.ClientPacketListener connection, net.minecraft.stats.StatsCounter stats,
+			net.minecraft.client.ClientRecipeBook recipes, net.minecraft.world.entity.player.Input input, boolean wasShiftKeyDown,
+			net.minecraft.client.multiplayer.chat.ChatAbilities chat) {
+		return new Object[] {minecraft, level, connection, stats, recipes, input, wasShiftKeyDown, chat, new net.minecraft.client.player.ItemActivation()};
+	}
+
+	/** {@code new ConfirmLinkScreen(callback, String url, boolean trusted)}: 26.3 takes the address as a URI. */
+	public static Object[] confirmLinkScreen(it.unimi.dsi.fastutil.booleans.BooleanConsumer callback, String url, boolean trusted) {
+		URI uri;
+		try {
+			uri = URI.create(url);
+		} catch (IllegalArgumentException e) {
+			// 26.2 took any string and showed it; an address that is no URI cannot be opened, so the screen offers a blank address to decline
+			uri = URI.create("about:blank");
+		}
+		return new Object[] {callback, uri, trusted};
+	}
 }

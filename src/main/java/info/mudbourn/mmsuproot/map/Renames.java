@@ -70,6 +70,8 @@ public final class Renames {
 	private final Map<String, List<Rule>> fields = new HashMap<>();
 	private final Map<String, String> fieldOwners = new HashMap<>();
 	private final Map<String, String[]> casts = new HashMap<>(); // class (26.3 name) -> {helper owner, helper name}
+	private final Map<String, String[]> invokerParams = new HashMap<>(); // "mixin interface.method" -> {old descriptor, extra parameter types}
+	private final Map<String, String[]> instanceTests = new HashMap<>(); // class (26.3 name) -> {helper owner, helper name}
 	private final Map<String, String[]> callMoves = new HashMap<>(); // "owner.name desc" (26.3 names) -> {new owner, new name}
 	private final Map<String, String> fieldGets = new HashMap<>(); // "owner.name" (26.3 names) -> getter name
 	private final Map<String, String> injectAts = new HashMap<>(); // mixin target string of a call -> the string it becomes
@@ -112,6 +114,11 @@ public final class Renames {
 				int dot = p[2].lastIndexOf('.');
 				r.casts.put(p[1], new String[] {p[2].substring(0, dot), p[2].substring(dot + 1)});
 			}
+			case "instanceadapt" -> {
+				int dot = p[2].lastIndexOf('.');
+				r.instanceTests.put(p[1], new String[] {p[2].substring(0, dot), p[2].substring(dot + 1)});
+			}
+			case "invokerparam" -> r.invokerParams.put(p[1] + "." + p[2], new String[] {p[3], p[4]});
 			case "callmove" -> r.callMoves.put(p[1] + "." + p[2] + " " + p[3], new String[] {p[4], p[5]});
 			case "fieldmove" -> r.fieldMoves.put(p[1] + "." + p[2], new String[] {p[3], p[4]});
 			case "fieldget" -> r.fieldGets.put(p[1] + "." + p[2], p[3]);
@@ -337,6 +344,16 @@ public final class Renames {
 	/** {helper owner, helper name} for a checkcast to the class, or null. */
 	public String[] castAdapt(String cls) {
 		return casts.get(cls);
+	}
+
+	/** {old descriptor, extra parameter types} of an {@code invokerparam} rule for the mixin interface method, or null. */
+	public String[] invokerParam(String mixinClass, String method) {
+		return invokerParams.get(mixinClass + "." + method);
+	}
+
+	/** {helper owner, helper name} for an instanceof test of the class, or null. */
+	public String[] instanceAdapt(String cls) {
+		return instanceTests.get(cls);
 	}
 
 	public String[] callMove(String owner, String name, String desc) {

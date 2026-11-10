@@ -18,6 +18,12 @@ import org.objectweb.asm.commons.Remapper;
  * rewrites the strings in annotations, because mixins name their targets there.
  */
 public final class ClassRemap {
+	/** {@code desc} with the parameter types {@code extra} (descriptor syntax, no parentheses) added after its last parameter. */
+	static String withExtraParams(String desc, String extra) {
+		int close = desc.indexOf(')');
+		return desc.substring(0, close) + extra + desc.substring(close);
+	}
+
 	private static final int API = Opcodes.ASM9;
 
 	private ClassRemap() { }
@@ -524,6 +530,24 @@ public final class ClassRemap {
 
 				@Override
 				public void visitMethodInsn(int opcode, String owner, String methodName, String methodDesc, boolean itf) {
+					String[] invoker = opcode == Opcodes.INVOKEINTERFACE || opcode == Opcodes.INVOKEVIRTUAL ? namer.renames().invokerParam(owner, methodName) : null;
+					if (invoker != null && invoker[0].equals(methodDesc)) {
+						// a call of an invoker whose target gained trailing parameters: the new ones get their zero value
+						int words = 0;
+						for (Type t : Type.getArgumentTypes("(" + invoker[1] + ")V")) {
+							switch (t.getSort()) {
+								case Type.LONG -> super.visitInsn(Opcodes.LCONST_0);
+								case Type.DOUBLE -> super.visitInsn(Opcodes.DCONST_0);
+								case Type.FLOAT -> super.visitInsn(Opcodes.FCONST_0);
+								case Type.OBJECT, Type.ARRAY -> super.visitInsn(Opcodes.ACONST_NULL);
+								default -> super.visitInsn(Opcodes.ICONST_0);
+							}
+							words += t.getSize();
+						}
+						extraStack = Math.max(extraStack, words);
+						super.visitMethodInsn(opcode, owner, methodName, ClassRemap.withExtraParams(methodDesc, invoker[1]), itf);
+						return;
+					}
 					if (opcode == Opcodes.INVOKESPECIAL && methodName.equals("<init>")) {
 						Renames.CtorAdapt a = namer.renames().ctorAdapt(owner, methodDesc);
 						if (a != null) {

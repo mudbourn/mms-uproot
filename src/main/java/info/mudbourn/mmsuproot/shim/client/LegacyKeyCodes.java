@@ -4,13 +4,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.input.KeyEvent;
 
 /**
  * Key codes for mods built before 26.3. Up to 26.2 a keyboard key was a GLFW key code ({@code KEY_R} is 82); 26.3
  * reads the keyboard through SDL and its codes are SDL scancodes ({@code KEY_R} is 21). A mod compiles its key code
  * into the jar, so the remap sends every key a mod hands to a {@code KeyMapping} or to {@code Type.getOrCreate}
- * through here. The mouse keeps its buttons, and a code with no entry below passes through unchanged.
+ * through here. The mouse keeps its buttons, and a keyboard code with no entry below is unknown (-1).
  */
 public final class LegacyKeyCodes {
 	/**
@@ -136,16 +138,25 @@ public final class LegacyKeyCodes {
 	};
 
 	private static final Map<Integer, Integer> TO_SDL = new HashMap<>();
+	private static final Map<Integer, Integer> TO_GLFW = new HashMap<>();
 
 	static {
-		for (int[] pair : PAIRS) TO_SDL.put(pair[0], pair[1]);
+		for (int[] pair : PAIRS) {
+			TO_SDL.put(pair[0], pair[1]);
+			TO_GLFW.putIfAbsent(pair[1], pair[0]);
+		}
 	}
 
 	private LegacyKeyCodes() { }
 
-	/** The 26.3 code for a GLFW key code. */
+	/** The 26.3 code for a GLFW key code; one with no entry (and -1, GLFW's unknown key) is -1. */
 	public static int convert(int glfwCode) {
-		return TO_SDL.getOrDefault(glfwCode, glfwCode);
+		return TO_SDL.getOrDefault(glfwCode, -1);
+	}
+
+	/** The GLFW key code for a 26.3 (SDL scancode) key code; one with no entry (and -1) is -1, GLFW's unknown key. */
+	public static int toGlfw(int code) {
+		return TO_GLFW.getOrDefault(code, -1);
 	}
 
 	private static int convert(InputConstants.Type type, int code) {
@@ -170,5 +181,69 @@ public final class LegacyKeyCodes {
 	/** {@code type.getOrCreate(code)}. */
 	public static InputConstants.Key getOrCreate(InputConstants.Type type, int code) {
 		return type.getOrCreate(convert(type, code));
+	}
+
+	/**
+	 * {@code KeyEvent.key()}: a mod built before 26.3 compares it with GLFW key codes it has compiled in, so it is handed the GLFW
+	 * code of the pressed key.
+	 */
+	public static int key(KeyEvent event) {
+		return toGlfw(event.key());
+	}
+
+	/** {@code KeyEvent.scancode()}: 26.3's key already is the layout-independent scancode. */
+	public static int scancode(KeyEvent event) {
+		return event.key();
+	}
+
+	/** SDL sets this bit on the key code of a key that has no character ({@code SDLK_SCANCODE_MASK}); the rest of the code is its scancode. */
+	private static final int SCANCODE_MASK = 1 << 30;
+
+	/**
+	 * The 26.3 layout key code (SDL's keycode) of a key as a US layout types it: a printable key is its lowercase ASCII character,
+	 * Return, Escape, Backspace, Tab and Delete are their control characters, and every other key is its scancode with
+	 * {@code SDLK_SCANCODE_MASK} set. {@code InputWithModifiers.isCopy} and the like compare it with 97, 99, 118 and 120.
+	 */
+	private static int layoutKeycode(int glfwKey, int scancode) {
+		if (scancode < 0) return 0;
+		if (glfwKey >= 65 && glfwKey <= 90) return glfwKey + 32;
+		if (glfwKey >= 32 && glfwKey <= 96) return glfwKey;
+		return switch (glfwKey) {
+			case 256 -> 27;
+			case 257 -> 13;
+			case 258 -> 9;
+			case 259 -> 8;
+			case 261 -> 127;
+			default -> SCANCODE_MASK | scancode;
+		};
+	}
+
+	/**
+	 * {@code new KeyEvent(key, scancode, modifiers)}: the key is a GLFW code; 26.3 wants its SDL scancode, then the layout key code
+	 * (see {@link #layoutKeycode}), then the modifiers. A key with no 26.3 counterpart is -1 with key code 0.
+	 */
+	public static Object[] keyEvent(int key, int scancode, int modifiers) {
+		int sdl = convert(key);
+		return new Object[] {sdl, layoutKeycode(key, sdl), modifiers};
+	}
+
+	/** {@code GLFW.glfwGetKeyScancode(key)}: the SDL scancode of a GLFW key, which is what 26.3 calls a key code. */
+	public static int glfwGetKeyScancode(int key) {
+		return convert(key);
+	}
+
+	/** {@code GLFW.glfwGetKey(window, key)}: {@code GLFW_PRESS} (1) while the key is down, else {@code GLFW_RELEASE} (0). The window is gone. */
+	public static int glfwGetKey(long window, int key) {
+		return isKeyDown(key) ? 1 : 0;
+	}
+
+	/** {@code InputConstants.isKeyDown(window, key)}: the window is gone and the key is a GLFW code. */
+	public static boolean isKeyDown(Window window, int key) {
+		return isKeyDown(key);
+	}
+
+	private static boolean isKeyDown(int glfwKey) {
+		int sdl = convert(glfwKey);
+		return sdl >= 0 && InputConstants.isKeyDown(sdl);
 	}
 }

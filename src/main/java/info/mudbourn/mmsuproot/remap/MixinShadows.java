@@ -57,6 +57,16 @@ final class MixinShadows extends ClassNode {
 			methods.addAll(adapters);
 		}
 		for (MethodNode m : methods) {
+			String[] invoker = namer.renames().invokerParam(name, m.name);
+			if (invoker != null && invoker[0].equals(m.desc)) {
+				// an @Invoker whose target gained trailing parameters: the interface method takes them too (callers are adapted in ClassRemap)
+				m.desc = ClassRemap.withExtraParams(m.desc, invoker[1]);
+				m.signature = null;
+				m.visibleParameterAnnotations = null;
+				m.invisibleParameterAnnotations = null;
+				m.visibleAnnotableParameterCount = 0;
+				m.invisibleAnnotableParameterCount = 0;
+			}
 			if (!namer.renames().optional(name, m.name)) continue;
 			for (List<AnnotationNode> list : java.util.Arrays.asList(m.visibleAnnotations, m.invisibleAnnotations)) {
 				if (list == null) continue;

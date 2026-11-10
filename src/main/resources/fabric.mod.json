@@ -12,7 +12,7 @@
 	},
 	"entrypoints": {
 		"main": ["info.mudbourn.mmsuproot.boot.UprootMain"],
-		"client": ["info.mudbourn.mmsuproot.boot.DevShot", "info.mudbourn.mmsuproot.shim.client.DevUse"]
+		"client": ["info.mudbourn.mmsuproot.boot.DevShot", "info.mudbourn.mmsuproot.shim.client.DevUse", "info.mudbourn.mmsuproot.probe.ProbeRunner"]
 	},
 	"mixins": ["mms_uproot.mixins.json"],
 	"accessWidener": "mms_uproot.accesswidener",

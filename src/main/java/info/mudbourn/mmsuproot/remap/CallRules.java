@@ -152,6 +152,11 @@ final class CallRules extends ClassVisitor {
 					super.visitMethodInsn(Opcodes.INVOKESTATIC, cast[0], cast[1], "(Ljava/lang/Object;)L" + type + ";", false);
 					return;
 				}
+				String[] test = opcode == Opcodes.INSTANCEOF ? renames.instanceAdapt(type) : null;
+				if (test != null) {
+					super.visitMethodInsn(Opcodes.INVOKESTATIC, test[0], test[1], "(Ljava/lang/Object;)Z", false);
+					return;
+				}
 				super.visitTypeInsn(opcode, type);
 			}
 

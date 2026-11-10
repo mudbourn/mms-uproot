@@ -16,6 +16,17 @@ loom {
 			sourceSet sourceSets.main
 		}
 	}
+	runs {
+		// the dev client the probe harness drives (info.mudbourn.mmsuproot.probe); run it through the uprootProbe task
+		uprootProbe {
+			client()
+			ideConfigGenerated false
+			runDir "run"
+			vmArg "-Duproot.probe=true"
+			programArg "--quickPlaySingleplayer"
+			programArg "uproot_check"
+		}
+	}
 }
 
 dependencies {
@@ -58,4 +69,36 @@ tasks.register('uprootOverrides', JavaExec) {
 
 tasks.matching { it.name == 'runClient' }.configureEach {
 	dependsOn 'uprootOverrides'
+}
+
+// Runs the in-game probes in the test world and fails when any probe fails or the run did not finish.
+def probeFile = file('run/mms-uproot/probe.txt')
+tasks.matching { it.name == 'runUprootProbe' }.configureEach {
+	dependsOn 'uprootOverrides'
+	timeout = java.time.Duration.ofMinutes(5)
+	doFirst { probeFile.delete() }
+}
+
+tasks.register('uprootProbe') {
+	group = 'uproot'
+	description = 'Launches the dev client with the probe harness, waits for it to quit and fails on any probe failure'
+	dependsOn 'runUprootProbe'
+	doLast {
+		if (!probeFile.isFile()) throw new GradleException("uprootProbe: ${probeFile} is missing, the game did not get as far as running probes")
+		def lines = probeFile.readLines('UTF-8').findAll { it.startsWith('PROBE ') }
+		def plan = lines.find { it.startsWith('PROBE PLAN ') }
+		def done = lines.find { it.startsWith('PROBE DONE ') }
+		def results = lines.findAll { it ==~ /PROBE (PASS|FAIL|SKIP) .*/ }
+		def failed = results.findAll { it.startsWith('PROBE FAIL ') }
+		results.each { logger.lifecycle(it) }
+		if (plan == null) throw new GradleException("uprootProbe: ${probeFile} has no PROBE PLAN line")
+		int expected = (plan - 'PROBE PLAN ').trim() as int
+		if (!failed.isEmpty()) throw new GradleException("uprootProbe: ${failed.size()} probe(s) failed:\n" + failed.join('\n'))
+		if (done == null) {
+			def last = results.isEmpty() ? '(none)' : results.last()
+			throw new GradleException("uprootProbe: the run did not finish (no PROBE DONE line; ${results.size()} of ${expected} probes reported, last: ${last}); the game probably crashed")
+		}
+		if (results.size() != expected) throw new GradleException("uprootProbe: ${results.size()} probe results for a plan of ${expected}")
+		logger.lifecycle("uprootProbe: ${done - 'PROBE '}")
+	}
 }

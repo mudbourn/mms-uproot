@@ -23,7 +23,8 @@
 		"LegacyTextInputCloseMixin",
 		"LegacyTextInputMixin",
 		"MinecraftScreenMixin",
-		"ScreenBackgroundMixin"
+		"ScreenBackgroundMixin",
+		"ShaderManagerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

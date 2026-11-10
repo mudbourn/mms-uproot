@@ -47,3 +47,35 @@ noop net/potionstudios/biomeswevegone/client/BiomesWeveGoneClient registerWoodTy
 # The recipe's own serializer class cannot load (RecipeSerializer is a record in 26.3), so the recipe class must not build it; the
 # SERIALIZER reads are moved to the record serializer of shim/recipe (renames.txt).
 noop io/github/wouink/furnish/recipe/FurnitureRecipe <clinit> * | the recipe class must not build its own serializer; RecipeSerializer is a record in 26.3
+
+# --- owo-lib: copium ore hook ---
+# Copenhagen captures the locals of OreFeature.doPlace; 26.3 walks BlockReplacement there where 26.2 walked OreConfiguration.TargetBlockState, so
+# the capture is invalid, and a failed local capture is a critical error that require=0 does not soften. The hook only records ore positions for
+# blocks a mod registered through owo's Maldenhagen.injectCopium, an opt-in nobody needs; no vanilla or owo behaviour depends on it.
+mixin io/wispforest/owo/mixin/Copenhagen | ore-position hook on locals that 26.3 reshaped; opt-in niche feature
+
+# --- owo-lib: blur surface ---
+# owo's blur draws through its own uniform ring (net.minecraft.client.renderer.DynamicUniformStorage, which 26.3 replaced by DynamicGpuData) and
+# a GLSL shader written for the 26.2 layout (no explicit locations, a different DynamicTransforms order). Porting it would be a renderer of
+# Uproot's own. Without it Surface.blur draws nothing, so a blurred panel keeps the plain background behind it; nothing else depends on it.
+noop io/wispforest/owo/ui/renderstate/BlurQuadElementRenderState initialize * | blur input target and uniform ring use 26.2's renderer internals
+noop io/wispforest/owo/ui/core/Surface lambda$blur$0 * | blur surface draws a quad through the removed uniform ring; the surface paints nothing instead
+# The invoker for SetComponentsFunction's constructor is not applied: 26.3's constructor takes a condition holder and is private. Its one caller,
+# the lambda of owo's LootOps.injectItemStack, is moved to shim.compat.LegacyLoot.setComponents by a rule of renames-26x.txt.
+mixin io/wispforest/owo/mixin/SetComponentsFunctionAccessor | constructor invoker for a constructor that changed shape; its caller is rerouted to a shim
+# Recipe remainders: owo reads an "owo:remainders" entry of a recipe JSON as the recipe is parsed, through a call inside
+# SimpleJsonResourceReloadListener.scanDirectory and a lister field of RecipeManager that 26.3 no longer has. Only data packs that use
+# owo:remainders lose the entry's effect (their recipes still load).
+mixin io/wispforest/owo/mixin/extension/SimpleJsonResourceReloadListenerMixin | recipe parsing moved out of scanDirectory
+mixin io/wispforest/owo/mixin/extension/recipe/RecipeManagerAccessor | its only reader is the disabled recipe remainders hook
+# Accessors for renderer internals (CommandEncoder.backend, GlProgram.uniformsByName) that owo never reads and 26.3's renderer lacks
+mixin io/wispforest/owo/mixin/ui/CommandEncoderAccessor | field no longer exists; no owo class reads it
+mixin io/wispforest/owo/mixin/shader/GlProgramAccessor | field no longer exists; no owo class reads it
+# Braid, owo's second UI toolkit: its extra OS window shares the GL context of the main one (GLFW), and in-world displays draw before the level
+# render call, which 26.3 moved. Neither is used by owo's own config screens or by the mods that depend on owo.
+mixin io/wispforest/owo/mixin/braid/WindowMixin | secondary Braid windows need GLFW window creation, which 26.3 has not
+mixin io/wispforest/owo/mixin/ui/display/GameRendererMixin | Braid displays draw before GameRenderer.render's level call, which no longer exists
+# The cube map component renders into a texture the component names, through a render pass call whose clear-colour argument changed type
+mixin io/wispforest/owo/mixin/ui/CubeMapMixin | CommandEncoder.createRenderPass changed its arguments
+# owo's own link opener for macOS and Linux (Util.OS.openUri(URI)); 26.3 opens links in Blaze3D
+mixin io/wispforest/owo/mixin/tweaks/OperatingSystemMixin | Util$OS has no openUri(URI) to overwrite in 26.3
