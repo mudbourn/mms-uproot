@@ -76,6 +76,20 @@ final class ConvertedView {
 		}
 	}
 
+	/** Whether a criterion waits for a recipe, named in a namespace of this pack, that the pack does not have. */
+	private static boolean craftsMissingRecipe(Map<String, Object> advancement, Set<String> recipes, Set<String> namespaces) {
+		if (!(advancement.get("criteria") instanceof Map<?, ?> criteria)) return false;
+		for (Object c : criteria.values()) {
+			if (!(c instanceof Map<?, ?> crit) || !"minecraft:recipe_crafted".equals(crit.get("trigger")) || !(crit.get("conditions") instanceof Map<?, ?> cond)) continue;
+			Object named = cond.containsKey("recipe_id") ? cond.get("recipe_id") : cond.get("recipes");
+			for (Object r : named instanceof List<?> l ? l : List.of(String.valueOf(named))) {
+				Identifier id = Identifier.tryParse(String.valueOf(r));
+				if (id != null && namespaces.contains(id.getNamespace()) && !recipes.contains(id.toString())) return true;
+			}
+		}
+		return false;
+	}
+
 	private void list(String namespace, String path, PackResources.ResourceOutput out) {
 		Built b = built();
 		pack.listResources(PackType.SERVER_DATA, namespace, path, (id, supplier) -> {
@@ -113,6 +127,15 @@ final class ConvertedView {
 			pack.listResources(PackType.SERVER_DATA, ns, "worldgen", (id, supplier) -> files.add(new Object[] {ns, id.getPath(), supplier}));
 		}
 
+		Set<String> ownRecipes = new HashSet<>();
+		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
+			pack.listResources(PackType.SERVER_DATA, ns, "recipe", (id, supplier) -> {
+				String path = id.getPath();
+				if (path.endsWith(".json")) ownRecipes.add(ns + ":" + path.substring("recipe/".length(), path.length() - ".json".length()));
+			});
+		}
+		Set<String> ownNamespaces = new HashSet<>(pack.getNamespaces(PackType.SERVER_DATA));
+
 		Map<String, String> parents = new HashMap<>();
 		Set<String> hiddenRecipes = new HashSet<>();
 		List<String> timelines = new ArrayList<>();
@@ -131,6 +154,12 @@ final class ConvertedView {
 								hiddenRecipes.add(ns + ":" + id.getPath().substring("recipe/".length(), id.getPath().length() - ".json".length()));
 								stats.count("recipes of unregistered types left out");
 							}
+							return;
+						}
+						if (folder.equals("advancement") && craftsMissingRecipe(root, ownRecipes, ownNamespaces)) {
+							// 1.21.11 never checked the recipe a criterion names; 26.3 needs it to exist, and this one is not in the pack
+							hidden.add(key);
+							stats.count("advancements of recipes the pack lacks left out");
 							return;
 						}
 						if (folder.equals("advancement") && root.get("rewards") instanceof Map<?, ?> rewards && rewards.get("recipes") instanceof List<?> unlocked
@@ -163,6 +192,28 @@ final class ConvertedView {
 		}
 		hideOrphans(parents, hidden, served);
 		tagTimelines(timelines, served, added, namespaces, stats);
+
+		// A mod's own data registry reads from a folder named after the registry's namespace (data/<ns>/<registry namespace>/<registry path>).
+		// What it holds may embed vanilla values in their 1.21.11 shapes (block states, state providers), which the generic pass reads by shape.
+		Set<String> namespaceList = pack.getNamespaces(PackType.SERVER_DATA);
+		for (String ns : namespaceList) {
+			for (String registryNamespace : namespaceList) {
+				if (registryNamespace.equals("minecraft")) continue;
+				pack.listResources(PackType.SERVER_DATA, ns, registryNamespace, (id, supplier) -> {
+					if (!id.getPath().endsWith(".json")) return;
+					String key = ns + ":" + id.getPath();
+					try (InputStream in = supplier.get()) {
+						Map<String, Object> root = Json.parseObject(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+						Object converted = FeatureJson.generic(root, stats);
+						if (converted.equals(root)) return;
+						served.put(key, Json.write(converted).getBytes(StandardCharsets.UTF_8));
+						report.dataConvertedFiles.incrementAndGet();
+					} catch (IOException | RuntimeException e) {
+						fail(key, e);
+					}
+				});
+			}
+		}
 
 		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
 			pack.listResources(PackType.SERVER_DATA, ns, "structure", (id, supplier) -> {

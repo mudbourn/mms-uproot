@@ -54,6 +54,14 @@ public final class LegacyBlocks {
 	private LegacyBlocks() { }
 
 	/**
+	 * 1.21.11's {@code isViewBlocking} took a block predicate; 26.3's takes one that also gets the box being looked through.
+	 * The old predicate never looked at it, so this forwards the state, level and position and drops the box.
+	 */
+	public static BlockBehaviour.Properties isViewBlocking(BlockBehaviour.Properties properties, BlockBehaviour.StatePredicate predicate) {
+		return properties.isViewBlocking((state, level, pos, box) -> predicate.test(state, level, pos));
+	}
+
+	/**
 	 * 1.21.11 blocks carried a codec and built it with {@code simpleCodec}. 26.3 blocks have none, so
 	 * nothing reads the codec a mod keeps; this returns a codec that decodes to nothing so the field can be set.
 	 */

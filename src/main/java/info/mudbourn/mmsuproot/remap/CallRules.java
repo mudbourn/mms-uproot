@@ -32,6 +32,7 @@ final class CallRules extends ClassVisitor {
 	private final Set<String> declared = new HashSet<>(); // name+desc of the methods the class declares
 	private final List<Object[]> superStubs = new ArrayList<>(); // {stub name, super owner, interface flag, Bridge}
 	private List<Renames.Bridge> applicable;
+	private final List<Object[]> lambdaStubs = new ArrayList<>(); // {stub name, stub descriptor, impl Handle}
 
 	CallRules(ClassVisitor next, Namer namer) {
 		super(API, next);
@@ -100,6 +101,77 @@ final class CallRules extends ClassVisitor {
 	}
 
 	/**
+	 * A lambda or method reference for a functional interface a {@code bridge} rule covers: the interface method has added parameters, so
+	 * the lambda is made for the new shape, and its body is a static method of this class that drops the added arguments and calls the
+	 * old implementation. Returns the new bootstrap arguments, or null when no rule applies.
+	 */
+	private Object[] bridgedLambda(String indyName, String indyDesc, Handle bsm, Object[] args) {
+		if (!bsm.getOwner().equals("java/lang/invoke/LambdaMetafactory") || args.length < 3 || renames.bridges().isEmpty()) return null;
+		if (!(args[0] instanceof Type sam) || !(args[1] instanceof Handle impl) || !(args[2] instanceof Type inst)) return null;
+		Type itf = Type.getReturnType(indyDesc);
+		if (itf.getSort() != Type.OBJECT) return null;
+		Set<String> up = new HashSet<>(namer.ancestorsOf(itf.getInternalName()));
+		up.add(itf.getInternalName());
+		Renames.Bridge rule = null;
+		for (Renames.Bridge b : renames.bridges()) {
+			if (b.name().equals(indyName) && b.oldDesc().equals(sam.getDescriptor()) && up.contains(b.owner())) rule = b;
+		}
+		if (rule == null) return null;
+
+		Type[] oldArgs = Type.getArgumentTypes(rule.oldDesc());
+		Type[] newArgs = Type.getArgumentTypes(rule.newDesc());
+		List<Type> implArgs = new ArrayList<>();
+		if (impl.getTag() != Opcodes.H_INVOKESTATIC && impl.getTag() != Opcodes.H_NEWINVOKESPECIAL) implArgs.add(Type.getObjectType(impl.getOwner()));
+		implArgs.addAll(List.of(Type.getArgumentTypes(impl.getDesc())));
+		List<Type> stubArgs = new ArrayList<>(implArgs);
+		List<Type> extra = new ArrayList<>(List.of(newArgs).subList(oldArgs.length, newArgs.length));
+		stubArgs.addAll(extra);
+		Type ret = impl.getTag() == Opcodes.H_NEWINVOKESPECIAL ? Type.getObjectType(impl.getOwner()) : Type.getReturnType(impl.getDesc());
+		String stubDesc = Type.getMethodDescriptor(ret, stubArgs.toArray(new Type[0]));
+		String stub = "uproot$lambda$" + lambdaStubs.size();
+		lambdaStubs.add(new Object[] {stub, stubDesc, impl, implArgs.size()});
+
+		List<Type> instArgs = new ArrayList<>(List.of(Type.getArgumentTypes(inst.getDescriptor())));
+		instArgs.addAll(extra);
+		Object[] out = args.clone();
+		out[0] = Type.getMethodType(rule.newDesc());
+		out[1] = new Handle(Opcodes.H_INVOKESTATIC, className, stub, stubDesc, isInterface);
+		out[2] = Type.getMethodType(Type.getReturnType(inst.getDescriptor()), instArgs.toArray(new Type[0]));
+		return out;
+	}
+
+	/** The static method a bridged lambda runs: calls the old implementation with the arguments it knew and ignores the rest. */
+	private void emitLambdaStub(String stub, String desc, Handle impl, int implArgCount) {
+		Type[] args = Type.getArgumentTypes(desc);
+		Type ret = Type.getReturnType(desc);
+		MethodVisitor mv = super.visitMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, stub, desc, null, null);
+		mv.visitCode();
+		int stack = 0;
+		if (impl.getTag() == Opcodes.H_NEWINVOKESPECIAL) {
+			mv.visitTypeInsn(Opcodes.NEW, impl.getOwner());
+			mv.visitInsn(Opcodes.DUP);
+			stack += 2;
+		}
+		int slot = 0;
+		for (int i = 0; i < implArgCount; i++) {
+			mv.visitVarInsn(args[i].getOpcode(Opcodes.ILOAD), slot);
+			slot += args[i].getSize();
+			stack += args[i].getSize();
+		}
+		int opcode = switch (impl.getTag()) {
+			case Opcodes.H_INVOKESTATIC -> Opcodes.INVOKESTATIC;
+			case Opcodes.H_INVOKEVIRTUAL -> Opcodes.INVOKEVIRTUAL;
+			case Opcodes.H_INVOKEINTERFACE -> Opcodes.INVOKEINTERFACE;
+			default -> Opcodes.INVOKESPECIAL;
+		};
+		mv.visitMethodInsn(opcode, impl.getOwner(), impl.getName(), impl.getDesc(), impl.isInterface());
+		mv.visitInsn(ret.getOpcode(Opcodes.IRETURN));
+		for (int i = implArgCount; i < args.length; i++) slot += args[i].getSize();
+		mv.visitMaxs(Math.max(stack, ret.getSize()), slot);
+		mv.visitEnd();
+	}
+
+	/**
 	 * A Minecraft class that became an interface (or stopped being one) is called with the other
 	 * instruction now. Returns the opcode to use for a call whose owner is a game class.
 	 */
@@ -142,7 +214,8 @@ final class CallRules extends ClassVisitor {
 			public void visitInvokeDynamicInsn(String indyName, String indyDesc, Handle bsm, Object... bsmArgs) {
 				Object[] mapped = bsmArgs.clone();
 				for (int i = 0; i < mapped.length; i++) mapped[i] = rewritten(mapped[i]);
-				super.visitInvokeDynamicInsn(indyName, indyDesc, bsm, mapped);
+				Object[] adapted = bridgedLambda(indyName, indyDesc, bsm, mapped);
+				super.visitInvokeDynamicInsn(indyName, indyDesc, bsm, adapted != null ? adapted : mapped);
 			}
 
 			@Override
@@ -207,6 +280,7 @@ final class CallRules extends ClassVisitor {
 		for (Renames.Bridge b : applicable()) {
 			if (declared.contains(b.name() + b.oldDesc()) && !declared.contains(b.name() + b.newDesc())) emitBridge(b);
 		}
+		for (Object[] l : lambdaStubs) emitLambdaStub((String) l[0], (String) l[1], (Handle) l[2], (int) l[3]);
 		for (Object[] s : superStubs) emitSuperStub((String) s[0], (String) s[1], (boolean) s[2], (Renames.Bridge) s[3]);
 		super.visitEnd();
 	}

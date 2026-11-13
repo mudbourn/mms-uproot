@@ -79,6 +79,34 @@ public final class GameClasses {
 		return hits != null && hits.size() == 1 ? hits.get(0) : null;
 	}
 
+	/**
+	 * As {@link #uniqueBySimpleName}, and when several classes carry the name, the one in the package that shares the most with
+	 * {@code oldName}'s package, as long as it shares the area under net/minecraft (three segments) and no other class ties.
+	 */
+	public String uniqueNear(String oldName) {
+		String simple = oldName.substring(oldName.lastIndexOf('/') + 1);
+		List<String> hits = bySimpleName.get(simple);
+		if (hits == null) return null;
+		if (hits.size() == 1) return hits.get(0);
+		String[] old = oldName.split("/");
+		String best = null;
+		int bestShared = 0;
+		boolean tie = false;
+		for (String hit : hits) {
+			String[] parts = hit.split("/");
+			int shared = 0;
+			while (shared < parts.length - 1 && shared < old.length - 1 && parts[shared].equals(old[shared])) shared++;
+			if (shared > bestShared) {
+				best = hit;
+				bestShared = shared;
+				tie = false;
+			} else if (shared == bestShared) {
+				tie = true;
+			}
+		}
+		return bestShared >= 3 && !tie ? best : null;
+	}
+
 	public int size() {
 		return names.size();
 	}

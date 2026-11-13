@@ -146,3 +146,11 @@ callinst net/minecraft/world/entity/player/Inventory placeItemBackInInventory (L
 # A plain swing is the attack swing in 26.3; the full swing call takes the animation too (see renames.txt)
 method net/minecraft/world/entity/LivingEntity swing swingForAttack (Lnet/minecraft/world/InteractionHand;)V
 callinst net/minecraft/world/entity/LivingEntity swingForAttack (Lnet/minecraft/world/InteractionHand;)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swingForAttack
+
+# Fabric's game rule API has no CustomGameRuleCategory and no GameRuleBuilder.category(CustomGameRuleCategory) in the 26.3 build (see renames.txt)
+class net/fabricmc/fabric/api/gamerule/v1/CustomGameRuleCategory info/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory
+callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
+callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$BooleanRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$BooleanRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
+callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$IntegerRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$IntegerRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
+callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$DoubleRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$DoubleRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
+callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$EnumRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$EnumRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category

@@ -33,6 +33,8 @@
 #                                  an internal class name, a dot and the method name. Matches subclasses of OWNER
 #                                  and method references, but not super calls.
 #                                  e.g. callinst net/minecraft/world/entity/player/Player displayClientMessage (Lnet/minecraft/network/chat/Component;Z)V info/mudbourn/mmsuproot/shim/block/LegacyBlocks.displayClientMessage
+#                                  An optional NEWDESC after NEWNAME is the descriptor the new target has, when only the return type
+#                                  differs (a result that is now a wider type, as long as the mod uses it as that type).
 # fieldget OWNER NAME METHOD     a read (getfield) of the field OWNER.NAME is a call of OWNER.METHOD() now, which returns the same
 #                                  type; the field is private or gone. OWNER is the 26.3 name the read names, no subclasses.
 # castadapt CLASS HELPER.method   a checkcast to CLASS (26.3 name) becomes invokestatic HELPER.method(Object)CLASS. For a value
@@ -50,6 +52,8 @@
 #                                  implements OWNER, and that names NAME, lists the old parameters before its callback; it
 #                                  gets the added parameters inserted before the callback and the handler is wrapped so
 #                                  its body runs unchanged (see remap.MixinParams).
+#                                  A lambda or method reference for a functional interface that extends or is OWNER gets the same treatment: it is
+#                                  made for NEWDESC and runs through a static method of the mod class that drops the added arguments.
 #                                  e.g. bridge net/minecraft/world/level/block/BonemealableBlock performBonemeal (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/BonemealSource;)V
 # injectat OWNER NAME DESC NEWOWNER NEWNAME NEWDESC
 #                                  a mixin @At target string (Lowner;name(desc)ret) that names OWNER.NAME with DESC now names
@@ -222,6 +226,16 @@ class net/minecraft/world/entity/npc/villager/VillagerTrades$TypeSpecificTrade i
 class net/minecraft/world/entity/npc/villager/VillagerTrades$TreasureMapForEmeralds info/mudbourn/mmsuproot/shim/compat/LegacyVillagerTrades$TreasureMapForEmeralds
 class net/fabricmc/fabric/api/object/builder/v1/trade/TradeOfferHelper info/mudbourn/mmsuproot/shim/compat/TradeOfferHelper
 class net/fabricmc/fabric/api/object/builder/v1/trade/TradeOfferHelper$WanderingTraderOffersBuilder info/mudbourn/mmsuproot/shim/compat/TradeOfferHelper$WanderingTraderOffersBuilder
+
+# Fabric's game rule API lost CustomGameRuleCategory and GameRuleBuilder.category(CustomGameRuleCategory) (vanilla registers categories now).
+# The stand-in registers the vanilla category; callinst sends each builder type's category call to LegacyGameRules. The visitor was renamed.
+class net/fabricmc/fabric/api/gamerule/v1/CustomGameRuleCategory info/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory
+class net/fabricmc/fabric/api/gamerule/v1/FabricGameRuleVisitor net/fabricmc/fabric/api/gamerule/v1/FabricGameRuleTypeVisitor
+callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
+callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$BooleanRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$BooleanRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
+callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$IntegerRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$IntegerRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
+callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$DoubleRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$DoubleRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
+callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$EnumRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$EnumRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
 
 # Block helpers 26.3 made private or moved into per-colour collections
 callmove net/minecraft/world/level/block/SpreadingSnowyBlock canBeGrass (Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;)Z info/mudbourn/mmsuproot/shim/block/LegacyBlocks canBeGrass
@@ -564,3 +578,106 @@ fieldget net/minecraft/client/Minecraft screen info/mudbourn/mmsuproot/shim/clie
 # 26.3 moved the waypoint styles to the HUD, and team colours became an optional TeamColor. Locator Border uses both.
 callinst net/minecraft/client/Minecraft getWaypointStyles ()Lnet/minecraft/client/resources/WaypointStyleManager; info/mudbourn/mmsuproot/shim/client/LegacyClient.waypointStyles
 callinst net/minecraft/world/scores/PlayerTeam getColor ()Lnet/minecraft/ChatFormatting; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.teamColor
+
+# Fabric's lifecycle events say level where they said world (the 26.3 build of fabric-lifecycle-events-v1)
+class net/fabricmc/fabric/api/event/lifecycle/v1/ServerWorldEvents net/fabricmc/fabric/api/event/lifecycle/v1/ServerLevelEvents
+class net/fabricmc/fabric/api/event/lifecycle/v1/ServerWorldEvents$Load net/fabricmc/fabric/api/event/lifecycle/v1/ServerLevelEvents$Load
+class net/fabricmc/fabric/api/event/lifecycle/v1/ServerWorldEvents$Unload net/fabricmc/fabric/api/event/lifecycle/v1/ServerLevelEvents$Unload
+method net/fabricmc/fabric/api/event/lifecycle/v1/ServerLevelEvents$Load onWorldLoad onLevelLoad
+method net/fabricmc/fabric/api/event/lifecycle/v1/ServerLevelEvents$Unload onWorldUnload onLevelUnload
+class net/fabricmc/fabric/api/event/lifecycle/v1/ServerTickEvents$StartWorldTick net/fabricmc/fabric/api/event/lifecycle/v1/ServerTickEvents$StartLevelTick
+class net/fabricmc/fabric/api/event/lifecycle/v1/ServerTickEvents$EndWorldTick net/fabricmc/fabric/api/event/lifecycle/v1/ServerTickEvents$EndLevelTick
+field net/fabricmc/fabric/api/event/lifecycle/v1/ServerTickEvents START_WORLD_TICK START_LEVEL_TICK
+field net/fabricmc/fabric/api/event/lifecycle/v1/ServerTickEvents END_WORLD_TICK END_LEVEL_TICK
+class net/fabricmc/fabric/api/event/lifecycle/v1/ServerChunkEvents$LevelTypeChange net/fabricmc/fabric/api/event/lifecycle/v1/ServerChunkEvents$FullChunkStatusChange
+method net/fabricmc/fabric/api/event/lifecycle/v1/ServerChunkEvents$FullChunkStatusChange onChunkLevelTypeChange onFullChunkStatusChange
+field net/fabricmc/fabric/api/event/lifecycle/v1/ServerChunkEvents CHUNK_LEVEL_TYPE_CHANGE FULL_CHUNK_STATUS_CHANGE
+class net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientWorldEvents net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientLevelEvents
+class net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientWorldEvents$AfterClientWorldChange net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientLevelEvents$AfterClientLevelChange
+method net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientLevelEvents$AfterClientLevelChange afterWorldChange afterLevelChange
+field net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientLevelEvents AFTER_CLIENT_WORLD_CHANGE AFTER_CLIENT_LEVEL_CHANGE
+class net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientTickEvents$StartWorldTick net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientTickEvents$StartLevelTick
+class net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientTickEvents$EndWorldTick net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientTickEvents$EndLevelTick
+field net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientTickEvents START_WORLD_TICK START_LEVEL_TICK
+field net/fabricmc/fabric/api/client/event/lifecycle/v1/ClientTickEvents END_WORLD_TICK END_LEVEL_TICK
+
+# Registry codecs: RegistryCodecs.homogeneousList is holderSet (same overloads), and RegistryFileCodec.create returns a plain Codec now
+# and is reached through RegistryCodecs.holder
+method net/minecraft/core/registries/codec/RegistryCodecs homogeneousList holderSet
+callmove net/minecraft/core/registries/codec/RegistryFileCodec create (Lnet/minecraft/resources/ResourceKey;Lcom/mojang/serialization/Codec;)Lnet/minecraft/core/registries/codec/RegistryFileCodec; net/minecraft/core/registries/codec/RegistryCodecs holder (Lnet/minecraft/resources/ResourceKey;Lcom/mojang/serialization/Codec;)Lcom/mojang/serialization/Codec;
+callmove net/minecraft/core/registries/codec/RegistryFileCodec create (Lnet/minecraft/resources/ResourceKey;Lcom/mojang/serialization/Codec;Z)Lnet/minecraft/core/registries/codec/RegistryFileCodec; net/minecraft/core/registries/codec/RegistryCodecs holder (Lnet/minecraft/resources/ResourceKey;Lcom/mojang/serialization/Codec;Z)Lcom/mojang/serialization/Codec;
+
+# Pointed dripstone's thickness is the speleothem thickness now (same five values)
+class net/minecraft/world/level/block/state/properties/DripstoneThickness net/minecraft/world/level/block/state/properties/SpeleothemThickness
+field net/minecraft/world/level/block/state/properties/BlockStateProperties DRIPSTONE_THICKNESS SPELEOTHEM_THICKNESS
+
+# A loot condition type was a record around a codec; the registry holds the codec now (see LegacyLootConditionType)
+class net/minecraft/world/level/storage/loot/predicates/LootItemConditionType info/mudbourn/mmsuproot/shim/compat/LegacyLootConditionType
+
+# Fabric's land path node type registry is the land path type registry (vanilla's PathType, same shapes)
+class net/fabricmc/fabric/api/registry/LandPathNodeTypesRegistry net/fabricmc/fabric/api/registry/LandPathTypeRegistry
+class net/fabricmc/fabric/api/registry/LandPathNodeTypesRegistry$PathNodeTypeProvider net/fabricmc/fabric/api/registry/LandPathTypeRegistry$PathTypeProvider
+class net/fabricmc/fabric/api/registry/LandPathNodeTypesRegistry$StaticPathNodeTypeProvider net/fabricmc/fabric/api/registry/LandPathTypeRegistry$StaticPathTypeProvider
+class net/fabricmc/fabric/api/registry/LandPathNodeTypesRegistry$DynamicPathNodeTypeProvider net/fabricmc/fabric/api/registry/LandPathTypeRegistry$DynamicPathTypeProvider
+method net/fabricmc/fabric/api/registry/LandPathTypeRegistry getPathNodeType getPathType
+method net/fabricmc/fabric/api/registry/LandPathTypeRegistry getPathNodeTypeProvider getPathTypeProvider
+method net/fabricmc/fabric/api/registry/LandPathTypeRegistry$StaticPathTypeProvider getPathNodeType getPathType
+method net/fabricmc/fabric/api/registry/LandPathTypeRegistry$DynamicPathTypeProvider getPathNodeType getPathType
+
+# The view-blocking predicate of block properties also gets the box now
+callinst net/minecraft/world/level/block/state/BlockBehaviour$Properties isViewBlocking (Lnet/minecraft/world/level/block/state/BlockBehaviour$StatePredicate;)Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties; info/mudbourn/mmsuproot/shim/block/LegacyBlocks.isViewBlocking
+
+# Fabric's injected method that adds a block to a block entity type was renamed (vanilla calls its set validBlocks now)
+method net/minecraft/world/level/block/entity/BlockEntityType addSupportedBlock addValidBlock
+
+# Fabric's tooltip registry for item components says provider where it said appender
+class net/fabricmc/fabric/api/item/v1/ComponentTooltipAppenderRegistry net/fabricmc/fabric/api/item/v1/ItemComponentTooltipProviderRegistry
+
+# The static codec builders of the number providers live in IntProviders and FloatProviders now
+callmove net/minecraft/util/valueproviders/IntProvider codec (II)Lcom/mojang/serialization/Codec; net/minecraft/util/valueproviders/IntProviders codec
+callmove net/minecraft/util/valueproviders/IntProvider validateCodec (IILcom/mojang/serialization/Codec;)Lcom/mojang/serialization/Codec; net/minecraft/util/valueproviders/IntProviders validateCodec
+callmove net/minecraft/util/valueproviders/FloatProvider codec (FF)Lcom/mojang/serialization/Codec; net/minecraft/util/valueproviders/FloatProviders codec
+
+# Fabric's living entity feature renderer callback is the render layer callback now (same arguments)
+class net/fabricmc/fabric/api/client/rendering/v1/LivingEntityFeatureRendererRegistrationCallback net/fabricmc/fabric/api/client/rendering/v1/LivingEntityRenderLayerRegistrationCallback
+class net/fabricmc/fabric/api/client/rendering/v1/LivingEntityFeatureRendererRegistrationCallback$RegistrationHelper net/fabricmc/fabric/api/client/rendering/v1/LivingEntityRenderLayerRegistrationCallback$RegistrationHelper
+method net/fabricmc/fabric/api/client/rendering/v1/LivingEntityRenderLayerRegistrationCallback registerRenderers registerLayers
+
+# Humanoid models lost the call that shows or hides every part
+callinst net/minecraft/client/model/HumanoidModel setAllVisible (Z)V info/mudbourn/mmsuproot/shim/client/LegacyClient.setAllVisible
+
+# The loot builders' when/apply(Builder) are default methods of the user-builder interfaces now, erased to those interfaces (see renames-26x.txt)
+calldesc net/minecraft/world/level/storage/loot/LootPool$Builder when (Lnet/minecraft/world/level/storage/loot/predicates/LootItemCondition$Builder;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; (Lnet/minecraft/world/level/storage/loot/predicates/LootItemCondition$Builder;)Lnet/minecraft/world/level/storage/loot/predicates/ConditionUserBuilder;
+calldesc net/minecraft/world/level/storage/loot/LootPool$Builder apply (Lnet/minecraft/world/level/storage/loot/functions/LootItemFunction$Builder;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; (Lnet/minecraft/world/level/storage/loot/functions/LootItemFunction$Builder;)Lnet/minecraft/world/level/storage/loot/functions/FunctionUserBuilder;
+calldesc net/minecraft/world/level/storage/loot/entries/UniformContainerBase$Builder when (Lnet/minecraft/world/level/storage/loot/predicates/LootItemCondition$Builder;)Lnet/minecraft/world/level/storage/loot/entries/LootPoolEntryContainer$Builder; (Lnet/minecraft/world/level/storage/loot/predicates/LootItemCondition$Builder;)Lnet/minecraft/world/level/storage/loot/predicates/ConditionUserBuilder;
+calldesc net/minecraft/world/level/storage/loot/entries/UniformContainerBase$Builder apply (Lnet/minecraft/world/level/storage/loot/functions/LootItemFunction$Builder;)Lnet/minecraft/world/level/storage/loot/entries/UniformContainerBase$Builder; (Lnet/minecraft/world/level/storage/loot/functions/LootItemFunction$Builder;)Lnet/minecraft/world/level/storage/loot/functions/FunctionUserBuilder;
+
+callmove net/minecraft/world/level/storage/loot/functions/EnchantedCountIncreaseFunction lootingMultiplier (Lnet/minecraft/core/HolderLookup$Provider;Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/functions/EnchantedCountIncreaseFunction$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot lootingMultiplier
+
+# Custom advancement criteria: an entity condition is a loot condition in a holder now, and validation goes through the loot validation
+# context (see LegacyAdvancements)
+class net/minecraft/advancements/criterion/ContextAwarePredicate net/minecraft/core/Holder
+class net/minecraft/advancements/criterion/CriterionValidator net/minecraft/world/level/storage/loot/ValidationContextSource
+fieldmove net/minecraft/advancements/predicates/entity/EntityPredicate ADVANCEMENT_CODEC net/minecraft/world/level/storage/loot/predicates/LootItemCondition CODEC
+callinst net/minecraft/core/Holder matches (Lnet/minecraft/world/level/storage/loot/LootContext;)Z info/mudbourn/mmsuproot/shim/compat/LegacyAdvancements.matches
+callinst net/minecraft/world/level/storage/loot/ValidationContextSource validateEntities (Ljava/util/List;Ljava/lang/String;)V info/mudbourn/mmsuproot/shim/compat/LegacyAdvancements.validateEntities
+callinst net/minecraft/world/level/storage/loot/ValidationContextSource validateEntity (Ljava/util/Optional;Ljava/lang/String;)V info/mudbourn/mmsuproot/shim/compat/LegacyAdvancements.validateEntity
+
+# Chunk load callbacks learned whether the chunk came from disk; a callback written without it still runs (classes, lambdas and references)
+bridge net/fabricmc/fabric/api/event/lifecycle/v1/ServerChunkEvents$Load onChunkLoad (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/LevelChunk;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/LevelChunk;Z)V
+
+# An entity type is tested against a set of types through its registry holder now
+callinst net/minecraft/world/entity/EntityType is (Lnet/minecraft/core/HolderSet;)Z info/mudbourn/mmsuproot/shim/entity/LegacyEntities.isIn
+
+# The primary level data constructor was rebuilt (and so was its tag writing); a mixin that only needs to run when one is made runs at the end of the private one
+handler org/ladysnake/cca/mixin/level/common/MixinLevelProperties initComponents (Ljava/util/UUID;ZLnet/minecraft/world/level/storage/LevelData$RespawnData;JIZLjava/util/Set;Ljava/util/Set;Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lcom/mojang/serialization/Lifecycle;Ljava/util/List;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null
+
+# Fabric's packet buffer factory is named after the vanilla buffer it makes (same methods)
+class net/fabricmc/fabric/api/networking/v1/PacketByteBufs net/fabricmc/fabric/api/networking/v1/FriendlyByteBufs
+
+# The loot context only reads a parameter as an optional now; the old required read throws when it is missing
+method net/minecraft/world/level/storage/loot/LootContext getOptionalParameter getOptional
+callinst net/minecraft/world/level/storage/loot/LootContext getParameter (Lnet/minecraft/util/context/ContextKey;)Ljava/lang/Object; info/mudbourn/mmsuproot/shim/compat/LegacyLoot.getParameter
+
+# A component patch is read against the prototype now; the old read told set, removed or untouched by itself
+callinst net/minecraft/core/component/DataComponentPatch get (Lnet/minecraft/core/component/DataComponentType;)Ljava/util/Optional; info/mudbourn/mmsuproot/shim/compat/LegacyComponents.get

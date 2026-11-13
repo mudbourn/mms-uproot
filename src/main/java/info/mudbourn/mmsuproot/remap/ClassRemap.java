@@ -34,6 +34,7 @@ public final class ClassRemap {
 		ClassVisitor chain = new MixinShadows(new MixinParams(new CtorAdapters(new CallRules(new FieldMoves(new SuperSwap(writer, namer), namer), namer), namer), namer), namer);
 		chain = new ClassRemapper(chain, new NameRemapper(namer));
 		chain = new AnnotationStrings(chain, namer);
+		chain = new StringNames(chain, namer);
 		reader.accept(chain, 0);
 		return writer.toByteArray();
 	}
@@ -108,6 +109,42 @@ public final class ClassRemap {
 		@Override
 		public String mapRecordComponentName(String owner, String name, String descriptor) {
 			return namer.field(owner, name);
+		}
+	}
+
+	/**
+	 * Rewrites a string constant that names an intermediary class ({@code net/minecraft/class_123}, a descriptor with one, or the
+	 * dotted form). Code that builds classes or looks members up by reflection carries its names as strings, which the class
+	 * remapper does not see. Constants in fields (compile-time constants) and {@code ldc} both count.
+	 */
+	private static final class StringNames extends ClassVisitor {
+		private final Namer namer;
+
+		StringNames(ClassVisitor next, Namer namer) {
+			super(API, next);
+			this.namer = namer;
+		}
+
+		private Object names(Object value) {
+			if (value instanceof String s && (s.contains("net/minecraft/class_") || s.contains("net.minecraft.class_"))) return namer.rewrite(s);
+			return value;
+		}
+
+		@Override
+		public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
+			return super.visitField(access, name, descriptor, signature, names(value));
+		}
+
+		@Override
+		public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+			MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+			if (mv == null) return null;
+			return new MethodVisitor(API, mv) {
+				@Override
+				public void visitLdcInsn(Object value) {
+					super.visitLdcInsn(names(value));
+				}
+			};
 		}
 	}
 
@@ -373,7 +410,7 @@ public final class ClassRemap {
 		private Object bridged(Object arg) {
 			if (arg instanceof Handle s && s.getTag() == Opcodes.H_INVOKESTATIC) { // Foo::staticCall with a callmove rule
 				String[] move = callMove(s.getOwner(), s.getName(), s.getDesc());
-				return move == null ? arg : new Handle(Opcodes.H_INVOKESTATIC, move[0], move[1], s.getDesc(), false);
+				return move == null ? arg : new Handle(Opcodes.H_INVOKESTATIC, move[0], move[1], move.length > 2 ? move[2] : s.getDesc(), false);
 			}
 			if (!(arg instanceof Handle h) || h.getTag() != Opcodes.H_NEWINVOKESPECIAL || !h.getName().equals("<init>")) return arg;
 			Renames.Ctor c = namer.renames().ctor(h.getOwner(), h.getDesc());
@@ -558,7 +595,7 @@ public final class ClassRemap {
 					}
 					String[] move = opcode == Opcodes.INVOKESTATIC ? callMove(owner, methodName, methodDesc) : null;
 					if (move != null) {
-						super.visitMethodInsn(opcode, move[0], move[1], methodDesc, false);
+						super.visitMethodInsn(opcode, move[0], move[1], move.length > 2 ? move[2] : methodDesc, false);
 						return;
 					}
 					Renames.Ctor c = opcode == Opcodes.INVOKESPECIAL && methodName.equals("<init>") ? namer.renames().ctor(owner, methodDesc) : null;

@@ -1,13 +1,21 @@
 package info.mudbourn.mmsuproot.shim.compat;
 
+import java.util.NoSuchElementException;
+
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.util.context.ContextKey;
+import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.LootPool;
+import net.minecraft.world.level.storage.loot.functions.EnchantedCountIncreaseFunction;
 import net.minecraft.world.level.storage.loot.functions.LootItemConditionalFunction;
 import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
 import net.minecraft.world.level.storage.loot.functions.SetComponentsFunction;
 import net.minecraft.world.level.storage.loot.functions.SetItemCountFunction;
 import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
+import net.minecraft.world.level.storage.loot.providers.number.floats.ContextFloatProvider;
 import net.minecraft.world.level.storage.loot.providers.number.ints.ConstantValue;
 import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider;
 import net.minecraft.world.level.storage.loot.providers.number.ints.UniformGenerator;
@@ -59,6 +67,30 @@ public final class LegacyLoot {
 		} catch (Throwable t) {
 			throw new IllegalStateException(t);
 		}
+	}
+
+	/** {@code EnchantedCountIncreaseFunction.lootingMultiplier(registries, NumberProvider)}: 26.3 takes the enchantment getter and a float provider holder. */
+	public static EnchantedCountIncreaseFunction.Builder lootingMultiplier(HolderLookup.Provider registries, LegacyNumberProvider multiplier) {
+		return EnchantedCountIncreaseFunction.lootingMultiplier(registries.lookupOrThrow(Registries.ENCHANTMENT), multiplier(multiplier));
+	}
+
+	/** {@code LootContext.getParameter(key)}: the value of a context key the loot context must have, which 26.3 only offers as an optional read. */
+	public static Object getParameter(LootContext context, ContextKey<?> key) {
+		Object value = context.getOptional(key);
+		if (value == null) throw new NoSuchElementException("Missing required parameter: " + key);
+		return value;
+	}
+
+	private static Holder<ContextFloatProvider> multiplier(LegacyNumberProvider provider) {
+		if (provider instanceof LegacyConstantValue) {
+			return Holder.direct(new net.minecraft.world.level.storage.loot.providers.number.floats.ConstantValue(provider.value()));
+		}
+		if (provider instanceof LegacyUniformGenerator uniform) {
+			return Holder.direct(new net.minecraft.world.level.storage.loot.providers.number.floats.UniformGenerator(
+				Holder.direct(new net.minecraft.world.level.storage.loot.providers.number.floats.ConstantValue(uniform.min())),
+				Holder.direct(new net.minecraft.world.level.storage.loot.providers.number.floats.ConstantValue(uniform.max()))));
+		}
+		throw new UnsupportedOperationException("Uproot can only convert constant and uniform loot multipliers, got " + provider);
 	}
 
 	private static Holder<ContextIntProvider> count(LegacyNumberProvider provider) {

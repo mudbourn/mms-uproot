@@ -321,7 +321,7 @@ final class MixinParams extends ClassVisitor {
 				for (int k = 0; k < mutable.size(); k++) {
 					String s = String.valueOf(mutable.get(k));
 					int paren = s.indexOf('(');
-					if (paren > 0 && s.matches("[\\w$]+\\(.*\\).+")) mutable.set(k, s.substring(0, paren) + nowArgs + s.substring(s.indexOf(')') + 1));
+					if (paren > 0 && s.matches("[\\w$<>]+\\(.*\\).+")) mutable.set(k, s.substring(0, paren) + nowArgs + s.substring(s.indexOf(')') + 1));
 				}
 			}
 		}

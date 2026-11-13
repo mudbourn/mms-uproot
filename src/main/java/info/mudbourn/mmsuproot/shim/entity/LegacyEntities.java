@@ -46,6 +46,11 @@ public final class LegacyEntities {
 		return type.builtInRegistryHolder().is(tag);
 	}
 
+	/** {@code EntityType.is(HolderSet)}: whether the type is one of the set's entries. */
+	public static boolean isIn(EntityType<?> type, net.minecraft.core.HolderSet<EntityType<?>> set) {
+		return set.contains(type.builtInRegistryHolder());
+	}
+
 	/** {@code Player.displayClientMessage(Component, boolean)}: the flag chose the action bar over chat. */
 	public static void displayClientMessage(Player player, Component message, boolean overlay) {
 		if (overlay) {

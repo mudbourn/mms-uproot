@@ -104,7 +104,7 @@ public final class Namer {
 			int dollar = mojang.indexOf('$');
 			String outer = dollar < 0 ? mojang : mojang.substring(0, dollar);
 			if (!game.has(outer)) {
-				String found = game.uniqueBySimpleName(outer.substring(outer.lastIndexOf('/') + 1));
+				String found = game.uniqueNear(outer);
 				if (found != null) {
 					result = found + mojang.substring(outer.length());
 					report.moved.put(mojang, result);

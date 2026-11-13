@@ -6,6 +6,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.world.level.levelgen.synth.NormalNoise;
+
 /**
  * Rewrites worldgen JSON from the 1.21.11 shapes to the 26.3 shapes. The rules come from the two
  * vanilla formats, never from a mod's files: each is keyed on a vanilla type id and applies to any
@@ -79,8 +84,17 @@ public final class FeatureJson {
 				conditions.clear();
 				conditions.putAll(renamed);
 			}
+			if ("minecraft:recipe_crafted".equals(crit.get("trigger")) && conditions.get("recipe_id") instanceof String recipe) {
+				stats.count("recipe triggers");
+				Map<String, Object> renamed = new LinkedHashMap<>();
+				conditions.forEach((k, v) -> renamed.put(k.equals("recipe_id") ? "recipes" : k, k.equals("recipe_id") ? List.of(recipe) : v));
+				conditions.clear();
+				conditions.putAll(renamed);
+			}
+			Set<String> alreadyConditions = new java.util.HashSet<>();
 			for (Map.Entry<String, Object> e : conditions.entrySet()) {
 				if (e.getValue() instanceof List<?> list && !list.isEmpty() && list.stream().allMatch(o -> o instanceof Map<?, ?> m && m.containsKey("condition"))) {
+					alreadyConditions.add(e.getKey());
 					stats.count("advancement conditions");
 					List<Object> terms = new ArrayList<>();
 					for (Object o : list) terms.add(lootCondition((Map<String, Object>) o));
@@ -94,12 +108,14 @@ public final class FeatureJson {
 				}
 			}
 			for (Map.Entry<String, Object> e : conditions.entrySet()) {
-				if (ENTITY_FIELDS.contains(e.getKey()) && e.getValue() instanceof Map<?, ?> m && plainEntity(m)) {
+				if (alreadyConditions.contains(e.getKey())) {
+					continue;
+				} else if (ENTITY_FIELDS.contains(e.getKey()) && e.getValue() instanceof Map<?, ?> m && plainEntity(m)) {
 					stats.count("advancement entity predicates");
 					e.setValue(wrapEntity(entityPredicate((Map<String, Object>) m)));
 				} else if (e.getKey().equals("victims") && e.getValue() instanceof List<?> list) {
 					List<Object> wrapped = new ArrayList<>();
-					for (Object o : list) wrapped.add(o instanceof Map<?, ?> m && plainEntity(m) ? wrapEntity(entityPredicate((Map<String, Object>) m)) : o);
+					for (Object o : list) wrapped.add(o instanceof Map<?, ?> m && plainEntity(m) ? wrapEntity(entityPredicate((Map<String, Object>) m)) : o instanceof List<?> conds ? conditionList(conds) : o);
 					e.setValue(wrapped);
 				} else if ((e.getKey().equals("damage") || e.getKey().equals("killing_blow")) && e.getValue() instanceof Map<?, ?> m) {
 					e.setValue(damagePredicate((Map<String, Object>) m, stats));
@@ -141,7 +157,7 @@ public final class FeatureJson {
 			} else if (key.equals("type_specific") && v instanceof Map<?, ?> m && m.get("type") instanceof String kind) {
 				Map<String, Object> rest = new LinkedHashMap<>((Map<String, Object>) m);
 				rest.remove("type");
-				out.put("minecraft:type_specific/" + kind, rest);
+				out.put("minecraft:type_specific/" + (kind.startsWith("minecraft:") ? kind.substring("minecraft:".length()) : kind), rest);
 			} else if ((key.equals("vehicle") || key.equals("passenger") || key.equals("targeted_entity")) && v instanceof Map<?, ?> m) {
 				out.put("minecraft:" + key, entityPredicate((Map<String, Object>) m));
 			} else {
@@ -265,22 +281,54 @@ public final class FeatureJson {
 					for (Map.Entry<String, Object> fe : cast(f).entrySet()) {
 						if (fe.getKey().equals("function")) fn.put("type", fe.getValue());
 						else if (fe.getKey().equals("conditions") && keyed(fe.getValue(), "condition")) fn.put("condition", conditionList((List<?>) fe.getValue()));
+						else if (LOOT_NUMBERS.contains(fe.getKey())) fn.put(fe.getKey(), uniformNumber(fe.getValue(), stats));
 						else fn.put(fe.getKey(), lootTable(fe.getValue(), stats));
 					}
 					if ("minecraft:exploration_map".equals(fn.get("type")) && !fn.containsKey("destination")) {
 						// the destination is required now; the old default was the treasure map tag
 						stats.count("exploration map destinations");
 						fn.put("destination", "#minecraft:on_treasure_maps");
+					} else if ("minecraft:exploration_map".equals(fn.get("type")) && fn.get("destination") instanceof String dest && !dest.startsWith("#")) {
+						// the destination was a bare structure tag id, and is a tag reference now
+						stats.count("exploration map destinations");
+						fn.put("destination", "#" + dest);
 					}
 					fns.add(fn);
 				}
 				out.put("modifier", fns);
+			} else if (LOOT_NUMBERS.contains(key) && isBareRange(v) && !cast(m).containsKey("items") && !cast(m).containsKey("components") && !cast(m).containsKey("predicates")) {
+				out.put(key, uniformNumber(v, stats));
+			} else if (key.equals("name") && v instanceof String tag && "minecraft:tag".equals(cast(m).get("type"))) {
+				// a tag entry lists its items as a set now
+				stats.count("loot tag entries");
+				out.put("items", tag.startsWith("#") ? tag : "#" + tag);
+			} else if (key.equals("expand") && "minecraft:tag".equals(cast(m).get("type"))) {
+				continue;
 			} else {
 				out.put(key, lootTable(v, stats));
 			}
 		}
 		return out;
 	}
+
+	private static boolean isBareRange(Object v) {
+		return v instanceof Map<?, ?> range && !range.containsKey("type") && range.size() == 2 && range.get("min") instanceof Number && range.get("max") instanceof Number;
+	}
+
+	/** A bare {@code {min, max}} was a uniform number provider; the type is explicit now. Anything else is read as a loot table value. */
+	private static Object uniformNumber(Object v, Stats stats) {
+		if (!isBareRange(v)) return lootTable(v, stats);
+		Map<?, ?> range = (Map<?, ?>) v;
+		stats.count("loot uniform numbers");
+		Map<String, Object> uniform = new LinkedHashMap<>();
+		uniform.put("type", "minecraft:uniform");
+		uniform.put("min", range.get("min"));
+		uniform.put("max", range.get("max"));
+		return uniform;
+	}
+
+	/** Loot table fields that hold a number provider, where an untyped {@code {min, max}} meant a uniform one. */
+	private static final Set<String> LOOT_NUMBERS = Set.of("rolls", "bonus_rolls", "count", "levels", "damage");
 
 	// ---- generic pass: block states, provider ids, offset placement, untyped rule providers ----
 
@@ -297,6 +345,11 @@ public final class FeatureJson {
 		Map<String, Object> out = new LinkedHashMap<>();
 		for (Map.Entry<String, Object> e : in.entrySet()) out.put(e.getKey(), generic(e.getValue(), stats));
 
+		if (out.get("condition") instanceof String kind && !kind.startsWith("fabric:") && !out.containsKey("type")) { // fabric: ids are resource conditions, which keep "condition"
+			// a loot condition embedded in a mod's own data keyed its kind "condition"; it is "type" now
+			stats.count("loot conditions");
+			return lootCondition(out);
+		}
 		if (out.get("firstOctave") instanceof Number octave && out.get("amplitudes") instanceof List<?> amplitudes) {
 			stats.count("noise parameters");
 			return noise(octave, amplitudes);
@@ -347,13 +400,55 @@ public final class FeatureJson {
 	private static final double ONE_OCTAVE = 0.955388882960065;
 
 	private static Map<String, Object> noise(Number firstOctave, List<?> amplitudes) {
-		if (amplitudes.size() != 1 || !(amplitudes.get(0) instanceof Number amplitude)) {
-			throw new IllegalArgumentException("noise parameters with " + amplitudes.size() + " octaves cannot be converted");
-		}
+		if (amplitudes.size() != 1 || !(amplitudes.get(0) instanceof Number amplitude)) return parityNoise(firstOctave, amplitudes);
 		Map<String, Object> out = new LinkedHashMap<>();
 		out.put("base_amplitude", amplitude.doubleValue() * ONE_OCTAVE);
 		out.put("base_octave", firstOctave.longValue());
 		return out;
+	}
+
+	/**
+	 * Several octaves: the game builds the same noise from the old numbers itself ({@code NormalNoise.createParity}), so its
+	 * parameters, written back through their own codec, are the new form.
+	 */
+	@SuppressWarnings("unchecked")
+	private static Map<String, Object> parityNoise(Number firstOctave, List<?> amplitudes) {
+		double[] values = new double[amplitudes.size()];
+		for (int i = 0; i < values.length; i++) {
+			if (!(amplitudes.get(i) instanceof Number n)) throw new IllegalArgumentException("noise amplitude that is not a number");
+			values[i] = n.doubleValue();
+		}
+		try {
+			NormalNoise noise = NormalNoise.createParity(firstOctave.intValue(), values);
+			java.lang.reflect.Field field = NormalNoise.class.getDeclaredField("parameters");
+			field.setAccessible(true);
+			Object parameters = field.get(noise);
+			java.lang.reflect.Field codecField = parameters.getClass().getDeclaredField("CODEC");
+			codecField.setAccessible(true);
+			com.mojang.serialization.Codec<Object> codec = (com.mojang.serialization.Codec<Object>) codecField.get(null);
+			JsonElement json = codec.encodeStart(JsonOps.INSTANCE, parameters).getOrThrow(IllegalArgumentException::new);
+			return (Map<String, Object>) fromGson(json);
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			throw new IllegalArgumentException("noise parameters with " + amplitudes.size() + " octaves cannot be converted", e);
+		}
+	}
+
+	private static Object fromGson(JsonElement json) {
+		if (json.isJsonObject()) {
+			Map<String, Object> out = new LinkedHashMap<>();
+			for (Map.Entry<String, JsonElement> e : json.getAsJsonObject().entrySet()) out.put(e.getKey(), fromGson(e.getValue()));
+			return out;
+		}
+		if (json.isJsonArray()) {
+			List<Object> out = new ArrayList<>();
+			for (JsonElement e : json.getAsJsonArray()) out.add(fromGson(e));
+			return out;
+		}
+		JsonPrimitive p = json.getAsJsonPrimitive();
+		if (p.isBoolean()) return p.getAsBoolean();
+		if (p.isString()) return p.getAsString();
+		double d = p.getAsDouble();
+		return d == Math.rint(d) && !p.getAsString().contains(".") ? (Object) p.getAsLong() : (Object) d;
 	}
 
 	// ---- configured feature (old) to feature (new) ----
@@ -487,7 +582,30 @@ public final class FeatureJson {
 
 	private static Map<String, Object> mod(Map<String, Object> f, Stats stats) {
 		stats.count("mod types kept");
-		return f;
+		Map<String, Object> out = new LinkedHashMap<>(f);
+		if (out.containsKey("config")) out.put("config", nested(out.get("config"), stats));
+		return out;
+	}
+
+	/**
+	 * A mod feature's config may carry vanilla features inline, as a placed feature ({@code feature} and {@code placement}) or as a bare
+	 * {@code type} and {@code config} of a vanilla type. Those take the 26.3 shape; everything else is walked and left as it is.
+	 */
+	private static Object nested(Object value, Stats stats) {
+		if (value instanceof List<?> list) {
+			List<Object> out = new ArrayList<>();
+			for (Object o : list) out.add(nested(o, stats));
+			return out;
+		}
+		if (!(value instanceof Map<?, ?>)) return value;
+		Map<String, Object> m = cast(value);
+		if (m.get("feature") instanceof Map<?, ?> inner && inner.get("type") instanceof String && m.containsKey("placement")) return placedRef(m, stats);
+		if (m.get("type") instanceof String type && type.startsWith("minecraft:") && m.get("config") instanceof Map<?, ?> && Set.of("type", "config").containsAll(m.keySet())) {
+			return feature(m, stats);
+		}
+		Map<String, Object> out = new LinkedHashMap<>();
+		for (Map.Entry<String, Object> e : m.entrySet()) out.put(e.getKey(), nested(e.getValue(), stats));
+		return out;
 	}
 
 	private static Map<String, Object> typed(String type) {

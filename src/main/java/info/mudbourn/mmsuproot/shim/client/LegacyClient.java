@@ -13,6 +13,7 @@ import net.fabricmc.fabric.api.client.model.loading.v1.SimpleUnbakedExtraModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.resources.WaypointStyleManager;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
@@ -28,6 +29,17 @@ import net.minecraft.util.ARGB;
 /** Client calls that 26.3 moved off {@code Minecraft}; the remap sends the old calls here. */
 public final class LegacyClient {
 	private LegacyClient() { }
+
+	/** 1.21.11's {@code HumanoidModel.setAllVisible}: shows or hides the head, hat, body, arms and legs. 26.3 dropped it. */
+	public static void setAllVisible(HumanoidModel<?> model, boolean visible) {
+		model.head.visible = visible;
+		model.hat.visible = visible;
+		model.body.visible = visible;
+		model.rightArm.visible = visible;
+		model.leftArm.visible = visible;
+		model.rightLeg.visible = visible;
+		model.leftLeg.visible = visible;
+	}
 
 	/** 1.21.11's static {@code Minecraft.renderNames()}: false while the HUD is hidden (F1). The flag lives on the HUD now. */
 	public static boolean renderNames() {

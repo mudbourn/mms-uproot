@@ -72,7 +72,7 @@ public final class Renames {
 	private final Map<String, String[]> casts = new HashMap<>(); // class (26.3 name) -> {helper owner, helper name}
 	private final Map<String, String[]> invokerParams = new HashMap<>(); // "mixin interface.method" -> {old descriptor, extra parameter types}
 	private final Map<String, String[]> instanceTests = new HashMap<>(); // class (26.3 name) -> {helper owner, helper name}
-	private final Map<String, String[]> callMoves = new HashMap<>(); // "owner.name desc" (26.3 names) -> {new owner, new name}
+	private final Map<String, String[]> callMoves = new HashMap<>(); // "owner.name desc" (26.3 names) -> {new owner, new name[, new desc]}
 	private final Map<String, String> fieldGets = new HashMap<>(); // "owner.name" (26.3 names) -> getter name
 	private final Map<String, String> injectAts = new HashMap<>(); // mixin target string of a call -> the string it becomes
 	private final Map<String, String[]> fieldMoves = new HashMap<>(); // "owner.name" (26.3 names) -> {new owner, new name}
@@ -119,7 +119,7 @@ public final class Renames {
 				r.instanceTests.put(p[1], new String[] {p[2].substring(0, dot), p[2].substring(dot + 1)});
 			}
 			case "invokerparam" -> r.invokerParams.put(p[1] + "." + p[2], new String[] {p[3], p[4]});
-			case "callmove" -> r.callMoves.put(p[1] + "." + p[2] + " " + p[3], new String[] {p[4], p[5]});
+			case "callmove" -> r.callMoves.put(p[1] + "." + p[2] + " " + p[3], p.length > 6 ? new String[] {p[4], p[5], p[6]} : new String[] {p[4], p[5]});
 			case "fieldmove" -> r.fieldMoves.put(p[1] + "." + p[2], new String[] {p[3], p[4]});
 			case "fieldget" -> r.fieldGets.put(p[1] + "." + p[2], p[3]);
 			case "fieldset" -> {
