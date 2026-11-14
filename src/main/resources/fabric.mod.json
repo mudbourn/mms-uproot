@@ -11,6 +11,7 @@
 		"mms_uproot": "info.mudbourn.mmsuproot.boot.UprootBoot"
 	},
 	"entrypoints": {
+		"preLaunch": ["info.mudbourn.mmsuproot.boot.UprootPreLaunch"],
 		"main": ["info.mudbourn.mmsuproot.boot.UprootMain"],
 		"client": ["info.mudbourn.mmsuproot.boot.DevShot", "info.mudbourn.mmsuproot.shim.client.DevUse", "info.mudbourn.mmsuproot.probe.ProbeRunner"]
 	},

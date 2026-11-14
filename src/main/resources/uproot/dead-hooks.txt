@@ -1,0 +1,13 @@
+# Mixin injectors of target mods that match nothing in 26.3 and are accepted so. The dead-hooks probe fails on any other.
+# Format: MIXINCLASS HANDLER | reason     (HANDLER may be * for every injector of the mixin class; MIXINCLASS has slashes)
+# The reason says why nothing is lost, or what is lost and why that is accepted. Nothing from a mod lives in this repo besides these names.
+
+# --- accepted, nothing important is lost ---
+link/infra/mixintrace/mixin/MixinCrashReport mixintrace_addTrace | harmless: only adds mixin trace lines to a crash report (CrashReport.getDetails changed shape); the report is complete without them
+io/wispforest/owo/mixin/MinecraftMixin afterQuiltHook | harmless: a Quilt-loader-only hook, not present on Fabric
+com/notunanancyowen/mait/mixin/SlimeEntityMixin copyOffhandItemIGuess | covered: the target call sits in AbstractCubeMob.remove in 26.3, where a mixin on Slime cannot reach it; mixin.SlimeSplitMixin does the same copy there (probe mait.slime-split-copies-offhand)
+
+# --- real breaks, not bridged (each names what stops working) ---
+io/wispforest/owo/mixin/extension/json5/FileToIdConverterMixin json5$findResources | real break, rarely used: owo's .json5 resource discovery; ResourceManager.listResources now takes a Selector, so json5 files are not listed
+io/wispforest/owo/mixin/extension/json5/FileToIdConverterMixin json5$findAllResources | real break, rarely used: owo's .json5 resource discovery (stacks), same cause as findResources
+io/wispforest/owo/mixin/braid/GuiRendererMixin injectTextureFilter | real break, accepted: owo's texture filter for its braid/blur surface; GuiRenderer.executeDraw and RenderPass.bindTexture were rebuilt (see the owo blur note in disable.txt)

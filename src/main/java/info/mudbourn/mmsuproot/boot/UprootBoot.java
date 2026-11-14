@@ -156,6 +156,12 @@ public final class UprootBoot implements LanguageAdapter {
 		if (h != null) h.release();
 	}
 
+	/** The id of the mod Uproot rewrites that the mixin config belongs to, or null. */
+	static String ownerOf(String config) {
+		Report.Entry entry = MIXIN_CONFIG_OWNERS.get(config);
+		return entry == null ? null : entry.id;
+	}
+
 	static void recordMixinFailure(String config, String mixin, String what) {
 		Report.Entry entry = MIXIN_CONFIG_OWNERS.get(config);
 		if (entry != null) entry.mixinIssues.add(mixin + ": " + what);

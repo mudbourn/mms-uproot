@@ -125,6 +125,7 @@ final class ShaderProbes {
 		Path log = FabricLoader.getInstance().getGameDir().resolve("logs/latest.log");
 		List<String> bad = Files.readAllLines(log, java.nio.charset.StandardCharsets.UTF_8).stream()
 			.filter(l -> l.contains("/ERROR]") || l.contains("/WARN]"))
+			.filter(l -> !l.contains("(mms-uproot) Dead hook:")) // judged by mixins.no-dead-hooks; its lines name pipeline classes
 			.filter(l -> {
 				String s = l.toLowerCase(java.util.Locale.ROOT);
 				return s.contains("shader") || s.contains("glsl") || s.contains("spir") || s.contains("pipeline");

@@ -202,7 +202,25 @@ final class MixinShadows extends ClassNode {
 			if (f.invisibleAnnotations == null) f.invisibleAnnotations = new ArrayList<>();
 			f.invisibleAnnotations.add(new AnnotationNode(UNIQUE));
 			f.access = (f.access & ~(Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) | Opcodes.ACC_PRIVATE;
+			if (f.desc.equals("Lnet/minecraft/util/RandomSource;") && (f.access & Opcodes.ACC_STATIC) == 0) initRandom(f);
 			namer.note("mixin " + simple() + " keeps " + f.name + " as a field of its own: " + target.substring(target.lastIndexOf('/') + 1) + (declaring == null ? " has none in 26.3" : " cannot reach it, it is private to " + declaring.substring(declaring.lastIndexOf('/') + 1)));
+		}
+	}
+
+	/**
+	 * A random source the game used to hold and the mixin read through a shadow: the field it keeps instead would stay null, so each read of
+	 * it makes a fresh source (no initialiser is relied on: Mixin does not always carry one into the target's constructor).
+	 */
+	private void initRandom(FieldNode f) {
+		for (MethodNode m : methods) {
+			for (var insn = m.instructions.getFirst(); insn != null; ) {
+				var next = insn.getNext();
+				if (insn instanceof FieldInsnNode fi && fi.getOpcode() == Opcodes.GETFIELD && fi.owner.equals(name) && fi.name.equals(f.name)) {
+					m.instructions.insertBefore(insn, new org.objectweb.asm.tree.InsnNode(Opcodes.POP));
+					m.instructions.set(insn, new MethodInsnNode(Opcodes.INVOKESTATIC, "net/minecraft/util/RandomSource", "create", "()Lnet/minecraft/util/RandomSource;", true));
+				}
+				insn = next;
+			}
 		}
 	}
 

@@ -32,7 +32,7 @@ public final class ClassRemap {
 		ClassReader reader = new ClassReader(bytes);
 		ClassWriter writer = new ClassWriter(0);
 		ClassVisitor chain = new MixinShadows(new MixinParams(new CtorAdapters(new CallRules(new FieldMoves(new SuperSwap(writer, namer), namer), namer), namer), namer), namer);
-		chain = new ClassRemapper(chain, new NameRemapper(namer));
+		chain = new ClassRemapper(chain, new NameRemapper(namer, namer.renames().mixinTargetsOf(reader.getClassName())));
 		chain = new AnnotationStrings(chain, namer);
 		chain = new StringNames(chain, namer);
 		reader.accept(chain, 0);
@@ -81,14 +81,19 @@ public final class ClassRemap {
 	private static final class NameRemapper extends Remapper {
 		private final Namer namer;
 
-		NameRemapper(Namer namer) {
+		/** Classes this mixin's {@code mixintarget} rules replace: its handlers take the new target where they took the old one. */
+		private final java.util.Map<String, String> targetSwap;
+
+		NameRemapper(Namer namer, java.util.Map<String, String> targetSwap) {
 			super(API);
 			this.namer = namer;
+			this.targetSwap = targetSwap;
 		}
 
 		@Override
 		public String map(String internalName) {
-			return namer.cls(internalName);
+			String mapped = namer.cls(internalName);
+			return targetSwap.isEmpty() ? mapped : targetSwap.getOrDefault(mapped, mapped);
 		}
 
 		@Override

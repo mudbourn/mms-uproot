@@ -59,6 +59,15 @@ public final class LegacyWorld {
 		return s == null ? null : s.registryAccess();
 	}
 
+	/**
+	 * The registries of the running server, for a mixin handler that was given them by an old call. The game also writes the level data
+	 * once before its server exists (a world being opened); no registries are available then, and an empty set stands in.
+	 */
+	public static net.minecraft.core.RegistryAccess registryAccess() {
+		MinecraftServer s = server;
+		return s == null ? net.minecraft.core.RegistryAccess.EMPTY : s.registryAccess();
+	}
+
 	/** Remembers the running server, for calls that used to find it through an object that no longer leads there. */
 	public static void register() {
 		ServerLifecycleEvents.SERVER_STARTING.register(s -> server = s);

@@ -40,6 +40,11 @@ public final class CtorAdapters {
 		return new Object[] {pos.getX() >> 4, pos.getZ() >> 4};
 	}
 
+	/** {@code new SavedDataType(name, constructor, codec, fixType)}: saved data is named by an identifier now; a bare name is one of the game's own. */
+	public static Object[] savedDataType(String name, java.util.function.Supplier<?> constructor, com.mojang.serialization.Codec<?> codec, net.minecraft.util.datafix.DataFixTypes fixType) {
+		return new Object[] {Identifier.parse(name.contains(":") ? name : "minecraft:" + name), constructor, codec, fixType};
+	}
+
 	/** {@code StemBlock}: two support tags were added, filled with the pumpkin stem ones. */
 	public static Object[] stemBlock(ResourceKey<Block> fruit, ResourceKey<Block> attachedStem, ResourceKey<Item> seed, BlockBehaviour.Properties properties) {
 		return new Object[] {fruit, attachedStem, seed, BlockTags.SUPPORTS_PUMPKIN_STEM, BlockTags.SUPPORTS_PUMPKIN_STEM_FRUIT, properties};

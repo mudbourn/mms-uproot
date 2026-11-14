@@ -15,7 +15,14 @@ import net.minecraft.client.Options;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.resources.WaypointStyleManager;
+import net.minecraft.client.model.Model;
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.rendertype.RenderType;
@@ -75,6 +82,36 @@ public final class LegacyClient {
 		List<BlockStateModelPart> parts = new ArrayList<>();
 		model.collectParts(RandomSource.create(42L), parts);
 		collector.submitBlockModel(pose, type, parts, new int[] {ARGB.colorFromFloat(1.0F, red, green, blue)}, light, overlay, outline);
+	}
+
+	/**
+	 * 1.21.11's {@code submitModel} with a sprite to take texture coordinates from and a crumbling overlay: 26.3 takes the sprite as a
+	 * UV mapping (a sprite is one) and has the overlay as a call of its own.
+	 */
+	public static <S> void submitModel(OrderedSubmitNodeCollector collector, Model<? super S> model, S state, PoseStack pose, RenderType type,
+			int light, int overlay, int tint, TextureAtlasSprite sprite, int outline, ModelFeatureRenderer.CrumblingOverlay crumbling) {
+		collector.submitModel(model, state, pose, type, light, overlay, tint, sprite, outline);
+		if (crumbling != null) collector.submitCrumblingOverlay(model, state, pose, type, light, overlay, outline, crumbling);
+	}
+
+	/** The same without a sprite: the third number was the outline colour, and the model is drawn untinted. */
+	public static <S> void submitModel(OrderedSubmitNodeCollector collector, Model<? super S> model, S state, PoseStack pose, RenderType type,
+			int light, int overlay, int outline, ModelFeatureRenderer.CrumblingOverlay crumbling) {
+		collector.submitModel(model, state, pose, type, light, overlay, -1, null, outline);
+		if (crumbling != null) collector.submitCrumblingOverlay(model, state, pose, type, light, overlay, outline, crumbling);
+	}
+
+	/** 1.21.11's {@code submitModelPart}; the glint flag is not carried over (26.3 asks the render type for it) and the sheet flag only mattered with a sprite. */
+	public static void submitModelPart(OrderedSubmitNodeCollector collector, ModelPart part, PoseStack pose, RenderType type, int light, int overlay,
+			TextureAtlasSprite sprite, boolean sheeted, boolean foil, int tint, ModelFeatureRenderer.CrumblingOverlay crumbling, int outline) {
+		collector.submitModelPart(part, pose, type, light, overlay, sprite, tint, outline);
+		if (crumbling != null) collector.submitCrumblingOverlay(part, pose, type, light, overlay, outline, crumbling);
+	}
+
+	/** 1.21.11's {@code submitBlock}: the state's baked model, drawn untinted as a moving block is. */
+	public static void submitBlock(OrderedSubmitNodeCollector collector, PoseStack pose, BlockState state, int light, int overlay, int outline) {
+		BlockStateModel model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(state);
+		submitBlockModel((SubmitNodeCollector) collector, pose, RenderTypes.cutoutMovingBlock(), model, 1.0F, 1.0F, 1.0F, light, overlay, outline);
 	}
 
 	/**

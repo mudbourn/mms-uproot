@@ -40,6 +40,14 @@ public final class Renames {
 	/** An override whose 26.3 descriptor differs: {@code owner} is the 26.3 type that declares {@code newDesc}. */
 	public record Bridge(String owner, String name, String oldDesc, String newDesc) { }
 
+	/** A class under {@code owner} that declares {@code name desc} also answers the same arguments with the return type {@code ret}. */
+	public record RetBridge(String owner, String name, String desc, String ret) { }
+	private final List<RetBridge> retBridges = new ArrayList<>();
+
+	public List<RetBridge> retBridges() {
+		return retBridges;
+	}
+
 	/**
 	 * Where one old handler parameter gets its value: the new parameter {@code index} (when not negative), the static no-argument
 	 * helper {@code helperOwner.helperName} (when set), or else the default, null, 0 or false by the parameter's type.
@@ -51,7 +59,7 @@ public final class Renames {
 	}
 
 	/** A mixin handler (by its mixin class and name) that takes the target's {@code newDesc} parameters, a callback last, and calls the old handler with {@code args}, one per old parameter before its callback. */
-	public record Handler(String mixin, String name, String newDesc, List<Arg> args) { }
+	public record Handler(String mixin, String name, String newDesc, List<Arg> args, String[] guard, int[] opSpec) { }
 
 	/** A mixin target (26.3 name) that inherits {@code name} where 1.21.11 declared it as {@code desc}; the superclass declares it as {@code superDesc}. */
 	public record Inherited(String target, String name, String desc, String superDesc) { }
@@ -74,6 +82,7 @@ public final class Renames {
 	private final Map<String, String[]> instanceTests = new HashMap<>(); // class (26.3 name) -> {helper owner, helper name}
 	private final Map<String, String[]> callMoves = new HashMap<>(); // "owner.name desc" (26.3 names) -> {new owner, new name[, new desc]}
 	private final Map<String, String> fieldGets = new HashMap<>(); // "owner.name" (26.3 names) -> getter name
+	private final Map<String, String> annotationStrings = new HashMap<>(); // text inside a mixin annotation string -> what it becomes
 	private final Map<String, String> injectAts = new HashMap<>(); // mixin target string of a call -> the string it becomes
 	private final Map<String, String[]> fieldMoves = new HashMap<>(); // "owner.name" (26.3 names) -> {new owner, new name}
 	private final Map<String, String[]> fieldSets = new HashMap<>(); // "owner.name" (26.3 names) -> {helper owner or null, helper or setter name}
@@ -129,6 +138,14 @@ public final class Renames {
 			case "optional" -> r.optionals.add(p[1] + "." + p[2]);
 			case "super" -> r.superSwaps.put(p[1], p[2]);
 			case "calldrop" -> r.callDrops.add(p[1] + "." + p[2] + " " + p[3]);
+			case "retbridge" -> {
+				if (p.length != 5) throw new IllegalStateException("Bad retbridge rule: " + line);
+				r.retBridges.add(new RetBridge(p[1], p[2], p[3], p[4]));
+			}
+			case "annotation" -> {
+				if (p.length != 3) throw new IllegalStateException("Bad annotation rule: " + line);
+				r.annotationStrings.put(p[1], p[2]);
+			}
 			case "injectat" -> {
 				if (p.length != 7) throw new IllegalStateException("Bad injectat rule: " + line);
 				r.injectAts.put("L" + p[1] + ";" + p[2] + p[3], "L" + p[4] + ";" + p[5] + p[6]);
@@ -229,7 +246,18 @@ public final class Renames {
 	 * parameter's type (null, 0 or false), or {@code pkg/Helper.method} for a static no-argument helper that returns the value.
 	 */
 	private static Handler handler(String[] p, String line) {
-		if (p.length != 5 || !p[3].startsWith("(")) throw new IllegalStateException("Bad handler rule: " + line);
+		// an optional sixth field, if=pkg/Helper.method: a static boolean method of the target's parameters that says whether the handler runs
+		if (p.length < 5 || p.length > 7 || !p[3].startsWith("(")) throw new IllegalStateException("Bad handler rule: " + line);
+		String[] guard = null;
+		int[] opSpec = null;
+		for (int i = 5; i < p.length; i++) {
+			if (p[i].startsWith("if=")) guard = helper(p[i].substring(3), line);
+			else if (p[i].startsWith("op=")) {
+				String[] parts = p[i].substring(3).split(",");
+				opSpec = new int[parts.length];
+				for (int k = 0; k < parts.length; k++) opSpec[k] = parts[k].startsWith("c") ? -Integer.parseInt(parts[k].substring(1)) - 1 : Integer.parseInt(parts[k]);
+			} else throw new IllegalStateException("Bad handler rule: " + line);
+		}
 		List<Arg> args = new ArrayList<>();
 		if (!p[4].equals("-")) {
 			for (String entry : p[4].split(",")) {
@@ -241,12 +269,21 @@ public final class Renames {
 				}
 			}
 		}
-		return new Handler(p[1], p[2], p[3], args);
+		return new Handler(p[1], p[2], p[3], args, guard, opSpec);
 	}
 
 	/** The {@code handler} rule for the handler method {@code name} of the mixin class {@code mixin}, or null. */
 	public Handler handler(String mixin, String name) {
 		return handlers.isEmpty() ? null : handlers.get(mixin + "." + name);
+	}
+
+	/** The classes a mixin class's {@code mixintarget} rules replace, old to new (26.3 names); empty for most classes. */
+	public Map<String, String> mixinTargetsOf(String mixin) {
+		if (mixinTargets.isEmpty()) return Map.of();
+		Map<String, String> out = new HashMap<>();
+		String prefix = mixin + " ";
+		for (Map.Entry<String, String> e : mixinTargets.entrySet()) if (e.getKey().startsWith(prefix)) out.put(e.getKey().substring(prefix.length()), e.getValue());
+		return out;
 	}
 
 	/** The 26.3 class a mixin class targets in place of {@code oldTarget} (see the {@code mixintarget} rule), or null. */
@@ -399,6 +436,10 @@ public final class Renames {
 	}
 
 	/** The mixin {@code @At} target strings that are retargeted, from the 26.3 form of the 1.21.11 target to the new one. */
+	public Map<String, String> annotationStrings() {
+		return annotationStrings;
+	}
+
 	public Map<String, String> injectAts() {
 		return injectAts;
 	}

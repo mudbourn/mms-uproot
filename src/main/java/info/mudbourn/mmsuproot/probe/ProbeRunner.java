@@ -57,6 +57,10 @@ public final class ProbeRunner implements ClientModInitializer {
 		probes.addAll(LootProbes.all());
 		probes.addAll(ModProbes.all());
 		probes.addAll(FrostifulProbes.all());
+		probes.addAll(CcaProbes.all());
+		probes.addAll(FrostifulClientProbes.all());
+		probes.addAll(MaitProbes.all());
+		probes.addAll(DeadHookProbes.all());
 		append("PROBE PLAN " + probes.size());
 		ClientTickEvents.END_CLIENT_TICK.register(this::tick);
 	}

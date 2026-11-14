@@ -280,6 +280,13 @@ final class CallRules extends ClassVisitor {
 		for (Renames.Bridge b : applicable()) {
 			if (declared.contains(b.name() + b.oldDesc()) && !declared.contains(b.name() + b.newDesc())) emitBridge(b);
 		}
+		if (!renames.retBridges().isEmpty()) {
+			Set<String> up = namer.ancestorsOf(className);
+			for (Renames.RetBridge b : renames.retBridges()) {
+				String wide = Type.getMethodDescriptor(Type.getObjectType(b.ret().substring(1, b.ret().length() - 1)), Type.getArgumentTypes(b.desc()));
+				if (up.contains(b.owner()) && declared.contains(b.name() + b.desc()) && !declared.contains(b.name() + wide)) emitRetBridge(b, wide);
+			}
+		}
 		for (Object[] l : lambdaStubs) emitLambdaStub((String) l[0], (String) l[1], (Handle) l[2], (int) l[3]);
 		for (Object[] s : superStubs) emitSuperStub((String) s[0], (String) s[1], (boolean) s[2], (Renames.Bridge) s[3]);
 		super.visitEnd();
@@ -299,6 +306,24 @@ final class CallRules extends ClassVisitor {
 		mv.visitInsn(Opcodes.POP);
 		Type ret = Type.getReturnType(desc);
 		if (ret.getSort() != Type.VOID) pushDefault(mv, ret);
+	}
+
+	/** What javac makes for a covariant return: the method with the wide return type, calling the one that is declared. */
+	private void emitRetBridge(Renames.RetBridge b, String wide) {
+		Type[] args = Type.getArgumentTypes(b.desc());
+		MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC, b.name(), wide, null, null);
+		mv.visitCode();
+		mv.visitVarInsn(Opcodes.ALOAD, 0);
+		int slot = 1;
+		for (Type a : args) {
+			mv.visitVarInsn(a.getOpcode(Opcodes.ILOAD), slot);
+			slot += a.getSize();
+		}
+		mv.visitMethodInsn(isInterface ? Opcodes.INVOKEINTERFACE : Opcodes.INVOKEVIRTUAL, className, b.name(), b.desc(), isInterface);
+		mv.visitInsn(Opcodes.ARETURN);
+		mv.visitMaxs(slot + 1, slot);
+		mv.visitEnd();
+		declared.add(b.name() + wide);
 	}
 
 	/** {@code m(new)} for a class that only has {@code m(old)}: drops the added trailing parameters and calls {@code m(old)}. */

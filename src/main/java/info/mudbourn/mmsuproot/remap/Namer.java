@@ -203,7 +203,12 @@ public final class Namer {
 	private void collect(String name, Set<String> out) {
 		if (name == null || !out.add(name)) return;
 		if (mods.has(name)) {
-			for (String parent : header(name)) collect(cls(parent), out);
+			for (String parent : header(name)) {
+				collect(cls(parent), out);
+				// a mixin whose target moved (mixintarget rule) is read against the new target as well, so method rules on it reach the mixin's names
+				String moved = renames.mixinTarget(name, cls(parent));
+				if (moved != null) collect(moved, out);
+			}
 			return;
 		}
 		game.info(name).ifPresent(i -> {
@@ -337,6 +342,9 @@ public final class Namer {
 		s = m.appendTail(sb).toString();
 		for (Map.Entry<String, String> at : renames.injectAts().entrySet()) {
 			if (s.contains(at.getKey())) s = s.replace(at.getKey(), at.getValue());
+		}
+		for (Map.Entry<String, String> text : renames.annotationStrings().entrySet()) {
+			if (s.contains(text.getKey())) s = s.replace(text.getKey(), text.getValue());
 		}
 		return s;
 	}

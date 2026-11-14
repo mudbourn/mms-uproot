@@ -80,6 +80,8 @@
 #                                  javac would have, so the game's call reaches the injectors. TARGET and descriptors are 26.3
 #                                  names. Skipped when TARGET declares the method itself.
 #                                  e.g. inherited net/minecraft/client/model/monster/zombie/DrownedModel setupAnim (Lnet/minecraft/client/renderer/entity/state/ZombieRenderState;)V (Lnet/minecraft/client/renderer/entity/state/HumanoidRenderState;)V
+# annotation OLD NEW               text inside a mixin annotation string (after the names were mapped, 26.3 names) becomes NEW. For a target method
+#                                  whose descriptor changed, where injectat (a call in an @At) does not reach.
 # handler MIXINCLASS HANDLERNAME NEWDESC ARGMAP
 #                                  the injector handler HANDLERNAME of the mod's mixin class MIXINCLASS (its own internal name) was
 #                                  written for a target whose parameters changed in ways bridge cannot say: removed, reordered or retyped.
@@ -93,6 +95,15 @@
 #                                  named with its old descriptor in the annotation is rewritten to the target's new parameters.
 #                                  Choose entries after reading which old parameters the handler body uses; an unused one may default.
 #                                  e.g. handler net/conczin/immersive_optimization/mixin/client/LevelRendererMixin immersiveOptimization$render (Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;ZLnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lorg/joml/Vector4f;ZZLorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,null,1,2,null,3,4,5
+#                                  An optional sixth field if=pkg/Helper.method names a static boolean method of Uproot's own that gets the target's
+#                                  parameters (those before the callback) and says whether the handler runs; for a hook whose old target was a
+#                                  case of the new one. The handler must return nothing.
+#                                  (a MixinExtras wrap operation handler may also use this: the Operation takes the place of the callback, and the values
+#                                  captured after it (the enclosing method's parameters, all of them in 26.3 as MixinExtras wants them) are found again by type. Its method= string is then not touched; use annotation for it.)
+# retbridge OWNER NAME DESC RET   a class that extends or implements OWNER and declares NAME DESC also gets NAME with the same arguments returning RET (a type
+#                                  descriptor the declared return type extends), calling it: what javac makes for a covariant return. For a method that a
+#                                  rename turned into one the game calls with a wider return type.
+#                                  e.g. retbridge net/minecraft/world/level/storage/loot/predicates/LootItemCondition codec ()Linfo/mudbourn/mmsuproot/shim/compat/LegacyLootConditionType; Lcom/mojang/serialization/MapCodec;
 # invokerparam MIXINCLASS NAME OLDDESC EXTRA
 #                                  the @Invoker method NAME (descriptor OLDDESC) of the mod's mixin interface MIXINCLASS targets a method that gained
 #                                  trailing parameters, EXTRA (parameter types in descriptor syntax). The interface method takes them too, and every
@@ -681,3 +692,60 @@ callinst net/minecraft/world/level/storage/loot/LootContext getParameter (Lnet/m
 
 # A component patch is read against the prototype now; the old read told set, removed or untouched by itself
 callinst net/minecraft/core/component/DataComponentPatch get (Lnet/minecraft/core/component/DataComponentType;)Ljava/util/Optional; info/mudbourn/mmsuproot/shim/compat/LegacyComponents.get
+
+# CCA's level components: level data is written by a private setTagData(tag, uuid) now (no registries or player tag), and read by a
+# static getLevelDataAndDimensions(access, ...) whose call of PrimaryLevelData.parse lost the world options
+handler org/ladysnake/cca/mixin/level/common/MixinLevelProperties writeComponents (Lnet/minecraft/nbt/CompoundTag;Ljava/util/UUID;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V info/mudbourn/mmsuproot/shim/compat/LegacyWorld.registryAccess,0,null
+injectat net/minecraft/world/level/storage/PrimaryLevelData parse (Lcom/mojang/serialization/Dynamic;Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lnet/minecraft/world/level/levelgen/WorldOptions;Lcom/mojang/serialization/Lifecycle;)Lnet/minecraft/world/level/storage/PrimaryLevelData; net/minecraft/world/level/storage/PrimaryLevelData parse (Lcom/mojang/serialization/Dynamic;Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lcom/mojang/serialization/Lifecycle;)Lnet/minecraft/world/level/storage/PrimaryLevelData;
+annotation getLevelDataAndDimensions(Lcom/mojang/serialization/Dynamic;Lnet/minecraft/world/level/WorldDataConfiguration; getLevelDataAndDimensions(Lnet/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess;Lcom/mojang/serialization/Dynamic;Lnet/minecraft/world/level/WorldDataConfiguration;
+handler org/ladysnake/cca/mixin/level/common/LevelStorageMixin readComponents (Lcom/mojang/serialization/Dynamic;Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lcom/mojang/serialization/Lifecycle;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;Lnet/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess;Lcom/mojang/serialization/Dynamic;Lnet/minecraft/world/level/WorldDataConfiguration;Lnet/minecraft/core/Registry;Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/world/level/storage/PrimaryLevelData; 0,1,2,null,3
+
+# The heart types of the health bar moved with it, from Gui to Hud
+class net/minecraft/client/gui/Gui$HeartType net/minecraft/client/gui/Hud$HeartType
+
+# A loot condition's getType() is codec() in 26.3, returning the codec itself; the stand-in type is one (LegacyLootConditionType)
+method net/minecraft/world/level/storage/loot/predicates/LootItemCondition getType codec
+retbridge net/minecraft/world/level/storage/loot/predicates/LootItemCondition codec ()Linfo/mudbourn/mmsuproot/shim/compat/LegacyLootConditionType; Lcom/mojang/serialization/MapCodec;
+callinst info/mudbourn/mmsuproot/shim/compat/LegacyLootConditionType codec ()Lcom/mojang/serialization/MapCodec; info/mudbourn/mmsuproot/shim/compat/LegacyLootConditionType.codecOf
+
+# submit calls that took a sprite, a crumbling overlay or a glint flag in 1.21.11 (see LegacyClient)
+callinst net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModel (Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/renderer/texture/TextureAtlasSprite;ILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.submitModel
+callinst net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModel (Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.submitModel
+callinst net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModelPart (Lnet/minecraft/client/model/geom/ModelPart;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IILnet/minecraft/client/renderer/texture/TextureAtlasSprite;ZZILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;I)V info/mudbourn/mmsuproot/shim/client/LegacyClient.submitModelPart
+callinst net/minecraft/client/renderer/OrderedSubmitNodeCollector submitBlock (Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/level/block/state/BlockState;III)V info/mudbourn/mmsuproot/shim/client/LegacyClient.submitBlock
+
+# The illager render state's swing progress is the animation value of the armed entity state it extends
+field net/minecraft/client/renderer/entity/state/IllagerRenderState attackAnim swingAnimation
+
+# The health bar code moved from Gui to Hud and its render methods are extract methods (same arguments). A mixin that hooks it targets Hud.
+mixintarget com/github/thedeathlycow/thermoo/mixin/client/GuiPlayerTemperatureMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+mixintarget com/github/thedeathlycow/thermoo/mixin/client/GuiMountTemperatureMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+mixintarget com/github/thedeathlycow/frostiful/client/mixin/gui/InGameHudMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+method net/minecraft/client/gui/Hud renderHearts extractHearts
+method net/minecraft/client/gui/Hud renderHeart extractHeart
+method net/minecraft/client/gui/Hud renderVehicleHealth extractVehicleHealth
+method net/minecraft/client/gui/Hud renderCameraOverlays extractCameraOverlays
+method net/minecraft/client/gui/Hud renderTextureOverlay extractTextureOverlay
+injectat net/minecraft/client/gui/Gui renderHeart (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/gui/Hud$HeartType;IIZZZ)V net/minecraft/client/gui/Hud extractHeart (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/gui/Hud$HeartType;IIZZZ)V
+injectat net/minecraft/client/gui/Gui renderTextureOverlay (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/resources/Identifier;F)V net/minecraft/client/gui/Hud extractTextureOverlay (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/resources/Identifier;F)V
+
+# ServerLevel's constructor lost its last parameter (the random sequences, now saved data); a hook on the constructor names the shorter one
+annotation ZJLjava/util/List;ZLnet/minecraft/world/RandomSequences;)V ZJLjava/util/List;Z)V
+
+# Frostiful cancels the view bob while skating: bobView takes the camera state first and no partial tick now
+handler com/github/thedeathlycow/frostiful/client/mixin/ice_skate_fx/GameRendererMixin cancelBobIfSkating (Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 1,null
+
+# Saved data: the storage class became SavedDataStorage (same computeIfAbsent), and a saved data type is named by an identifier
+class net/minecraft/world/level/storage/DimensionDataStorage net/minecraft/world/level/storage/SavedDataStorage
+ctoradapt net/minecraft/world/level/saveddata/SavedDataType (Ljava/lang/String;Ljava/util/function/Supplier;Lcom/mojang/serialization/Codec;Lnet/minecraft/util/datafix/DataFixTypes;)V (Lnet/minecraft/resources/Identifier;Ljava/util/function/Supplier;Lcom/mojang/serialization/Codec;Lnet/minecraft/util/datafix/DataFixTypes;)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.savedDataType
+
+# A thrown potion's water case is not a method of its own in 26.3: affectEntitiesAround(level, contents) covers every potion that wets or
+# burns something, so a hook on the water case runs at its end only when the potion is water (the box local is still there)
+method net/minecraft/world/entity/projectile/throwableitemprojectile/AbstractThrownPotion onHitAsWater affectEntitiesAround
+handler com/github/thedeathlycow/frostiful/mixins/entity/WaterPotionSoakingMixin soakEntitiesWithWaterbottle (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/item/alchemy/PotionContents;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;Lnet/minecraft/world/phys/AABB;)V 0 if=info/mudbourn/mmsuproot/shim/compat/LegacyPotions.isWater
+
+# The hand and view bob moved into renderItemInHand(camera state, player state, target), and bobView takes the camera state first with no partial tick:
+# a hook that wraps the bobView call there is handed the camera state the enclosing method has, and the call gets it where it now wants it
+annotation renderItemInHand(FZLorg/joml/Matrix4f;)V renderItemInHand(Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lnet/minecraft/client/renderer/state/level/PlayerRenderState;Lcom/mojang/renderpearl/api/textures/GpuTextureView;)V
+injectat net/minecraft/client/renderer/GameRenderer bobView (Lcom/mojang/blaze3d/vertex/PoseStack;F)V net/minecraft/client/renderer/GameRenderer bobView (Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;)V
+handler com/github/thedeathlycow/frostiful/client/mixin/gui/ShiveringRenderer shakeViewWhenShivering (Lnet/minecraft/client/renderer/GameRenderer;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V 0,2,null op=0,c0,1

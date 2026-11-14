@@ -1,8 +1,16 @@
 package info.mudbourn.mmsuproot.shim.feature;
 
 import com.mojang.serialization.Codec;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.LevelSimulatedReader;
 import net.minecraft.world.level.LevelWriter;
+import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -39,6 +47,56 @@ public abstract class LegacyFeature<FC extends FeatureConfiguration> {
 
 	protected void setBlock(LevelWriter level, BlockPos pos, BlockState state) {
 		level.setBlock(pos, state, 3);
+	}
+
+	// 1.21.11's Feature helpers, which 26.3 dropped. Each body follows the 1.21.11 bytecode.
+
+	protected void safeSetBlock(WorldGenLevel level, BlockPos pos, BlockState state, Predicate<BlockState> canReplace) {
+		if (canReplace.test(level.getBlockState(pos))) {
+			level.setBlock(pos, state, 2);
+		}
+	}
+
+	protected void markAboveForPostProcessing(WorldGenLevel level, BlockPos pos) {
+		BlockPos.MutableBlockPos cursor = pos.mutable();
+		for (int i = 0; i < 2; i++) {
+			cursor.move(Direction.UP);
+			if (level.getBlockState(cursor).isAir()) {
+				return;
+			}
+			level.getChunk(cursor).markPosForPostProcessing(cursor);
+		}
+	}
+
+	public static Predicate<BlockState> isReplaceable(TagKey<Block> cannotReplace) {
+		return state -> !state.is(cannotReplace);
+	}
+
+	protected static boolean isStone(BlockState state) {
+		return state.is(BlockTags.BASE_STONE_OVERWORLD);
+	}
+
+	public static boolean isDirt(BlockState state) {
+		return state.is(BlockTags.DIRT);
+	}
+
+	public static boolean isGrassOrDirt(LevelSimulatedReader level, BlockPos pos) {
+		return level.isStateAtPosition(pos, LegacyFeature::isDirt);
+	}
+
+	public static boolean checkNeighbors(Function<BlockPos, BlockState> getState, BlockPos pos, Predicate<BlockState> test) {
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (Direction direction : Direction.values()) {
+			cursor.setWithOffset(pos, direction);
+			if (test.test(getState.apply(cursor))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public static boolean isAdjacentToAir(Function<BlockPos, BlockState> getState, BlockPos pos) {
+		return checkNeighbors(getState, pos, BlockState::isAir);
 	}
 
 	private static LegacyFeature<?> inert() {

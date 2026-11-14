@@ -25,6 +25,7 @@ final class MixinParams extends ClassVisitor {
 	private static final int API = Opcodes.ASM9;
 	private static final String INJECT = "Lorg/spongepowered/asm/mixin/injection/Inject;";
 	private static final String MIXIN = "Lorg/spongepowered/asm/mixin/Mixin;";
+	private static final String OPERATION = "com/llamalad7/mixinextras/injector/wrapoperation/Operation";
 	private static final String CALLBACK = "org/spongepowered/asm/mixin/injection/callback/CallbackInfo";
 	private static final String CALLBACK_RETURNABLE = "org/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable";
 
@@ -200,7 +201,7 @@ final class MixinParams extends ClassVisitor {
 		StringBuilder added = new StringBuilder();
 		for (int i = callback; i < now.length; i++) added.append(added.length() > 0 ? ", " : "").append(now[i].getClassName());
 		namer.note("mixin handler " + className.substring(className.lastIndexOf('/') + 1) + "." + m.name + " takes the parameters its target gained (" + added + ")");
-		return rewrap(m, inject, widened, sources, now, "mms_uproot$" + m.name + "$" + callback, callback, extra);
+		return rewrap(m, inject, widened, sources, now, "mms_uproot$" + m.name + "$" + callback, callback, extra, null, null, 0);
 	}
 
 	/**
@@ -213,8 +214,11 @@ final class MixinParams extends ClassVisitor {
 		int callback = callbackIndex(args);
 		int newCallback = callbackIndex(widened);
 		String where = className.substring(className.lastIndexOf('/') + 1) + "." + m.name;
-		if (callback != args.length - 1 || newCallback != widened.length - 1 || rule.args().size() != callback) {
-			namer.note("handler rule for " + where + " does not fit the handler: it takes " + args.length + " parameters, the callback last, and the rule maps " + rule.args().size());
+		// a wrap operation handler has its captured values after the Operation; they keep their order and sit after the new one
+		boolean wrap = callback >= 0 && args[callback].getInternalName().equals(OPERATION);
+		int suffix = args.length - 1 - callback;
+		if (callback < 0 || newCallback < 0 || rule.args().size() != callback) {
+			namer.note("handler rule for " + where + " does not fit the handler: it takes " + args.length + " parameters, the callback at " + callback + ", and the rule maps " + rule.args().size());
 			return null;
 		}
 		Renames.Arg[] sources = new Renames.Arg[args.length];
@@ -230,15 +234,37 @@ final class MixinParams extends ClassVisitor {
 			}
 		}
 		sources[callback] = Renames.Arg.param(newCallback);
-		Type[] now = new Type[newCallback];
-		System.arraycopy(widened, 0, now, 0, newCallback);
+		// the values a wrap handler takes after the Operation are the enclosing method's parameters: each old one is found again, by type, among the new ones
+		boolean[] used = new boolean[widened.length];
+		for (int i = callback + 1; i < args.length; i++) {
+			int found = -1;
+			for (int k = widened.length - 1; k > newCallback && found < 0; k--) if (!used[k] && widened[k].equals(args[i])) found = k;
+			if (found < 0) {
+				namer.note("handler rule for " + where + " finds no " + args[i].getClassName() + " among the target's parameters after the Operation");
+				return null;
+			}
+			used[found] = true;
+			sources[i] = Renames.Arg.param(found);
+		}
+		Type[] now = wrap ? null : new Type[newCallback];
+		if (now != null) System.arraycopy(widened, 0, now, 0, newCallback);
 		namer.note("mixin handler " + where + " takes the target's 26.3 parameters (" + rule.newDesc().substring(0, rule.newDesc().indexOf(')') + 1) + ")");
-		return rewrap(m, inject, widened, sources, now, "mms_uproot$" + m.name + "$handler", -1, 0);
+		int[] dropped = null;
+		if (wrap) {
+			// the old handler calls the original with the arguments it knew: the Operation it gets maps them to the ones the target takes now
+			// (by default the same ones, leaving out those the target no longer takes; an op= field of the rule says otherwise)
+			dropped = rule.opSpec() != null ? rule.opSpec() : java.util.stream.IntStream.range(0, callback).filter(i -> sources[i].index() >= 0).toArray();
+			boolean identity = dropped.length == callback;
+			for (int i = 0; identity && i < dropped.length; i++) identity = dropped[i] == i;
+			if (identity) dropped = null;
+		}
+		return rewrap(m, inject, widened, sources, now, "mms_uproot$" + m.name + "$handler", -1, 0, dropped, rule.guard(), newCallback);
 	}
 
 	private static int callbackIndex(Type[] args) {
 		for (int i = 0; i < args.length; i++) {
-			if (args[i].getSort() == Type.OBJECT && (args[i].getInternalName().equals(CALLBACK) || args[i].getInternalName().equals(CALLBACK_RETURNABLE))) return i;
+			if (args[i].getSort() == Type.OBJECT && (args[i].getInternalName().equals(CALLBACK) || args[i].getInternalName().equals(CALLBACK_RETURNABLE)
+					|| args[i].getInternalName().equals(OPERATION))) return i;
 		}
 		return -1;
 	}
@@ -256,7 +282,7 @@ final class MixinParams extends ClassVisitor {
 	 * parameters, which a method named with its old descriptor in the annotation is rewritten to. {@code callback} and {@code extra}
 	 * place the parameter annotations of a handler whose parameters grew (callback is -1 when they do not).
 	 */
-	private MethodNode rewrap(MethodNode m, AnnotationNode inject, Type[] newArgs, Renames.Arg[] sources, Type[] now, String renamed, int callback, int extra) {
+	private MethodNode rewrap(MethodNode m, AnnotationNode inject, Type[] newArgs, Renames.Arg[] sources, Type[] now, String renamed, int callback, int extra, int[] dropped, String[] guard, int guardArgs) {
 		boolean isStatic = (m.access & Opcodes.ACC_STATIC) != 0;
 		MethodNode w = new MethodNode(API, m.access, m.name, Type.getMethodDescriptor(Type.getReturnType(m.desc), newArgs), null, m.exceptions.toArray(new String[0]));
 		w.visibleAnnotations = m.visibleAnnotations;
@@ -266,6 +292,15 @@ final class MixinParams extends ClassVisitor {
 			w.invisibleParameterAnnotations = widen(m.invisibleParameterAnnotations, callback, extra);
 			w.visibleAnnotableParameterCount = m.visibleAnnotableParameterCount == 0 ? 0 : m.visibleAnnotableParameterCount + extra;
 			w.invisibleAnnotableParameterCount = m.invisibleAnnotableParameterCount == 0 ? 0 : m.invisibleAnnotableParameterCount + extra;
+			m.visibleParameterAnnotations = null;
+			m.invisibleParameterAnnotations = null;
+			m.visibleAnnotableParameterCount = 0;
+			m.invisibleAnnotableParameterCount = 0;
+		}
+		if (callback < 0) {
+			// a handler rule: each parameter annotation (a local capture, say) follows its parameter to where the rule puts it
+			w.visibleParameterAnnotations = moveParameterAnnotations(m.visibleParameterAnnotations, sources, newArgs.length);
+			w.invisibleParameterAnnotations = moveParameterAnnotations(m.invisibleParameterAnnotations, sources, newArgs.length);
 			m.visibleParameterAnnotations = null;
 			m.invisibleParameterAnnotations = null;
 			m.visibleAnnotableParameterCount = 0;
@@ -284,12 +319,49 @@ final class MixinParams extends ClassVisitor {
 			slot += newArgs[i].getSize();
 		}
 		w.visitCode();
+		org.objectweb.asm.Label run = null;
+		if (guard != null) {
+			// the handler only runs when the helper, given the target's parameters, says so (the handler returns nothing)
+			run = new org.objectweb.asm.Label();
+			StringBuilder helperDesc = new StringBuilder("(");
+			for (int i = 0; i < guardArgs; i++) {
+				w.visitVarInsn(newArgs[i].getOpcode(Opcodes.ILOAD), slots[i]);
+				helperDesc.append(newArgs[i].getDescriptor());
+			}
+			w.visitMethodInsn(Opcodes.INVOKESTATIC, guard[0], guard[1], helperDesc.append(")Z").toString(), false);
+			w.visitJumpInsn(Opcodes.IFNE, run);
+			w.visitInsn(Opcodes.RETURN);
+			w.visitLabel(run);
+			w.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+		}
 		if (!isStatic) w.visitVarInsn(Opcodes.ALOAD, 0);
 		int pushed = isStatic ? 0 : 1;
 		for (int i = 0; i < old.length; i++) {
 			Renames.Arg from = sources[i];
 			if (from.index() >= 0) {
 				w.visitVarInsn(newArgs[from.index()].getOpcode(Opcodes.ILOAD), slots[from.index()]);
+				if (dropped != null && old[i].getSort() == Type.OBJECT && old[i].getInternalName().equals(OPERATION)) {
+					// the Operation, mapped: which old call argument (or captured parameter after the Operation, as -n-1) each new one takes
+					w.visitIntInsn(Opcodes.BIPUSH, dropped.length);
+					w.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_INT);
+					for (int k = 0; k < dropped.length; k++) {
+						w.visitInsn(Opcodes.DUP);
+						w.visitIntInsn(Opcodes.BIPUSH, k);
+						w.visitIntInsn(Opcodes.BIPUSH, dropped[k]);
+						w.visitInsn(Opcodes.IASTORE);
+					}
+					int capturedFrom = guardArgs + 1;
+					w.visitIntInsn(Opcodes.BIPUSH, newArgs.length - capturedFrom);
+					w.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/Object");
+					for (int k = capturedFrom; k < newArgs.length; k++) {
+						w.visitInsn(Opcodes.DUP);
+						w.visitIntInsn(Opcodes.BIPUSH, k - capturedFrom);
+						w.visitVarInsn(Opcodes.ALOAD, slots[k]);
+						w.visitInsn(Opcodes.AASTORE);
+					}
+					w.visitMethodInsn(Opcodes.INVOKESTATIC, "info/mudbourn/mmsuproot/shim/compat/LegacyOperations", "remapping", "(L" + OPERATION + ";[I[Ljava/lang/Object;)L" + OPERATION + ";", false);
+					pushed += 10;
+				}
 				if (!newArgs[from.index()].equals(old[i]) && old[i].getSort() == Type.OBJECT && !namer.ancestorsOf(newArgs[from.index()].getInternalName()).contains(old[i].getInternalName())) {
 					w.visitTypeInsn(Opcodes.CHECKCAST, old[i].getInternalName());
 				}
@@ -313,9 +385,9 @@ final class MixinParams extends ClassVisitor {
 		w.visitEnd();
 
 		// a method named with its 1.21.11 descriptor now names the 26.3 one
-		String nowArgs = Type.getMethodDescriptor(Type.VOID_TYPE, now);
-		nowArgs = nowArgs.substring(0, nowArgs.indexOf(')') + 1);
-		for (int i = 0; inject.values != null && i + 1 < inject.values.size(); i += 2) {
+		String nowArgs = now == null ? null : Type.getMethodDescriptor(Type.VOID_TYPE, now);
+		if (nowArgs != null) nowArgs = nowArgs.substring(0, nowArgs.indexOf(')') + 1);
+		for (int i = 0; nowArgs != null && inject.values != null && i + 1 < inject.values.size(); i += 2) {
 			if (inject.values.get(i).equals("method") && inject.values.get(i + 1) instanceof List<?> l) {
 				@SuppressWarnings("unchecked") List<Object> mutable = (List<Object>) l;
 				for (int k = 0; k < mutable.size(); k++) {
@@ -326,6 +398,16 @@ final class MixinParams extends ClassVisitor {
 			}
 		}
 		return w;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static List<AnnotationNode>[] moveParameterAnnotations(List<AnnotationNode>[] old, Renames.Arg[] sources, int newCount) {
+		if (old == null) return null;
+		List<AnnotationNode>[] out = (List<AnnotationNode>[]) new List<?>[newCount];
+		for (int i = 0; i < old.length && i < sources.length; i++) {
+			if (old[i] != null && sources[i].index() >= 0) out[sources[i].index()] = old[i];
+		}
+		return out;
 	}
 
 	/** Whether {@code narrow} is a class that is, or extends, the class {@code wide}. */
