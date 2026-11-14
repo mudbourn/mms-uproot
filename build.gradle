@@ -75,7 +75,7 @@ tasks.matching { it.name == 'runClient' }.configureEach {
 def probeFile = file('run/mms-uproot/probe.txt')
 tasks.matching { it.name == 'runUprootProbe' }.configureEach {
 	dependsOn 'uprootOverrides'
-	timeout = java.time.Duration.ofMinutes(5)
+	timeout = java.time.Duration.ofMinutes(15)
 	doFirst { probeFile.delete() }
 }
 

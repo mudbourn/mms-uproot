@@ -60,6 +60,7 @@ public final class UprootBoot implements LanguageAdapter {
 			if (ModSource.skip(impl)) continue;
 			if (ModSource.refersToIntermediary(impl, report)) targets.add(impl);
 			else if (ModSource.builtForOlder26(impl, report)) modern.add(impl);
+			else if (ModSource.legacyDataPack(impl, report)) DataShim.target(impl.getMetadata().getId(), report.mod(impl.getMetadata().getId()));
 		}
 
 		if (targets.isEmpty() && modern.isEmpty()) {

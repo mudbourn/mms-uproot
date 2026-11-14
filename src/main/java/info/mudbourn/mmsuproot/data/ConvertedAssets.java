@@ -18,7 +18,6 @@ import javax.imageio.ImageIO;
 
 import info.mudbourn.mmsuproot.boot.Report;
 import info.mudbourn.mmsuproot.util.Json;
-import net.fabricmc.fabric.api.resource.v1.pack.ModPackResources;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.PackType;
@@ -47,11 +46,11 @@ final class ConvertedAssets {
 			{20, 4, 4, 2, 16, 4}, {24, 4, 16, 2, 0, 7},
 			{0, 6, 3, 6, 22, 7}, {6, 6, 3, 6, 28, 7}, {14, 6, 12, 6, 20, 0}};
 
-	private final ModPackResources pack;
+	private final PackResources pack;
 	private final Report.Entry report;
 	private volatile Built built;
 
-	ConvertedAssets(ModPackResources pack, Report.Entry report) {
+	ConvertedAssets(PackResources pack, Report.Entry report) {
 		this.pack = pack;
 		this.report = report;
 	}

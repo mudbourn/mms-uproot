@@ -240,6 +240,13 @@ public final class ClassRemap {
 		}
 
 		@Override
+		public void visitEnum(String name, String descriptor, String value) {
+			// a local capture that no longer fits skips the injector (a dead hook, reported) and does not stop the class or the game
+			boolean capture = injector && "locals".equals(name) && "Lorg/spongepowered/asm/mixin/injection/callback/LocalCapture;".equals(descriptor);
+			super.visitEnum(name, descriptor, capture && (value.equals("CAPTURE_FAILHARD") || value.equals("CAPTURE_FAILEXCEPTION")) ? "CAPTURE_FAILSOFT" : value);
+		}
+
+		@Override
 		public AnnotationVisitor visitAnnotation(String name, String descriptor) {
 			AnnotationVisitor av = super.visitAnnotation(name, descriptor);
 			return av == null ? null : new Strings(av, namer, false, owner, false, null);

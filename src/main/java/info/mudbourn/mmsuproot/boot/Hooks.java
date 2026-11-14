@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import info.mudbourn.mmsuproot.disable.Disabler;
+import info.mudbourn.mmsuproot.remap.GamePatches;
 import info.mudbourn.mmsuproot.remap.MixinConfigs;
 import net.fabricmc.loader.impl.game.GameProvider;
 import net.fabricmc.loader.impl.game.patch.GameTransformer;
@@ -39,6 +40,9 @@ import org.slf4j.LoggerFactory;
  */
 final class Hooks {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot");
+
+	/** Read here, so that GamePatches is loaded before the transformer is asked about any class (itself included). */
+	private static final Set<String> PATCHED = GamePatches.classes();
 
 	private final List<ModSource> sources;
 	private final Map<String, ModSource> configs = new ConcurrentHashMap<>();
@@ -211,6 +215,14 @@ final class Hooks {
 			if (patched != null) return patched;
 
 			String internal = className.replace('.', '/');
+			if (PATCHED.contains(internal)) {
+				try (InputStream in = FabricLauncherBase.getLauncher().getResourceAsStream(internal + ".class")) {
+					return in == null ? null : GamePatches.patch(internal, in.readAllBytes());
+				} catch (IOException | RuntimeException e) {
+					LOGGER.warn("Could not patch {}; loading it as is", className, e);
+					return null;
+				}
+			}
 			for (ModSource s : sources) {
 				if (!s.classes.containsKey(internal)) continue;
 				try {

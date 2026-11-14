@@ -4,9 +4,16 @@ import java.util.NoSuchElementException;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.HolderOwner;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.storage.loot.LootTable;
+import net.minecraft.world.level.storage.loot.entries.NestedLootTable;
+import net.minecraft.world.level.storage.loot.entries.UniformContainerBase;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.util.context.ContextKey;
+import net.minecraft.world.clock.WorldClock;
+import net.minecraft.world.clock.WorldClocks;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraft.world.level.storage.loot.functions.EnchantedCountIncreaseFunction;
@@ -14,7 +21,9 @@ import net.minecraft.world.level.storage.loot.functions.LootItemConditionalFunct
 import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
 import net.minecraft.world.level.storage.loot.functions.SetComponentsFunction;
 import net.minecraft.world.level.storage.loot.functions.SetItemCountFunction;
+import net.minecraft.world.level.storage.loot.functions.SetItemDamageFunction;
 import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
+import net.minecraft.world.level.storage.loot.predicates.TimeCheck;
 import net.minecraft.world.level.storage.loot.providers.number.floats.ContextFloatProvider;
 import net.minecraft.world.level.storage.loot.providers.number.ints.ConstantValue;
 import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider;
@@ -35,6 +44,46 @@ public final class LegacyLoot {
 	/** {@code SetItemCountFunction.setCount(NumberProvider)}, likewise. */
 	public static LootItemConditionalFunction.Builder<?> setCount(LegacyNumberProvider count) {
 		return SetItemCountFunction.setCount(count(count));
+	}
+
+	/** The overworld clock, named by key: 1.21.11 had one day time, which 26.3 keeps in this clock (the registry's holder is found by key, see ServerClockManagerMixin). */
+	private static final Holder<WorldClock> OVERWORLD_CLOCK = Holder.Reference.createStandAlone(new HolderOwner<>() { }, WorldClocks.OVERWORLD);
+
+	/** {@code TimeCheck.time(IntRange)}: 26.3 also names the clock whose ticks are tested. */
+	public static TimeCheck.Builder time(LegacyIntRange range) {
+		return TimeCheck.time(OVERWORLD_CLOCK, range.predicate());
+	}
+
+	/** {@code LootPool.Builder.setBonusRolls(NumberProvider)}: 26.3 takes a holder of a float provider. */
+	public static LootPool.Builder setBonusRolls(LootPool.Builder builder, LegacyNumberProvider rolls) {
+		return builder.setBonusRolls(multiplier(rolls));
+	}
+
+	/** {@code SetItemDamageFunction.setDamage(NumberProvider)}: the damage fraction is a float provider holder now. */
+	public static LootItemConditionalFunction.Builder<?> setDamage(LegacyNumberProvider damage) {
+		return SetItemDamageFunction.setDamage(multiplier(damage));
+	}
+
+	/** {@code NestedLootTable.lootTableReference(key)}: 26.3 takes a holder, so the entry gets one that finds the table by its key when the loot is rolled. */
+	public static UniformContainerBase.Builder<?> lootTableReference(ResourceKey<LootTable> key) {
+		return NestedLootTable.lootTableReference(new TableReference(key));
+	}
+
+	/** A reference to a loot table that is read from the running server's tables, which do not exist yet when a mod builds the entry. */
+	private static final class TableReference extends Holder.Reference<LootTable> {
+		TableReference(ResourceKey<LootTable> key) {
+			super(Holder.Reference.Type.STAND_ALONE, new HolderOwner<>() { }, key, null);
+		}
+
+		@Override
+		public LootTable value() {
+			return LegacyWorld.lootTable(key());
+		}
+
+		@Override
+		public boolean isBound() {
+			return true;
+		}
 	}
 
 	/** {@code LootPool.Builder.apply(LootItemFunction.Builder)}: the pool takes the built function in a holder now. */

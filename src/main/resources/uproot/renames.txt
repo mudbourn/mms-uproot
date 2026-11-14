@@ -104,6 +104,11 @@
 #                                  descriptor the declared return type extends), calling it: what javac makes for a covariant return. For a method that a
 #                                  rename turned into one the game calls with a wider return type.
 #                                  e.g. retbridge net/minecraft/world/level/storage/loot/predicates/LootItemCondition codec ()Linfo/mudbourn/mmsuproot/shim/compat/LegacyLootConditionType; Lcom/mojang/serialization/MapCodec;
+# implbridge OWNER OLDNAME OLDDESC NEWNAME NEWDESC [HELPER.method]
+#                                  a class that extends or implements OWNER and declares OLDNAME OLDDESC (what 1.21.11 called an abstract method of
+#                                  OWNER, as the class has it after renaming) also gets NEWNAME NEWDESC, the abstract method of 26.3, with the same
+#                                  arguments, calling it. HELPER.method (static, takes the old return type and returns the new one) converts the result.
+#                                  e.g. implbridge net/minecraft/server/packs/repository/Pack$ResourcesSupplier openPrimary (Lnet/minecraft/server/packs/PackLocationInfo;)Lnet/minecraft/server/packs/PackResources; openMetadata (Lnet/minecraft/server/packs/PackLocationInfo;)Lnet/minecraft/server/packs/PackMetadataResources;
 # invokerparam MIXINCLASS NAME OLDDESC EXTRA
 #                                  the @Invoker method NAME (descriptor OLDDESC) of the mod's mixin interface MIXINCLASS targets a method that gained
 #                                  trailing parameters, EXTRA (parameter types in descriptor syntax). The interface method takes them too, and every
@@ -157,6 +162,8 @@ method net/fabricmc/fabric/api/networking/v1/PayloadTypeRegistry playS2C clientb
 method net/fabricmc/fabric/api/networking/v1/PayloadTypeRegistry playC2S serverboundPlay 0
 method net/fabricmc/fabric/api/networking/v1/PayloadTypeRegistry configurationS2C clientboundConfiguration 0
 method net/fabricmc/fabric/api/networking/v1/PayloadTypeRegistry configurationC2S serverboundConfiguration 0
+method net/fabricmc/fabric/api/networking/v1/ServerPlayNetworking createS2CPacket createClientboundPacket
+method net/fabricmc/fabric/api/client/networking/v1/ClientPlayNetworking createC2SPacket createServerboundPacket
 
 # Feature API. 26.3 turned Feature into an interface that is its own settings and moved the
 # registries, so the old names point at Uproot's stand-ins, which only have to load; the game reads
@@ -215,6 +222,9 @@ callmove net/minecraft/world/level/block/state/BlockBehaviour simpleCodec (Ljava
 # loot, brewing, fuel, compost and trade APIs that data replaced. The compat stand-ins hand what a mod
 # registers to data.gen, which writes it as data.
 class net/minecraft/world/item/SignItem info/mudbourn/mmsuproot/shim/item/SignItem
+class net/minecraft/world/item/AxeItem info/mudbourn/mmsuproot/shim/item/AxeItem
+class net/minecraft/world/item/ShovelItem info/mudbourn/mmsuproot/shim/item/ShovelItem
+class net/minecraft/world/item/HoeItem info/mudbourn/mmsuproot/shim/item/HoeItem
 class net/fabricmc/fabric/api/registry/CompostingChanceRegistry info/mudbourn/mmsuproot/shim/compat/CompostingChanceRegistry
 class net/fabricmc/fabric/api/registry/FuelRegistryEvents info/mudbourn/mmsuproot/shim/compat/FuelRegistryEvents
 class net/fabricmc/fabric/api/registry/FuelRegistryEvents$BuildCallback info/mudbourn/mmsuproot/shim/compat/FuelRegistryEvents$BuildCallback
@@ -274,13 +284,15 @@ fieldmove net/minecraft/world/level/block/Blocks BLACK_WOOL info/mudbourn/mmsupr
 # Leaf blocks gained an ambient sound player; 1.21.11's leaves had none
 ctor net/minecraft/world/level/block/UntintedParticleLeavesBlock (FLnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (FLnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/world/level/block/sounds/AmbientLeavesBlockSoundPlayer;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V 2=info/mudbourn/mmsuproot/shim/block/LegacyBlocks.NO_AMBIENT_SOUND:Lnet/minecraft/world/level/block/sounds/AmbientLeavesBlockSoundPlayer;
 
-# Hoe tilling is a block transformer now
-callmove net/minecraft/world/item/HoeItem changeIntoState (Lnet/minecraft/world/level/block/state/BlockState;)Ljava/util/function/Consumer; info/mudbourn/mmsuproot/shim/item/LegacyTools changeIntoState
-callmove net/minecraft/world/item/HoeItem onlyIfAirAbove (Lnet/minecraft/world/item/context/UseOnContext;)Z info/mudbourn/mmsuproot/shim/item/LegacyTools onlyIfAirAbove
+# Hoe tilling is a block transformer now; HoeItem is the stand-in above, and an axe is an item of the axes tag
+instanceadapt info/mudbourn/mmsuproot/shim/item/AxeItem info/mudbourn/mmsuproot/shim/item/LegacyTools.isAxe
+callmove info/mudbourn/mmsuproot/shim/item/HoeItem changeIntoState (Lnet/minecraft/world/level/block/state/BlockState;)Ljava/util/function/Consumer; info/mudbourn/mmsuproot/shim/item/LegacyTools changeIntoState
+callmove info/mudbourn/mmsuproot/shim/item/HoeItem onlyIfAirAbove (Lnet/minecraft/world/item/context/UseOnContext;)Z info/mudbourn/mmsuproot/shim/item/LegacyTools onlyIfAirAbove
 callmove net/fabricmc/fabric/api/registry/TillableBlockRegistry register (Lnet/minecraft/world/level/block/Block;Ljava/util/function/Predicate;Ljava/util/function/Consumer;)V info/mudbourn/mmsuproot/shim/item/LegacyTools registerTillable
 
 # Calls whose receiver or arguments moved. The helper takes the receiver first.
 callinst net/minecraft/world/level/storage/loot/LootPool$Builder setRolls (Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot.setRolls
+method net/minecraft/world/level/storage/loot/LootPool$Builder conditionally when 1
 
 # Loot tables built in code (Fabric's LootTableEvents.MODIFY). Rolls and counts are int-provider holders now, a pool builder takes entry
 # builders and function holders, and the leaf-entry builder class is gone (lootTableItem returns its replacement). Fabric's pool-builder
@@ -438,6 +450,44 @@ class net/fabricmc/fabric/api/itemgroup/v1/ItemGroupEvents$ModifyEntries net/fab
 class net/fabricmc/fabric/api/itemgroup/v1/FabricItemGroupEntries net/fabricmc/fabric/api/creativetab/v1/FabricCreativeModeTabOutput
 method net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents modifyEntriesEvent modifyOutputEvent
 method net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents$ModifyOutput modifyEntries modifyOutput
+class net/fabricmc/fabric/api/client/rendering/v1/HudRenderCallback info/mudbourn/mmsuproot/shim/client/HudRenderCallback
+class net/fabricmc/fabric/api/client/keybinding/v1/KeyBindingHelper net/fabricmc/fabric/api/client/keymapping/v1/KeyMappingHelper
+method net/fabricmc/fabric/api/client/keymapping/v1/KeyMappingHelper registerKeyBinding registerKeyMapping
+class net/fabricmc/fabric/api/client/rendering/v1/TooltipComponentCallback net/fabricmc/fabric/api/client/rendering/v1/ClientTooltipComponentCallback
+method net/fabricmc/fabric/api/client/rendering/v1/ClientTooltipComponentCallback getComponent getClientComponent
+class net/fabricmc/fabric/api/itemgroup/v1/ItemGroupEvents$ModifyEntriesAll net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents$ModifyOutputAll
+method net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents$ModifyOutputAll modifyEntries modifyOutput
+field net/fabricmc/fabric/api/creativetab/v1/CreativeModeTabEvents MODIFY_ENTRIES_ALL MODIFY_OUTPUT_ALL
+
+# Fabric's resource loader names its reload listener calls and keys for what they are
+method net/fabricmc/fabric/api/resource/v1/ResourceLoader registerReloader registerReloadListener
+method net/fabricmc/fabric/api/resource/v1/ResourceLoader addReloaderOrdering addListenerOrdering
+field net/fabricmc/fabric/api/resource/v1/ResourceLoader RELOADER_REGISTRY_LOOKUP_KEY REGISTRY_LOOKUP_KEY
+field net/fabricmc/fabric/api/resource/v1/ResourceLoader RELOADER_FEATURE_SET_KEY FEATURE_FLAG_SET_KEY
+
+# Injectors at the screen field write of Minecraft.setScreen aim at the write MinecraftScreenMixin keeps in its added setScreen
+annotation Lnet/minecraft/client/Minecraft;screen:Lnet/minecraft/client/gui/screens/Screen; Lnet/minecraft/client/Minecraft;uprootScreen:Lnet/minecraft/client/gui/screens/Screen;
+
+# FriendlyByteBuf lost its collection, map and a few value helpers (codecs do that now); shim.compat.LegacyNetwork has them
+callinst net/minecraft/network/FriendlyByteBuf readCollection (Ljava/util/function/IntFunction;Lnet/minecraft/network/codec/StreamDecoder;)Ljava/util/Collection; info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.readCollection
+callinst net/minecraft/network/FriendlyByteBuf writeCollection (Ljava/util/Collection;Lnet/minecraft/network/codec/StreamEncoder;)V info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.writeCollection
+callinst net/minecraft/network/FriendlyByteBuf readList (Lnet/minecraft/network/codec/StreamDecoder;)Ljava/util/List; info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.readList
+callinst net/minecraft/network/FriendlyByteBuf readMap (Ljava/util/function/IntFunction;Lnet/minecraft/network/codec/StreamDecoder;Lnet/minecraft/network/codec/StreamDecoder;)Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.readMap
+callinst net/minecraft/network/FriendlyByteBuf readMap (Lnet/minecraft/network/codec/StreamDecoder;Lnet/minecraft/network/codec/StreamDecoder;)Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.readMap
+callinst net/minecraft/network/FriendlyByteBuf writeMap (Ljava/util/Map;Lnet/minecraft/network/codec/StreamEncoder;Lnet/minecraft/network/codec/StreamEncoder;)V info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.writeMap
+callinst net/minecraft/network/FriendlyByteBuf readIntIdList ()Lit/unimi/dsi/fastutil/ints/IntList; info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.readIntIdList
+callinst net/minecraft/network/FriendlyByteBuf writeIntIdList (Lit/unimi/dsi/fastutil/ints/IntList;)V info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.writeIntIdList
+callinst net/minecraft/network/FriendlyByteBuf readInstant ()Ljava/time/Instant; info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.readInstant
+callinst net/minecraft/network/FriendlyByteBuf writeInstant (Ljava/time/Instant;)V info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.writeInstant
+callinst net/minecraft/network/FriendlyByteBuf readVec3 ()Lnet/minecraft/world/phys/Vec3; info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.readVec3
+callinst net/minecraft/network/FriendlyByteBuf writeVec3 (Lnet/minecraft/world/phys/Vec3;)V info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.writeVec3
+
+# Resource listing takes a Selector now; shim.client.LegacyClient answers it
+callinst net/minecraft/server/packs/resources/ResourceManager listResources (Ljava/lang/String;Ljava/util/function/Predicate;)Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyResources.listResources
+
+# Fabric loot events moved to v3; the modify callback also gets the registries
+package net/fabricmc/fabric/api/loot/v2 net/fabricmc/fabric/api/loot/v3
+bridge net/fabricmc/fabric/api/loot/v3/LootTableEvents$Modify modifyLootTable (Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/storage/loot/LootTable$Builder;Lnet/fabricmc/fabric/api/loot/v3/LootTableSource;)V (Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/storage/loot/LootTable$Builder;Lnet/fabricmc/fabric/api/loot/v3/LootTableSource;Lnet/minecraft/core/HolderLookup$Provider;)V
 
 # Render API. The camera is a getter named for the field; the HUD hidden flag moved onto Hud; the quaternion overload of mulPose is rotate
 method net/minecraft/client/renderer/GameRenderer getMainCamera mainCamera 0
@@ -476,7 +526,7 @@ field net/minecraft/client/renderer/entity/state/ArmedEntityRenderState attackTi
 # stack, and leaves group() and recipeBookCategory() to the subclass; the stand-in keeps the old constructor, those two and the stack-returning
 # result(). The mod's own serializer class cannot load (RecipeSerializer is a record now); shim/recipe builds the record, which SERIALIZER reads.
 class net/minecraft/world/item/crafting/SingleItemRecipe info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe
-callinst info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe result ()Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe.legacyResultOf
+callinst net/minecraft/world/item/crafting/SingleItemRecipe result ()Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe.legacyResultOf
 ctoradapt net/minecraft/world/item/crafting/display/SlotDisplay$ItemStackSlotDisplay (Lnet/minecraft/world/item/ItemStack;)V (Lnet/minecraft/world/item/ItemStackTemplate;)V info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe.slotDisplayArgs
 fieldmove io/github/wouink/furnish/recipe/FurnitureRecipe SERIALIZER info/mudbourn/mmsuproot/shim/recipe/FurnishRecipes SERIALIZER
 fieldget net/minecraft/world/entity/LivingEntity swingingArm info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swingingArm
@@ -552,7 +602,6 @@ method net/minecraft/client/gui/screens/Screen renderBackground extractBackgroun
 method net/minecraft/client/gui/screens/Screen renderTransparentBackground extractTransparentBackground 1
 callinst net/minecraft/client/Minecraft setScreen (Lnet/minecraft/client/gui/screens/Screen;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.setScreen
 callinst net/minecraft/world/entity/player/Player drop (Lnet/minecraft/world/item/ItemStack;Z)Lnet/minecraft/world/entity/item/ItemEntity; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.drop
-bridge net/minecraft/client/renderer/entity/EntityRenderer shouldRender (Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDD)Z (Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDDF)Z
 injectat net/minecraft/world/entity/monster/cubemob/Slime convertTo (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob; net/minecraft/world/entity/monster/cubemob/AbstractCubeMob convertTo (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob;
 # optional MIXINCLASS HANDLER      the injector may find no target, also in strict mode (-Duproot.strictMixins): its target call is inside
 #                                  a method the mixin's target only inherits, where Mixin cannot reach it. (Added with the Mob AI rules.)
@@ -575,6 +624,14 @@ ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;ILnet/minecraft/cli
 ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;)V (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyMapping
 ctoradapt net/minecraft/client/KeyMapping (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;I)V (Ljava/lang/String;Lcom/mojang/blaze3d/platform/InputConstants$Type;ILnet/minecraft/client/KeyMapping$Category;I)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyMapping
 callinst com/mojang/blaze3d/platform/InputConstants$Type getOrCreate (I)Lcom/mojang/blaze3d/platform/InputConstants$Key; info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.getOrCreate
+
+# Key events: 26.3's key() is an SDL scancode and its scancode() is gone; a mod compares key() with GLFW codes (see shim.client.LegacyKeyCodes).
+# A typed character no longer carries modifiers.
+callinst net/minecraft/client/input/KeyEvent key ()I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.key
+callinst net/minecraft/client/input/KeyEvent scancode ()I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.scancode
+ctoradapt net/minecraft/client/input/KeyEvent (III)V (III)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyEvent
+ctoradapt net/minecraft/client/input/CharacterEvent (II)V (I)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.characterEvent
+callinst net/minecraft/client/input/CharacterEvent modifiers ()I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.characterModifiers
 
 # Polling a key: 26.3 has no GLFW and InputConstants.isKeyDown takes no window; the key is converted to its SDL scancode (see shim.client.LegacyKeyCodes)
 callmove com/mojang/blaze3d/platform/InputConstants isKeyDown (Lcom/mojang/blaze3d/platform/Window;I)Z info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes isKeyDown
@@ -749,3 +806,95 @@ handler com/github/thedeathlycow/frostiful/mixins/entity/WaterPotionSoakingMixin
 annotation renderItemInHand(FZLorg/joml/Matrix4f;)V renderItemInHand(Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lnet/minecraft/client/renderer/state/level/PlayerRenderState;Lcom/mojang/renderpearl/api/textures/GpuTextureView;)V
 injectat net/minecraft/client/renderer/GameRenderer bobView (Lcom/mojang/blaze3d/vertex/PoseStack;F)V net/minecraft/client/renderer/GameRenderer bobView (Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;)V
 handler com/github/thedeathlycow/frostiful/client/mixin/gui/ShiveringRenderer shakeViewWhenShivering (Lnet/minecraft/client/renderer/GameRenderer;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/llamalad7/mixinextras/injector/wrapoperation/Operation;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V 0,2,null op=0,c0,1
+annotation renderScreenEffect(ZFLnet/minecraft/client/renderer/SubmitNodeCollector;)V submit(FLnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/PlayerRenderState;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Z)V
+
+# Waddles, Computerpc, MapSyncer, Bountiful Fish and Trinkets. Text drawing moved to text, centeredText, textWithWordWrap and textWithBackdrop
+method net/minecraft/client/gui/GuiGraphicsExtractor drawString text
+method net/minecraft/client/gui/GuiGraphicsExtractor drawCenteredString centeredText
+method net/minecraft/client/gui/GuiGraphicsExtractor drawWordWrap textWithWordWrap
+method net/minecraft/client/gui/GuiGraphicsExtractor drawStringWithBackdrop textWithBackdrop
+method net/minecraft/world/level/block/state/BlockBehaviour$BlockStateBase getLightBlock getLightDampening
+
+# The rest of the GPU abstraction moved into com.mojang.renderpearl too, and the texture format enum became GpuFormat with its own constant
+# names (MCEF's browser texture). A texture upload no longer names the pixel format; shim.client.LegacyGpu drops it (RGBA is what it was given)
+class com/mojang/blaze3d/buffers/GpuBufferSlice com/mojang/renderpearl/api/buffers/GpuBufferSlice
+class com/mojang/blaze3d/buffers/GpuBuffer com/mojang/renderpearl/api/buffers/GpuBuffer
+class com/mojang/blaze3d/PrimitiveTopology com/mojang/renderpearl/api/pipeline/PrimitiveTopology
+class com/mojang/blaze3d/opengl/GlTexture com/mojang/renderpearl/backend/opengl/GlTexture
+class com/mojang/blaze3d/opengl/GlStateManager com/mojang/renderpearl/backend/opengl/GlStateManager
+class com/mojang/blaze3d/opengl/GlProgram com/mojang/renderpearl/backend/opengl/GlProgram
+class com/mojang/blaze3d/opengl/Uniform com/mojang/renderpearl/backend/opengl/Uniform
+class com/mojang/blaze3d/pipeline/BlendFunction com/mojang/renderpearl/api/pipeline/BlendFunction
+class com/mojang/blaze3d/pipeline/ColorTargetState com/mojang/renderpearl/api/pipeline/ColorTargetState
+class com/mojang/blaze3d/shaders/UniformType com/mojang/renderpearl/api/pipeline/UniformType
+class com/mojang/blaze3d/systems/DeviceInfo com/mojang/renderpearl/api/device/DeviceInfo
+class com/mojang/blaze3d/systems/GpuDevice com/mojang/renderpearl/api/device/GpuDevice
+class com/mojang/blaze3d/systems/GpuSurface com/mojang/renderpearl/api/device/GpuSurface
+class com/mojang/blaze3d/systems/CommandEncoder com/mojang/renderpearl/api/commands/CommandEncoder
+class com/mojang/blaze3d/systems/RenderPass com/mojang/renderpearl/api/commands/RenderPass
+class com/mojang/blaze3d/textures/AddressMode com/mojang/renderpearl/api/textures/AddressMode
+class com/mojang/blaze3d/textures/FilterMode com/mojang/renderpearl/api/textures/FilterMode
+class com/mojang/blaze3d/textures/GpuTexture com/mojang/renderpearl/api/textures/GpuTexture
+class com/mojang/blaze3d/textures/GpuTextureView com/mojang/renderpearl/api/textures/GpuTextureView
+class com/mojang/blaze3d/textures/GpuSampler com/mojang/renderpearl/api/textures/GpuSampler
+class com/mojang/blaze3d/textures/TextureFormat com/mojang/renderpearl/api/GpuFormat
+class com/mojang/blaze3d/vertex/VertexFormat com/mojang/renderpearl/api/vertex/VertexFormat
+class com/mojang/blaze3d/vertex/VertexFormatElement com/mojang/renderpearl/api/vertex/VertexFormatElement
+field com/mojang/renderpearl/api/GpuFormat RGBA8 RGBA8_UNORM
+field com/mojang/renderpearl/api/GpuFormat RED8 R8_UNORM
+field com/mojang/renderpearl/api/GpuFormat RED8I R8_SINT
+callinst com/mojang/renderpearl/api/commands/CommandEncoder writeToTexture (Lcom/mojang/renderpearl/api/textures/GpuTexture;Ljava/nio/ByteBuffer;Lcom/mojang/blaze3d/platform/NativeImage$Format;IIIIII)V info/mudbourn/mmsuproot/shim/client/LegacyGpu.writeToTexture
+
+# Tuple is gone; the stand-in is the same pair
+class net/minecraft/util/Tuple info/mudbourn/mmsuproot/shim/compat/LegacyTuple
+
+# Fabric's client command manager is ClientCommands now
+class net/fabricmc/fabric/api/client/command/v2/ClientCommandManager net/fabricmc/fabric/api/client/command/v2/ClientCommands
+method net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource getWorld getLevel
+
+# Resource listing takes a Selector now; shim.client.LegacyClient answers the old filter. A resource pack's file lists the same way
+callinst net/minecraft/server/packs/resources/ResourceManager listResourceStacks (Ljava/lang/String;Ljava/util/function/Predicate;)Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyResources.listResourceStacks
+
+# Item handling: a returned item says whether the client predicts it, a command's item stack has no overstack flag, and a drop around an entity
+# is createItemStackToDrop's (26.3's drop is the player's throw, which swings)
+callinst net/minecraft/world/entity/player/Inventory placeItemBackInInventory (Lnet/minecraft/world/item/ItemStack;)V info/mudbourn/mmsuproot/shim/compat/LegacyWorld.placeItemBackInInventory
+callinst net/minecraft/commands/arguments/item/ItemInput createItemStack (IZ)Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.createItemStack
+callinst net/minecraft/world/entity/LivingEntity drop (Lnet/minecraft/world/item/ItemStack;ZZ)Lnet/minecraft/world/entity/item/ItemEntity; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.drop
+
+# A loot condition's time of day tests a clock now, and its range is an IntRangePredicate. The stand-in range goes to the overworld clock
+class net/minecraft/world/level/storage/loot/IntRange info/mudbourn/mmsuproot/shim/compat/LegacyIntRange
+callmove net/minecraft/world/level/storage/loot/predicates/TimeCheck time (Linfo/mudbourn/mmsuproot/shim/compat/LegacyIntRange;)Lnet/minecraft/world/level/storage/loot/predicates/TimeCheck$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot time
+
+# Cauldron interactions: the named interaction map became a dispatcher, and the vanilla tables and their codec moved to CauldronInteractions
+class net/minecraft/core/cauldron/CauldronInteraction$InteractionMap net/minecraft/core/cauldron/CauldronInteraction$Dispatcher
+fieldowner net/minecraft/core/cauldron/CauldronInteraction net/minecraft/core/cauldron/CauldronInteractions
+callmove net/minecraft/core/cauldron/CauldronInteraction newInteractionMap (Ljava/lang/String;)Lnet/minecraft/core/cauldron/CauldronInteraction$Dispatcher; info/mudbourn/mmsuproot/shim/compat/LegacyCauldron newInteractionMap
+callinst net/minecraft/core/cauldron/CauldronInteraction$Dispatcher map ()Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyCauldron.map
+
+# Fabric API's enchantment modify event takes a ResourceSource where 1.21.11's builds took an EnchantmentSource; shim.compat.LegacyEnchantments forwards
+fieldmove net/fabricmc/fabric/api/item/v1/EnchantmentEvents MODIFY info/mudbourn/mmsuproot/shim/compat/LegacyEnchantments MODIFY
+
+# Scorchful's hooks on the health bar and the HUD overlays: same move as Thermoo's and Frostiful's
+mixintarget com/github/thedeathlycow/scorchful/mixin/client/GuiMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+
+# Bonus rolls and the damage fraction took number providers too
+callinst net/minecraft/world/level/storage/loot/LootPool$Builder setBonusRolls (Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot.setBonusRolls
+callmove net/minecraft/world/level/storage/loot/functions/SetItemDamageFunction setDamage (Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/functions/LootItemConditionalFunction$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot setDamage
+
+# A nested loot table entry by key: 26.3 takes a holder of the table
+callmove net/minecraft/world/level/storage/loot/entries/NestedLootTable lootTableReference (Lnet/minecraft/resources/ResourceKey;)Lnet/minecraft/world/level/storage/loot/entries/UniformContainerBase$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot lootTableReference
+
+
+# A pack factory implements openMetadata and openResources now, where 1.21.11 had openPrimary and openFull (one pack each)
+implbridge net/minecraft/server/packs/repository/Pack$ResourcesSupplier openPrimary (Lnet/minecraft/server/packs/PackLocationInfo;)Lnet/minecraft/server/packs/PackResources; openMetadata (Lnet/minecraft/server/packs/PackLocationInfo;)Lnet/minecraft/server/packs/PackMetadataResources;
+implbridge net/minecraft/server/packs/repository/Pack$ResourcesSupplier openFull (Lnet/minecraft/server/packs/PackLocationInfo;Lnet/minecraft/server/packs/repository/Pack$Metadata;)Lnet/minecraft/server/packs/PackResources; openResources (Lnet/minecraft/server/packs/PackLocationInfo;Lnet/minecraft/server/packs/repository/Pack$Metadata;)Ljava/util/stream/Stream; info/mudbourn/mmsuproot/shim/compat/LegacyPacks.single
+
+# The sprite lookup is keyed by a SpriteId now (1.21.11's Material, an atlas and a texture); a Material in 26.3 is something else
+class net/minecraft/client/resources/model/Material net/minecraft/client/resources/model/sprite/SpriteId
+class net/minecraft/client/resources/model/MaterialSet net/minecraft/client/resources/model/sprite/SpriteGetter
+
+# A recipe builds its result from the input alone now
+callinst net/minecraft/world/item/crafting/Recipe assemble (Lnet/minecraft/world/item/crafting/RecipeInput;Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/compat/LegacyRecipes.assemble
+
+# A dimension's infiniburn is a set of blocks now, 1.21.11's tag when the JSON names one
+callinst net/minecraft/world/level/dimension/DimensionType infiniburn ()Lnet/minecraft/tags/TagKey; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.infiniburn

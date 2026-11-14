@@ -296,7 +296,7 @@ public final class Namer {
 	 * {@code field} says whether a bare name with no parenthesis is a field.
 	 */
 	public String rewrite(String s, String mixinClass, boolean field) {
-		if (!(s.contains("net/minecraft") || s.contains("net.minecraft") || s.contains("com/mojang/blaze3d") || s.contains("com.mojang.blaze3d") || s.contains("method_") || s.contains("field_")
+		if (!(s.contains("net/minecraft") || s.contains("net.minecraft") || s.contains("com/mojang/blaze3d") || s.contains("com.mojang.blaze3d") || s.contains("method_") || s.contains("field_") || s.contains("comp_")
 				|| mixinClass != null && (renames.hasMethod(bareName(s)) || renames.hasField(bareName(s))))) return s;
 
 		if (mixinClass != null) {

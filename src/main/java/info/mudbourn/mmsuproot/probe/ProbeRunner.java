@@ -12,6 +12,11 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,10 +29,12 @@ import org.slf4j.LoggerFactory;
  */
 public final class ProbeRunner implements ClientModInitializer {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot-probe");
+	/** The save the uprootProbe task quick-plays into (build.gradle). */
+	private static final String TEST_WORLD = "uproot_check";
 	/** Ticks the player is in the world before the first probe, so chunks, entities and the first frames are settled. */
 	private static final int SETTLE_TICKS = 100;
 	/** The whole run gives up after this long, whatever the probes are doing. */
-	private static final long WALL_LIMIT_MS = 4 * 60_000L;
+	private static final long WALL_LIMIT_MS = 12 * 60_000L;
 
 	private final List<Probe> probes = new ArrayList<>();
 	private final Probe.Ctx[] ctx = {null};
@@ -38,10 +45,12 @@ public final class ProbeRunner implements ClientModInitializer {
 	private int pass, fail, skip;
 	private long startedAt;
 	private boolean finished;
+	private boolean createdWorld;
 
 	@Override
 	public void onInitializeClient() {
 		if (System.getProperty("uproot.probe") == null) return;
+		BadPacketsProbes.register();
 		file = FabricLoader.getInstance().getGameDir().resolve("mms-uproot").resolve("probe.txt");
 		try {
 			Files.createDirectories(file.getParent());
@@ -60,12 +69,36 @@ public final class ProbeRunner implements ClientModInitializer {
 		probes.addAll(CcaProbes.all());
 		probes.addAll(FrostifulClientProbes.all());
 		probes.addAll(MaitProbes.all());
+		probes.addAll(BwgProbes.all());
+		probes.addAll(BwgClientProbes.all());
+		probes.addAll(ScorchfulProbes.all());
+		probes.addAll(BasicWeaponsProbes.all());
+		probes.addAll(FurnishProbes.all());
+		probes.addAll(CorgiLibProbes.all());
+		probes.addAll(CrystalnestProbes.all());
+		probes.addAll(BadPacketsProbes.all());
+		probes.addAll(CrawlProbes.all());
 		probes.addAll(DeadHookProbes.all());
+		// -Duproot.probe.only=bwg. runs just the probes whose name starts so (for working on one mod)
+		String only = System.getProperty("uproot.probe.only");
+		if (only != null) probes.removeIf(p -> !p.name().startsWith(only));
 		append("PROBE PLAN " + probes.size());
 		ClientTickEvents.END_CLIENT_TICK.register(this::tick);
 	}
 
+	/** Creates the test world (a fresh one, with a fixed seed) when the save the quick play option names does not exist. */
+	private void createWorldIfMissing(Minecraft mc) {
+		if (createdWorld || mc.level != null || mc.gui.screen() == null || mc.gui.overlay() != null) return;
+		if (Files.exists(mc.getLevelSource().getBaseDir().resolve(TEST_WORLD))) return;
+		createdWorld = true;
+		LOGGER.info("creating the test world {}", TEST_WORLD);
+		LevelSettings settings = new LevelSettings(TEST_WORLD, GameType.SURVIVAL, LevelSettings.DifficultySettings.DEFAULT, true, WorldDataConfiguration.DEFAULT);
+		mc.createWorldOpenFlows().createFreshLevel(TEST_WORLD, settings, WorldOptions.defaultWithRandomSeed().withSeed(java.util.OptionalLong.of(4242L)),
+			WorldPresets::createNormalWorldDimensions, mc.gui.screen());
+	}
+
 	private void tick(Minecraft mc) {
+		createWorldIfMissing(mc);
 		if (finished || mc.level == null || mc.player == null || mc.getSingleplayerServer() == null) return;
 		// an unfocused window would open the pause menu over the probes
 		mc.options.pauseOnLostFocus = false;

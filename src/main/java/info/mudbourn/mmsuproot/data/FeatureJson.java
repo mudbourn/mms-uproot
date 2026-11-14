@@ -97,7 +97,7 @@ public final class FeatureJson {
 					alreadyConditions.add(e.getKey());
 					stats.count("advancement conditions");
 					List<Object> terms = new ArrayList<>();
-					for (Object o : list) terms.add(lootCondition((Map<String, Object>) o));
+					for (Object o : list) terms.add(condition((Map<String, Object>) o));
 					if (terms.size() == 1) e.setValue(terms.get(0));
 					else {
 						Map<String, Object> all = new LinkedHashMap<>();
@@ -167,6 +167,22 @@ public final class FeatureJson {
 		return out;
 	}
 
+	/** The tag list of a damage predicate: 26.3 names each tag with a leading {@code #}. */
+	private static Object damageTags(Object tags) {
+		if (!(tags instanceof List<?> list)) return tags;
+		List<Object> out = new ArrayList<>();
+		for (Object o : list) {
+			if (o instanceof Map<?, ?> m && m.get("id") instanceof String id && !id.startsWith("#")) {
+				Map<Object, Object> tag = new LinkedHashMap<>(m);
+				tag.put("id", "#" + id);
+				out.add(tag);
+			} else {
+				out.add(o);
+			}
+		}
+		return out;
+	}
+
 	/** A damage predicate: its entity fields are plain entity predicates, here and inside {@code type}. */
 	@SuppressWarnings("unchecked")
 	private static Map<String, Object> damagePredicate(Map<String, Object> in, Stats stats) {
@@ -176,6 +192,8 @@ public final class FeatureJson {
 			if (DAMAGE_ENTITIES.contains(e.getKey()) && v instanceof Map<?, ?> m) {
 				stats.count("advancement entity predicates");
 				v = entityPredicate((Map<String, Object>) m);
+			} else if (e.getKey().equals("tags")) {
+				v = damageTags(v);
 			} else if (e.getKey().equals("type") && v instanceof Map<?, ?> m) {
 				v = damagePredicate((Map<String, Object>) m, stats);
 			}
@@ -201,9 +219,65 @@ public final class FeatureJson {
 			Object v = e.getValue();
 			if (e.getKey().equals("requirements") && v instanceof Map<?, ?> m && m.containsKey("condition")) {
 				stats.count("enchantment conditions");
-				v = lootCondition((Map<String, Object>) m);
+				v = condition((Map<String, Object>) m);
+			} else if (e.getKey().equals("requirements") && keyed(v, "condition")) {
+				stats.count("enchantment conditions");
+				v = conditionList((List<?>) v);
 			} else {
 				v = enchantment(v, stats);
+			}
+			out.put(e.getKey(), v);
+		}
+		return out;
+	}
+
+	/** A loot condition: a reference to a named predicate ({@code minecraft:reference}) is that predicate's id in 26.3; any other is converted. */
+	private static Object condition(Map<String, Object> in) {
+		if ("minecraft:reference".equals(in.get("condition")) && in.get("name") instanceof String name) return name;
+		return lootCondition(in);
+	}
+
+	/** Recipe fields that hold one ingredient, or a list of them (the keys of a shaped recipe are handled apart). */
+	private static final List<String> RECIPE_INGREDIENTS = List.of("ingredients", "ingredient", "template", "base", "addition", "input", "material");
+
+	/** An ingredient as 26.3 reads it: an item id, a {@code #tag}, or a list of those. The old object form named {@code item} or {@code tag}. */
+	private static Object ingredient(Object in, Stats stats) {
+		if (in instanceof List<?> list) {
+			List<Object> out = new ArrayList<>();
+			for (Object o : list) out.add(ingredient(o, stats));
+			return out;
+		}
+		if (in instanceof Map<?, ?> m && m.get("item") instanceof String item && m.size() == 1) {
+			stats.count("recipe ingredients");
+			return item;
+		}
+		if (in instanceof Map<?, ?> m && m.get("tag") instanceof String tag && m.size() == 1) {
+			stats.count("recipe ingredients");
+			return "#" + tag;
+		}
+		return in;
+	}
+
+	/**
+	 * A recipe whose ingredients are the old objects ({@code {"item": ...}}, {@code {"tag": ...}}) and whose result may name its
+	 * item as {@code item}; 26.3 takes an id string for an ingredient and {@code id} for a result item.
+	 */
+	@SuppressWarnings("unchecked")
+	public static Map<String, Object> recipe(Map<String, Object> in, Stats stats) {
+		Map<String, Object> out = new LinkedHashMap<>();
+		for (Map.Entry<String, Object> e : in.entrySet()) {
+			Object v = e.getValue();
+			if (RECIPE_INGREDIENTS.contains(e.getKey())) {
+				v = ingredient(v, stats);
+			} else if (e.getKey().equals("key") && v instanceof Map<?, ?> keys) {
+				Map<String, Object> converted = new LinkedHashMap<>();
+				((Map<String, Object>) keys).forEach((k, o) -> converted.put(k, ingredient(o, stats)));
+				v = converted;
+			} else if (e.getKey().equals("result") && v instanceof Map<?, ?> result && result.containsKey("item") && !result.containsKey("id")) {
+				stats.count("recipe results");
+				Map<String, Object> converted = new LinkedHashMap<>();
+				((Map<String, Object>) result).forEach((k, o) -> converted.put(k.equals("item") ? "id" : k, o));
+				v = converted;
 			}
 			out.put(e.getKey(), v);
 		}
@@ -220,12 +294,16 @@ public final class FeatureJson {
 			Object v = e.getValue();
 			if (key.equals("predicate") && "minecraft:entity_properties".equals(in.get("condition")) && v instanceof Map<?, ?> p) {
 				v = entityPredicate((Map<String, Object>) p);
+			} else if (key.equals("predicate") && "minecraft:damage_source_properties".equals(in.get("condition")) && v instanceof Map<?, ?> p) {
+				Map<String, Object> damage = new LinkedHashMap<>((Map<String, Object>) p);
+				if (damage.containsKey("tags")) damage.put("tags", damageTags(damage.get("tags")));
+				v = damage;
 			} else if (v instanceof List<?> list && key.equals("terms")) {
 				List<Object> terms = new ArrayList<>();
-				for (Object o : list) terms.add(o instanceof Map<?, ?> m ? lootCondition((Map<String, Object>) m) : o);
+				for (Object o : list) terms.add(o instanceof Map<?, ?> m ? condition((Map<String, Object>) m) : o);
 				v = terms;
 			} else if (key.equals("term") && v instanceof Map<?, ?> m) {
-				v = lootCondition((Map<String, Object>) m);
+				v = condition((Map<String, Object>) m);
 			} else if (blockState) {
 				// block_state_property became match_block: the block is a set of blocks, the properties are the state
 				if (key.equals("type")) v = "minecraft:match_block";
@@ -237,11 +315,16 @@ public final class FeatureJson {
 		return out;
 	}
 
+	/** A predicate file of a data pack: one loot condition. */
+	public static Object predicate(Map<String, Object> root) {
+		return lootCondition(root);
+	}
+
 	/** A list of loot conditions as the one predicate 26.3 reads: several become an {@code all_of}. */
 	@SuppressWarnings("unchecked")
 	private static Object conditionList(List<?> list) {
 		List<Object> terms = new ArrayList<>();
-		for (Object o : list) terms.add(lootCondition((Map<String, Object>) o));
+		for (Object o : list) terms.add(condition((Map<String, Object>) o));
 		if (terms.size() == 1) return terms.get(0);
 		Map<String, Object> all = new LinkedHashMap<>();
 		all.put("type", "minecraft:all_of");
@@ -348,7 +431,7 @@ public final class FeatureJson {
 		if (out.get("condition") instanceof String kind && !kind.startsWith("fabric:") && !out.containsKey("type")) { // fabric: ids are resource conditions, which keep "condition"
 			// a loot condition embedded in a mod's own data keyed its kind "condition"; it is "type" now
 			stats.count("loot conditions");
-			return lootCondition(out);
+			return condition(out);
 		}
 		if (out.get("firstOctave") instanceof Number octave && out.get("amplitudes") instanceof List<?> amplitudes) {
 			stats.count("noise parameters");

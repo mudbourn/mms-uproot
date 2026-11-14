@@ -59,6 +59,13 @@ public final class LegacyWorld {
 		return s == null ? null : s.registryAccess();
 	}
 
+	/** The loot table the running server has under the key. */
+	public static net.minecraft.world.level.storage.loot.LootTable lootTable(ResourceKey<net.minecraft.world.level.storage.loot.LootTable> key) {
+		MinecraftServer s = server;
+		if (s == null) throw new IllegalStateException("no server is running");
+		return s.reloadableRegistries().getLootTable(key);
+	}
+
 	/**
 	 * The registries of the running server, for a mixin handler that was given them by an old call. The game also writes the level data
 	 * once before its server exists (a world being opened); no registries are available then, and an empty set stands in.
@@ -179,6 +186,11 @@ public final class LegacyWorld {
 		return team.getColor().map(c -> ChatFormatting.valueOf(c.name())).orElse(ChatFormatting.RESET);
 	}
 
+	/** {@code ItemInput.createItemStack(count, checkOverstack)}: 26.3 has no flag and always limits the count to the item's stack size. */
+	public static net.minecraft.world.item.ItemStack createItemStack(net.minecraft.commands.arguments.item.ItemInput input, int count, boolean checkOverstack) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+		return input.createItemStack(count);
+	}
+
 	/**
 	 * {@code Inventory.placeItemBackInInventory(stack)}: 26.3 also says whether the client predicts the placement. This always passes
 	 * {@code PREDICTED}, which is right for a remainder handed back from a result slot (vanilla's {@code ResultSlot} does the same); vanilla's
@@ -186,5 +198,14 @@ public final class LegacyWorld {
 	 */
 	public static void placeItemBackInInventory(net.minecraft.world.entity.player.Inventory inventory, net.minecraft.world.item.ItemStack stack) {
 		inventory.placeItemBackInInventory(stack, net.minecraft.util.Prediction.PREDICTED);
+	}
+
+	/**
+	 * {@code DimensionType.infiniburn()}: the tag of blocks that burn forever in the dimension. 26.3 keeps it as a set of blocks, which is
+	 * the tag itself when the dimension's JSON names one; any other set gives a tag that holds nothing.
+	 */
+	public static net.minecraft.tags.TagKey<net.minecraft.world.level.block.Block> infiniburn(net.minecraft.world.level.dimension.DimensionType type) {
+		if (type.infiniburn() instanceof net.minecraft.core.HolderSet.Named<net.minecraft.world.level.block.Block> named) return named.key();
+		return net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK, net.minecraft.resources.Identifier.fromNamespaceAndPath("mms_uproot", "no_infiniburn"));
 	}
 }

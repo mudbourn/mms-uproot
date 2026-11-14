@@ -33,8 +33,8 @@ class com/mojang/blaze3d/pipeline/RenderPipeline com/mojang/renderpearl/api/pipe
 # Renamed, same descriptor
 method net/minecraft/client/renderer/GameRenderer getMainCamera mainCamera 0
 
-# Resource listing takes a Selector now, and opening a link is Blaze3D's job; shim.client.LegacyClient answers both
-callinst net/minecraft/server/packs/resources/ResourceManager listResources (Ljava/lang/String;Ljava/util/function/Predicate;)Ljava/util/Map; info/mudbourn/mmsuproot/shim/client/LegacyClient.listResources
+# Resource listing takes a Selector now (shim.compat.LegacyResources), and opening a link is Blaze3D's job (shim.client.LegacyClient)
+callinst net/minecraft/server/packs/resources/ResourceManager listResources (Ljava/lang/String;Ljava/util/function/Predicate;)Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyResources.listResources
 callinst net/minecraft/util/Util$OS openUri (Ljava/lang/String;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.openUri
 
 # The locator bar is a contextual bar like the others; same constructor and render methods
@@ -114,6 +114,9 @@ callinst com/mojang/renderpearl/api/pipeline/BindGroupLayout$Builder withSampler
 callinst net/minecraft/client/input/KeyEvent key ()I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.key
 callinst net/minecraft/client/input/KeyEvent scancode ()I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.scancode
 ctoradapt net/minecraft/client/input/KeyEvent (III)V (III)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.keyEvent
+# A typed character no longer carries modifiers
+ctoradapt net/minecraft/client/input/CharacterEvent (II)V (I)V info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.characterEvent
+callinst net/minecraft/client/input/CharacterEvent modifiers ()I info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes.characterModifiers
 
 # Polling a key: 26.3 has no GLFW and InputConstants.isKeyDown takes no window; the key is converted to its SDL scancode (see shim.client.LegacyKeyCodes)
 callmove com/mojang/blaze3d/platform/InputConstants isKeyDown (Lcom/mojang/blaze3d/platform/Window;I)Z info/mudbourn/mmsuproot/shim/client/LegacyKeyCodes isKeyDown

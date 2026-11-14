@@ -126,7 +126,8 @@ final class MixinShadows extends ClassNode {
 	/** The declared superclass of the mixin, when the target no longer extends it, becomes the closest class the target does extend. */
 	private void fixSuper(String target) {
 		GameClasses game = namer.game();
-		if (superName == null || superName.equals("java/lang/Object") || !game.has(superName)) return;
+		// a stand-in of Uproot's own for a game class counts as one: it extends what the original extended
+		if (superName == null || superName.equals("java/lang/Object") || !(game.has(superName) || superName.startsWith("info/mudbourn/mmsuproot/"))) return;
 		if (namer.ancestorsOf(target).contains(superName)) return;
 		var above = namer.ancestorsOf(superName);
 		String found = null;

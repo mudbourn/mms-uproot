@@ -71,6 +71,9 @@ public record Probe(String name, int timeoutTicks, Body body) {
 					throw new IllegalStateException(e);
 				}
 			};
+			// a probe that calls serverPlayer() from inside a server task is already on the thread it would wait for
+			// this path skips the 20 second timeout below, so a probe that hangs here blocks the server instead of failing
+			if (server.isSameThread()) return supplier.get();
 			CompletableFuture<T> future = server.submit(supplier);
 			try {
 				return future.get(20, TimeUnit.SECONDS);

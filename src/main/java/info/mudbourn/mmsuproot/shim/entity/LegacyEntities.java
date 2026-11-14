@@ -65,6 +65,14 @@ public final class LegacyEntities {
 		return player.drop(stack, randomly, Prediction.PREDICTED);
 	}
 
+	/** {@code LivingEntity.drop(ItemStack, boolean, boolean)}: drops the stack around the entity without the swing that 26.3's {@code drop} adds. */
+	public static ItemEntity drop(LivingEntity entity, ItemStack stack, boolean dropAround, boolean includeThrower) {
+		if (stack.isEmpty() || entity.level().isClientSide()) return null;
+		ItemEntity dropped = entity.createItemStackToDrop(stack, dropAround, includeThrower);
+		if (dropped != null) entity.level().addFreshEntity(dropped);
+		return dropped;
+	}
+
 	/** The fixed one-per-entity value a mod kept in {@code LivingEntity.attackAnim}; 26.3 keeps the swing state there. */
 	private static final Map<LivingEntity, Float> ATTACK_ANIM = Collections.synchronizedMap(new WeakHashMap<>());
 

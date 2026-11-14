@@ -44,6 +44,17 @@ public final class Renames {
 	public record RetBridge(String owner, String name, String desc, String ret) { }
 	private final List<RetBridge> retBridges = new ArrayList<>();
 
+	/**
+	 * A class under {@code owner} that declares {@code oldName oldDesc} (what 1.21.11 called the abstract method) also gets the 26.3
+	 * method {@code newName newDesc}, which calls it; {@code helperOwner.helperName} (null for none) converts the result.
+	 */
+	public record ImplBridge(String owner, String oldName, String oldDesc, String newName, String newDesc, String helperOwner, String helperName) { }
+	private final List<ImplBridge> implBridges = new ArrayList<>();
+
+	public List<ImplBridge> implBridges() {
+		return implBridges;
+	}
+
 	public List<RetBridge> retBridges() {
 		return retBridges;
 	}
@@ -141,6 +152,11 @@ public final class Renames {
 			case "retbridge" -> {
 				if (p.length != 5) throw new IllegalStateException("Bad retbridge rule: " + line);
 				r.retBridges.add(new RetBridge(p[1], p[2], p[3], p[4]));
+			}
+			case "implbridge" -> {
+				if (p.length != 6 && p.length != 7) throw new IllegalStateException("Bad implbridge rule: " + line);
+				String[] h = p.length == 7 ? helper(p[6], line) : new String[] {null, null};
+				r.implBridges.add(new ImplBridge(p[1], p[2], p[3], p[4], p[5], h[0], h[1]));
 			}
 			case "annotation" -> {
 				if (p.length != 3) throw new IllegalStateException("Bad annotation rule: " + line);

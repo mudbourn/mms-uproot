@@ -15,7 +15,6 @@ import java.util.Set;
 
 import info.mudbourn.mmsuproot.boot.Report;
 import info.mudbourn.mmsuproot.util.Json;
-import net.fabricmc.fabric.api.resource.v1.pack.ModPackResources;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackResources;
@@ -35,11 +34,11 @@ final class ConvertedView {
 	/** Folders whose files may hold block states, the old offset placement or spawn groups. */
 	private static final List<String> GENERIC = List.of("worldgen/placed_feature/", "worldgen/processor_list/", "worldgen/structure/", "worldgen/biome/");
 
-	private final ModPackResources pack;
+	private final PackResources pack;
 	private final Report.Entry report;
 	private volatile Built built;
 
-	ConvertedView(ModPackResources pack, Report.Entry report) {
+	ConvertedView(PackResources pack, Report.Entry report) {
 		this.pack = pack;
 		this.report = report;
 	}
@@ -140,7 +139,7 @@ final class ConvertedView {
 		Set<String> hiddenRecipes = new HashSet<>();
 		List<String> timelines = new ArrayList<>();
 		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
-			for (String folder : List.of("recipe", "timeline", "advancement", "loot_table", "enchantment")) {
+			for (String folder : List.of("recipe", "timeline", "advancement", "loot_table", "enchantment", "predicate")) {
 				pack.listResources(PackType.SERVER_DATA, ns, folder, (id, supplier) -> {
 					if (!id.getPath().endsWith(".json")) return;
 					String key = ns + ":" + id.getPath();
@@ -153,6 +152,12 @@ final class ConvertedView {
 								hidden.add(key);
 								hiddenRecipes.add(ns + ":" + id.getPath().substring("recipe/".length(), id.getPath().length() - ".json".length()));
 								stats.count("recipes of unregistered types left out");
+								return;
+							}
+							Map<String, Object> converted = FeatureJson.recipe(root, stats);
+							if (!converted.equals(root)) {
+								served.put(key, Json.write(converted).getBytes(StandardCharsets.UTF_8));
+								report.dataConvertedFiles.incrementAndGet();
 							}
 							return;
 						}
@@ -172,6 +177,7 @@ final class ConvertedView {
 							case "timeline" -> FeatureJson.timeline(root, stats);
 							case "advancement" -> FeatureJson.advancement(root, stats);
 							case "enchantment" -> FeatureJson.enchantment(root, stats);
+							case "predicate" -> FeatureJson.predicate(root);
 							default -> FeatureJson.lootTable(root, stats);
 						};
 						if (converted == null) {
@@ -192,6 +198,7 @@ final class ConvertedView {
 		}
 		hideOrphans(parents, hidden, served);
 		tagTimelines(timelines, served, added, namespaces, stats);
+		legacyBlockTags(served, added, namespaces, stats);
 
 		// A mod's own data registry reads from a folder named after the registry's namespace (data/<ns>/<registry namespace>/<registry path>).
 		// What it holds may embed vanilla values in their 1.21.11 shapes (block states, state providers), which the generic pass reads by shape.
@@ -317,6 +324,21 @@ final class ConvertedView {
 		tag.put("values", values);
 		served.put(key, Json.write(tag).getBytes(StandardCharsets.UTF_8));
 		added.add(key);
+		namespaces.add("minecraft");
+	}
+
+	/** Block tags 26.3 renamed (old name to new): a tag of a 1.21.11 mod may list the old name, which stays a tag that holds the new one. */
+	private static final Map<String, String> RENAMED_BLOCK_TAGS = Map.of(
+		"snow_layer_can_survive_on", "support_override_snow_layer",
+		"snow_layer_cannot_survive_on", "cannot_support_snow_layer");
+
+	private void legacyBlockTags(Map<String, byte[]> served, Set<String> added, Set<String> namespaces, FeatureJson.Stats stats) {
+		RENAMED_BLOCK_TAGS.forEach((old, now) -> {
+			String key = "minecraft:tags/block/" + old + ".json";
+			served.put(key, Json.write(Map.of("values", List.of("#minecraft:" + now))).getBytes(StandardCharsets.UTF_8));
+			added.add(key);
+			stats.count("renamed block tags kept as aliases");
+		});
 		namespaces.add("minecraft");
 	}
 

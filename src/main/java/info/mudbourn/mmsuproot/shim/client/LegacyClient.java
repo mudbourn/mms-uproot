@@ -3,8 +3,6 @@ package info.mudbourn.mmsuproot.shim.client;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Predicate;
 
 import com.mojang.blaze3d.Blaze3D;
 
@@ -27,8 +25,6 @@ import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.packs.resources.Resource;
-import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.Util;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.ARGB;
@@ -125,11 +121,6 @@ public final class LegacyClient {
 	/** 26.1 and 26.2's {@code Util.OS.openUri(String)}: the game opens a link through {@code Blaze3D} now, and takes a URI. */
 	public static void openUri(Util.OS os, String uri) {
 		Blaze3D.openUri(URI.create(uri));
-	}
-
-	/** 26.1 and 26.2's {@code ResourceManager.listResources(String, Predicate)}: the filter is a {@code Selector} now. */
-	public static Map<Identifier, Resource> listResources(ResourceManager manager, String path, Predicate<Identifier> filter) {
-		return manager.listResources(path, filter::test);
 	}
 
 	/** {@code new LocalPlayer(...)}: 26.3 also takes the item-activation animation the player shows, a fresh one for a player that is only drawn. */

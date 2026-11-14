@@ -6,6 +6,7 @@ import java.util.Map;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 
 /**
@@ -225,6 +226,16 @@ public final class LegacyKeyCodes {
 	public static Object[] keyEvent(int key, int scancode, int modifiers) {
 		int sdl = convert(key);
 		return new Object[] {sdl, layoutKeycode(key, sdl), modifiers};
+	}
+
+	/** {@code new CharacterEvent(codepoint, modifiers)}: 26.3's typed-character event carries no modifiers. */
+	public static Object[] characterEvent(int codepoint, int modifiers) {
+		return new Object[] {codepoint};
+	}
+
+	/** {@code CharacterEvent.modifiers()}: none, as 26.3's typed-character event carries none. */
+	public static int characterModifiers(CharacterEvent event) {
+		return 0;
 	}
 
 	/** {@code GLFW.glfwGetKeyScancode(key)}: the SDL scancode of a GLFW key, which is what 26.3 calls a key code. */

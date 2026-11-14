@@ -287,6 +287,12 @@ final class CallRules extends ClassVisitor {
 				if (up.contains(b.owner()) && declared.contains(b.name() + b.desc()) && !declared.contains(b.name() + wide)) emitRetBridge(b, wide);
 			}
 		}
+		if (!renames.implBridges().isEmpty()) {
+			Set<String> up = namer.ancestorsOf(className);
+			for (Renames.ImplBridge b : renames.implBridges()) {
+				if (up.contains(b.owner()) && declared.contains(b.oldName() + b.oldDesc()) && !declared.contains(b.newName() + b.newDesc())) emitImplBridge(b);
+			}
+		}
 		for (Object[] l : lambdaStubs) emitLambdaStub((String) l[0], (String) l[1], (Handle) l[2], (int) l[3]);
 		for (Object[] s : superStubs) emitSuperStub((String) s[0], (String) s[1], (boolean) s[2], (Renames.Bridge) s[3]);
 		super.visitEnd();
@@ -324,6 +330,27 @@ final class CallRules extends ClassVisitor {
 		mv.visitMaxs(slot + 1, slot);
 		mv.visitEnd();
 		declared.add(b.name() + wide);
+	}
+
+	/** The 26.3 method of an interface whose 1.21.11 abstract method the class implements: the same arguments go to the old one. */
+	private void emitImplBridge(Renames.ImplBridge b) {
+		Type[] args = Type.getArgumentTypes(b.newDesc());
+		MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC, b.newName(), b.newDesc(), null, null);
+		mv.visitCode();
+		mv.visitVarInsn(Opcodes.ALOAD, 0);
+		int slot = 1;
+		for (Type a : args) {
+			mv.visitVarInsn(a.getOpcode(Opcodes.ILOAD), slot);
+			slot += a.getSize();
+		}
+		mv.visitMethodInsn(isInterface ? Opcodes.INVOKEINTERFACE : Opcodes.INVOKEVIRTUAL, className, b.oldName(), b.oldDesc(), isInterface);
+		if (b.helperOwner() != null) {
+			mv.visitMethodInsn(Opcodes.INVOKESTATIC, b.helperOwner(), b.helperName(), "(" + Type.getReturnType(b.oldDesc()).getDescriptor() + ")" + Type.getReturnType(b.newDesc()).getDescriptor(), false);
+		}
+		mv.visitInsn(Type.getReturnType(b.newDesc()).getOpcode(Opcodes.IRETURN));
+		mv.visitMaxs(Math.max(slot, Type.getReturnType(b.newDesc()).getSize()) + 1, slot);
+		mv.visitEnd();
+		declared.add(b.newName() + b.newDesc());
 	}
 
 	/** {@code m(new)} for a class that only has {@code m(old)}: drops the added trailing parameters and calls {@code m(old)}. */

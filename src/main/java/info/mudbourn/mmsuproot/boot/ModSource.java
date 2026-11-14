@@ -33,6 +33,8 @@ final class ModSource {
 	private static final byte[] MARKER = "net/minecraft/class_".getBytes(StandardCharsets.ISO_8859_1);
 	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot");
 	private static final int[] MINECRAFT = {26, 3, 0};
+	/** The data pack format 26.3 reads (version.json, data_major); a pack that stops below it was made for an older game. */
+	private static final int DATA_FORMAT = 121;
 	/**
 	 * Names that exist only before 26.3 (absent from its jar), the left-hand sides of renames-26x.txt that a class file can show
 	 * on its own: the GPU buffer slice and render pipeline moved into renderpearl, the locator bar renderer was renamed, and
@@ -172,6 +174,47 @@ final class ModSource {
 			report.note(mod.getMetadata().getId() + ": could not be scanned for an older 26.x build, so it was not remapped: " + e);
 		}
 		return false;
+	}
+
+	/**
+	 * True for a mod that is only a data pack (no class file, a {@code data} folder) whose {@code pack.mcmeta} stops below the data format
+	 * of 26.3. Its data is in the shapes of an older game, so it gets the data shim; it has no code for Uproot to rewrite.
+	 */
+	static boolean legacyDataPack(ModContainerImpl mod, Report report) {
+		try {
+			boolean hasData = false;
+			int highest = 0;
+			for (Path root : mod.getRootPaths()) {
+				try (Stream<Path> walk = Files.walk(root)) {
+					for (Path p : (Iterable<Path>) walk::iterator) {
+						if (p.getFileName() != null && p.getFileName().toString().endsWith(".class")) return false;
+					}
+				}
+				if (!Files.isDirectory(root.resolve("data"))) continue;
+				hasData = true;
+				Path meta = root.resolve("pack.mcmeta");
+				if (Files.isRegularFile(meta)) highest = Math.max(highest, highestFormat(Json.parseObject(Files.readString(meta))));
+			}
+			// every root is read before the answer, since a mod's roots are not in any order and a later one may hold the classes or the newer pack.mcmeta
+			return hasData && highest < DATA_FORMAT;
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("Could not tell whether {} is a data pack for an older game; not converting it", mod.getMetadata().getId(), e);
+			report.note(mod.getMetadata().getId() + ": could not be scanned as a data pack, so its data was not converted: " + e);
+		}
+		return false;
+	}
+
+	/** The highest data format a pack.mcmeta declares (max_format, supported_formats or pack_format), 0 when it declares none. */
+	private static int highestFormat(Map<String, Object> mcmeta) {
+		if (!(mcmeta.get("pack") instanceof Map<?, ?> pack)) return 0;
+		int highest = 0;
+		for (String key : List.of("max_format", "supported_formats", "pack_format")) {
+			Object value = pack.get(key);
+			if (value instanceof Map<?, ?> range) value = range.get("max_inclusive");
+			if (value instanceof List<?> version && !version.isEmpty()) value = version.get(0);
+			if (value instanceof Number n) highest = Math.max(highest, n.intValue());
+		}
+		return highest;
 	}
 
 	/** Whether any class file of the mod contains every byte string of one entry of {@link #OLDER_26}. Each file is read once. */

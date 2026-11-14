@@ -45,7 +45,7 @@ public abstract class LegacySingleItemRecipe extends SingleItemRecipe {
 	}
 
 	/** The old {@code result()}: a stack. Assembling the template is the public way to one; the remap sends the old calls here. */
-	public static ItemStack legacyResultOf(LegacySingleItemRecipe recipe) {
+	public static ItemStack legacyResultOf(SingleItemRecipe recipe) {
 		return recipe.assemble(new SingleRecipeInput(ItemStack.EMPTY));
 	}
 
