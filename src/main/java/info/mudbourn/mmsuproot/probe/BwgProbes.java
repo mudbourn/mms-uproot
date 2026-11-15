@@ -453,8 +453,9 @@ final class BwgProbes {
 		BlockPos center = platformCentre(c);
 		c.onServer(() -> {
 			platform(c, c.server().overworld(), center, Blocks.GRASS_BLOCK);
-			// a structure needs its chunks loaded (the command refuses otherwise), and a big lake reaches well past 100 blocks: every loaded one
-			if (tick == 1) clearBuildLimit(c.server().overworld(), center, 208);
+			// a structure needs its chunks loaded (the command refuses otherwise), and a big lake reaches well past 100 blocks: every loaded one.
+			// Cleared before each placement, over the chunks loaded now: an earlier structure's trees and peaks, and chunks that loaded since, reach the limit again
+			clearBuildLimit(c.server().overworld(), center, 208);
 			return null;
 		});
 		String out = command(c, "place structure " + ids.get(i) + " ~ ~1 ~");

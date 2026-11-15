@@ -182,6 +182,7 @@ public final class ScanTool {
 	private final Map<String, Set<String>> users = new HashMap<>(); // a mod class to the mod classes that mention it
 	private final Map<String, Set<String>> added = new HashMap<>(); // a game class to the members ("name+desc", "name:desc") a mod's mixin or injected interface gives it
 	private final Map<String, Lossy> lossy = new LinkedHashMap<>();
+	private final List<String[]> typesOnlyCalls = new ArrayList<>(); // {mod, user class, 26.3 owner, "method name desc"} of a call of a member of a typesonly class
 	private final Map<String, String> noops = new HashMap<>(); // "shim owner.name desc" -> what its body does, or "" when it does something
 	private final Map<String, ClassNode> shimClasses = new HashMap<>();
 	private final Map<String, Disabler.Applied> skipRules = new HashMap<>(); // the path and the full id of a skip rule -> the rule
@@ -337,7 +338,17 @@ public final class ScanTool {
 		Renames renames = targets.stream().anyMatch(j -> j.kind() == Kind.LEGACY) ? Renames.load() : null;
 		Renames renames26 = targets.stream().anyMatch(j -> j.kind() == Kind.MODERN) ? Renames.load("/uproot/renames-26x.txt") : null;
 		for (Renames r : new Renames[] {renames, renames26}) {
-			if (r != null) for (String rule : r.callDrops()) lossy("calldrop", rule, "the call is removed and null, 0 or false stands in for its result");
+			if (r == null) continue;
+			for (String rule : r.callDrops()) lossy("calldrop", rule, "the call is removed and null, 0 or false stands in for its result");
+			for (String helper : r.helperOwners()) {
+				if (!helper.startsWith(SHIM)) continue;
+				ClassNode cn = shimClasses.computeIfAbsent(helper, this::readShim);
+				if (cn == null) continue;
+				for (MethodNode m : cn.methods) {
+					String approximate = approximation(m);
+					if (approximate != null) lossy("shim-approx", helper.replace('/', '.') + "." + m.name + m.desc, approximate);
+				}
+			}
 		}
 		for (Disabler.Applied a : Disabler.applied()) {
 			lossy("disable-" + a.kind(), a.describe(), a.reason());
@@ -372,6 +383,10 @@ public final class ScanTool {
 				String name = internal(j.root(), p);
 				try {
 					byte[] mapped = ClassRemap.remap(Files.readAllBytes(p), namer);
+					for (String call : namer.takeTypesOnlyCalls().keySet()) {
+						String[] part = call.split("\t", 2);
+						typesOnlyCalls.add(new String[] {j.id(), name, part[0], "method " + part[1]});
+					}
 					Map<Integer, Integer> before = disableHits();
 					byte[] disabled = Disabler.transform(name, mapped);
 					for (Disabler.Applied a : Disabler.applied()) {
@@ -400,6 +415,11 @@ public final class ScanTool {
 			}
 		}
 		for (Gap g : gaps.values()) hints(g);
+		for (String[] c : typesOnlyCalls) {
+			Gap g = gap(c[2], false);
+			record(c[0], c[1], g, g.members.computeIfAbsent(c[3], k -> new Use()), c[2] + "." + c[3]);
+			g.memberHints.put(c[3], "its class rule in renames.txt is typesonly: a type stands in for the old class, its members do not");
+		}
 
 		Set<String> entrypoints = new HashSet<>();
 		for (Jar j : targets) readMetadata(j, namers.get(j.id()), entrypoints, notes);
@@ -439,7 +459,9 @@ public final class ScanTool {
 				ClassNode cn = shimClasses.computeIfAbsent(c, this::readShim);
 				if (cn == null) return "";
 				for (MethodNode m : cn.methods) {
-					if (m.name.equals(name) && m.desc.equals(desc)) return bodyKind(cn.name, m);
+					if (!m.name.equals(name) || !m.desc.equals(desc)) continue;
+					String approximate = approximation(m);
+					return approximate != null ? APPROX + approximate : bodyKind(cn.name, m);
 				}
 				c = cn.superName;
 			}
@@ -456,6 +478,17 @@ public final class ScanTool {
 		} catch (IOException e) {
 			return null;
 		}
+	}
+
+	private static final String APPROXIMATE = "Linfo/mudbourn/mmsuproot/shim/Approximate;";
+
+	/** What an {@code @Approximate} method gives up, or null. */
+	private static String approximation(MethodNode m) {
+		if (m.invisibleAnnotations == null) return null;
+		for (org.objectweb.asm.tree.AnnotationNode a : m.invisibleAnnotations) {
+			if (a.desc.equals(APPROXIMATE) && a.values != null && a.values.size() >= 2) return String.valueOf(a.values.get(1));
+		}
+		return null;
 	}
 
 	/** An empty body, or one that only returns a constant, a no-argument factory of the JDK, or one of its own arguments. */
@@ -488,11 +521,15 @@ public final class ScanTool {
 		return "";
 	}
 
-	/** Counts a call into a shim method whose body does nothing. */
+	/** Prefix of a {@link #noop} result that comes from an {@code @Approximate} marker, not from the body. */
+	private static final String APPROX = "approximate: ";
+
+	/** Counts a call into a shim method whose body does nothing, or that is marked {@code @Approximate}. */
 	private void shimCall(String mod, String owner, String name, String desc) {
 		String kind = noop(owner, name, desc);
 		if (kind.isEmpty()) return;
-		lossyUse(lossy("shim-noop", owner.replace('/', '.') + "." + name + desc, kind), mod, 1);
+		boolean marked = kind.startsWith(APPROX);
+		lossyUse(lossy(marked ? "shim-approx" : "shim-noop", owner.replace('/', '.') + "." + name + desc, marked ? kind.substring(APPROX.length()) : kind), mod, 1);
 	}
 
 	// ---- categories
@@ -1146,7 +1183,7 @@ public final class ScanTool {
 		md.append("\n## Lossy mappings (not gaps, not counted above)\n\n");
 		md.append("Rules that drop a call or answer it with a stand-in that does nothing, so a mod's behaviour is lost without an error. Each wants a real\n");
 		md.append("mapping or a written reason. Kinds: `calldrop` (a rule of renames.txt removes the call), `shim-noop` (a call lands on a shim method whose compiled body\n");
-		md.append("is empty or only returns a constant or an argument), `disable-stub`, `disable-noop`, `disable-skip` and `disable-mixin` (entries of disable.txt).\n");
+		md.append("is empty or only returns a constant or an argument), `shim-approx` (a call lands on a shim method marked `@Approximate`, with what it gives up), `disable-stub`, `disable-noop`, `disable-skip` and `disable-mixin` (entries of disable.txt).\n");
 		md.append("Sites are call sites for the first two, rule applications for stub and noop, and, for skip and mixin, the strings that name the id and the mixin classes present (a rough count).\n\n");
 		md.append("| kind | rule | sites | mods | what it does or why |\n|---|---|---|---|---|\n");
 		for (Lossy l : lossies) {

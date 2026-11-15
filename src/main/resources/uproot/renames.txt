@@ -60,6 +60,8 @@
 #                                  NEWOWNER.NEWNAME with NEWDESC. All 26.3 names, DESC as the string has it after renaming.
 #                                  For injections whose call moved to another method; pair it with a method rule for the
 #                                  injected method itself, whose handler arguments and locals must still fit.
+# typesonly CLASS                 the class rule for CLASS (1.21.11 name) holds for types and signatures only: the 26.3 class is not the old
+#                                  class's stand-in for calls. The offline scan reports every call of a member of CLASS as a real gap.
 # ctoradapt OWNER OLDDESC NEWDESC HELPER.method
 #                                  a constructor whose arguments change in more ways than ctor can say. Calls
 #                                  (invokespecial, so both new X(...) and super(...)) and X::new references pass the
@@ -907,8 +909,10 @@ callinst net/minecraft/world/item/crafting/Recipe assemble (Lnet/minecraft/world
 callinst net/minecraft/world/level/dimension/DimensionType infiniburn ()Lnet/minecraft/tags/TagKey; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.infiniburn
 
 # --- worldgen gaps ---
-# A world carver is its own settings now, as a feature is: 1.21.11's configured carver (a carver and its settings) is the 26.3 carver
+# A world carver is its own settings now, as a feature is: 1.21.11's configured carver (a carver and its settings) is the 26.3 carver.
+# Valid for type and signature uses only: the old constructor, worldCarver() and carve(...) have no 26.3 answer, so the scan reports a call of them as a real gap
 class net/minecraft/world/level/levelgen/carver/ConfiguredWorldCarver net/minecraft/world/level/levelgen/carver/WorldCarver
+typesonly net/minecraft/world/level/levelgen/carver/ConfiguredWorldCarver
 
 # 1.21.11's data generation helpers that made a patch or a placed feature from a feature and its settings; 26.3 has no ConfiguredFeature, so the
 # shim's feature and settings go through shim.feature.LegacyWorldgen. grassPatch was private in 1.21.11 (a mod reaches it through its access widener)

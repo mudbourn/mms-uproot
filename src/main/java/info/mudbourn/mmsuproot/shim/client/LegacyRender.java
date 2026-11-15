@@ -11,6 +11,7 @@ import com.mojang.renderpearl.api.device.GpuDevice;
 import com.mojang.renderpearl.api.device.GpuSurface;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 
+import info.mudbourn.mmsuproot.shim.Approximate;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
@@ -67,6 +68,7 @@ public final class LegacyRender {
 	 * {@code GpuDevice.createSurface(window)}: 26.3 also takes a supplier that says whether the window is minimised, which
 	 * the surface asks before drawing. A window made through this call is never reported minimised.
 	 */
+	@Approximate("a window minimised at run time is still drawn to")
 	public static GpuSurface createSurface(GpuDevice device, long window) {
 		return device.createSurface(window, () -> false);
 	}

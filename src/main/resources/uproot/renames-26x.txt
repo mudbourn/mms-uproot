@@ -173,7 +173,7 @@ callinst net/minecraft/world/entity/LivingEntity drop (Lnet/minecraft/world/item
 # The glass pane items are a per-colour collection now
 fieldmove net/minecraft/world/item/Items GRAY_STAINED_GLASS_PANE info/mudbourn/mmsuproot/shim/item/LegacyItemFields GRAY_STAINED_GLASS_PANE
 
-# The piercing hit search can report the entity's own box or the margin-widened one; the old call always reported the entity's own
+# The piercing hit search reports where the ray entered the entity's own box, or, when its new last flag is false, where it entered the margin-widened box; the old call always gave the first (the shim passes true)
 callmove net/minecraft/world/entity/projectile/ProjectileUtil getManyEntityHitResult (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;FLnet/minecraft/world/level/ClipContext$Block;Z)Ljava/util/Collection; info/mudbourn/mmsuproot/shim/entity/LegacyProjectiles getManyEntityHitResult
 # --- end gameplay gaps ---
 

@@ -49,6 +49,7 @@ public final class Namer {
 	private final Map<String, Set<String>> ancestorCache = new ConcurrentHashMap<>();
 	private final Map<String, List<String>> headerCache = new ConcurrentHashMap<>();
 	private final Map<String, Integer> drops = new java.util.concurrent.ConcurrentSkipListMap<>();
+	private final Map<String, Integer> typesOnlyCalls = new java.util.concurrent.ConcurrentSkipListMap<>();
 
 	public Namer(NameTable table, Renames renames, GameClasses game, ModClasses mods, Report.Entry report) {
 		this.table = table;
@@ -82,6 +83,16 @@ public final class Namer {
 	/** The calls this namer removed, by {@code calldrop} rule. */
 	public Map<String, Integer> drops() {
 		return drops;
+	}
+
+	/**
+	 * Takes the calls of a {@code typesonly} class (a call whose owner the rename rules only carry as a type) counted since the last
+	 * take, as {@code 26.3 owner, tab, name and 26.3 descriptor} to the number of calls.
+	 */
+	public Map<String, Integer> takeTypesOnlyCalls() {
+		Map<String, Integer> out = new java.util.TreeMap<>(typesOnlyCalls);
+		typesOnlyCalls.keySet().removeAll(out.keySet());
+		return out;
 	}
 
 	/** Adds a line to the mod's report notes, once. */
@@ -156,6 +167,7 @@ public final class Namer {
 		} else if (name.indexOf("method_") > 0) {
 			name = replaceMembers(name);
 		}
+		if (owner != null && desc != null && desc.startsWith("(") && renames.hasTypesOnly() && renames.typesOnly(mojang(owner))) typesOnlyCalls.merge(cls(owner) + '\t' + name + desc(desc), 1, Integer::sum);
 		if (!renames.hasMethod(name)) return name;
 		return renames.method(owner == null ? null : ancestors(owner), name, argCount(desc), desc == null ? null : mojangDesc(desc));
 	}

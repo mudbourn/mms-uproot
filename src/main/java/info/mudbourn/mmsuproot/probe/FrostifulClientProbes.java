@@ -136,16 +136,14 @@ final class FrostifulClientProbes {
 			String name = BuiltInRegistries.BLOCK.getKey(block).toString();
 			int quads = 0;
 			for (BlockState state : block.getStateDefinition().getPossibleStates()) {
-				List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts = new ArrayList<>();
-				models.get(state).collectParts(net.minecraft.util.RandomSource.create(42L), parts);
-				for (var part : parts) {
-					List<net.minecraft.client.resources.model.geometry.BakedQuad> all = new ArrayList<>(part.getQuads(null));
-					for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) all.addAll(part.getQuads(d));
-					for (var quad : all) {
-						quads++;
-						var layer = quad.materialInfo().layer();
-						if (layer.ordinal() < entry.getValue().ordinal() && !wrong.contains(name + " asked " + entry.getValue() + ", got " + layer)) wrong.add(name + " asked " + entry.getValue() + ", got " + layer);
-					}
+				// the layer is raised as the quads are emitted, which is how every renderer reads a model
+				var mesh = net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().mutableMesh();
+				models.get(state).emitQuads(mesh.emitter(), c.mc.level, net.minecraft.core.BlockPos.ZERO, state, net.minecraft.util.RandomSource.create(42L), d -> false);
+				List<net.minecraft.client.renderer.chunk.ChunkSectionLayer> seen = new ArrayList<>();
+				mesh.forEachMutable(quad -> seen.add(quad.chunkLayer()));
+				for (var layer : seen) {
+					quads++;
+					if (layer.ordinal() < entry.getValue().ordinal() && !wrong.contains(name + " asked " + entry.getValue() + ", got " + layer)) wrong.add(name + " asked " + entry.getValue() + ", got " + layer);
 				}
 			}
 			if (quads == 0) throw new Probe.Fail(name + " has no quads");

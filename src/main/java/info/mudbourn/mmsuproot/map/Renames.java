@@ -99,6 +99,7 @@ public final class Renames {
 	private final Map<String, String[]> fieldSets = new HashMap<>(); // "owner.name" (26.3 names) -> {helper owner or null, helper or setter name}
 	private final Set<String> callDrops = new HashSet<>(); // "owner.name desc" (26.3 names)
 	private final Set<String> optionals = new HashSet<>(); // "mixin class.handler"
+	private final Set<String> typesOnly = new HashSet<>(); // 1.21.11 classes whose class rule is valid for type uses only
 	private final Map<String, String> superSwaps = new HashMap<>(); // mod class -> the class it extends in place of its own superclass
 
 	public static Renames load() {
@@ -147,6 +148,7 @@ public final class Renames {
 				r.fieldSets.put(p[1] + "." + p[2], dot < 0 ? new String[] {null, p[3]} : helper(p[3], line));
 			}
 			case "optional" -> r.optionals.add(p[1] + "." + p[2]);
+			case "typesonly" -> r.typesOnly.add(p[1]);
 			case "super" -> r.superSwaps.put(p[1], p[2]);
 			case "calldrop" -> r.callDrops.add(p[1] + "." + p[2] + " " + p[3]);
 			case "retbridge" -> {
@@ -428,6 +430,24 @@ public final class Renames {
 	/** {helper owner or null, helper or setter name} for a write of the field {@code owner.name} (26.3 names), or null. */
 	public String[] fieldSet(String owner, String name) {
 		return fieldSets.get(owner + "." + name);
+	}
+
+	/** The classes the call rules ({@code callinst}, {@code callmove}) send calls to. */
+	public Set<String> helperOwners() {
+		Set<String> out = new java.util.TreeSet<>();
+		for (String[] h : callInsts.values()) out.add(h[0]);
+		for (String[] h : callMoves.values()) out.add(h[0]);
+		return out;
+	}
+
+	/** Whether any class rule holds for types only. */
+	public boolean hasTypesOnly() {
+		return !typesOnly.isEmpty();
+	}
+
+	/** Whether the class rule for the 1.21.11 class {@code mojangName} holds for types and signatures only (see the {@code typesonly} rule). */
+	public boolean typesOnly(String mojangName) {
+		return !typesOnly.isEmpty() && typesOnly.contains(mojangName);
 	}
 
 	/** The class a mod class extends in place of its own superclass, or null (see the {@code super} rule). */
