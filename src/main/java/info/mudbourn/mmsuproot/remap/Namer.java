@@ -48,6 +48,7 @@ public final class Namer {
 	private final Map<String, String> classCache = new ConcurrentHashMap<>();
 	private final Map<String, Set<String>> ancestorCache = new ConcurrentHashMap<>();
 	private final Map<String, List<String>> headerCache = new ConcurrentHashMap<>();
+	private final Map<String, Integer> drops = new java.util.concurrent.ConcurrentSkipListMap<>();
 
 	public Namer(NameTable table, Renames renames, GameClasses game, ModClasses mods, Report.Entry report) {
 		this.table = table;
@@ -71,6 +72,16 @@ public final class Namer {
 			return;
 		}
 		if (!found) report.unresolved.add(owner + "." + name + (field ? ":" : "") + desc + "  <- " + user);
+	}
+
+	/** Counts one call removed by the {@code calldrop} rule {@code owner.name desc}. */
+	public void dropped(String rule) {
+		drops.merge(rule, 1, Integer::sum);
+	}
+
+	/** The calls this namer removed, by {@code calldrop} rule. */
+	public Map<String, Integer> drops() {
+		return drops;
 	}
 
 	/** Adds a line to the mod's report notes, once. */

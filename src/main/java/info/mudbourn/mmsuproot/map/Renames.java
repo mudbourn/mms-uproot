@@ -445,6 +445,11 @@ public final class Renames {
 		return !callDrops.isEmpty() && callDrops.contains(owner + "." + name + " " + desc);
 	}
 
+	/** Every {@code calldrop} rule as {@code owner.name desc} (26.3 names). */
+	public Set<String> callDrops() {
+		return Set.copyOf(callDrops);
+	}
+
 	/** Whether any call drop is named {@code name}, so callers can skip the hierarchy walk. */
 	public boolean hasCallDrop(String name) {
 		for (String key : callDrops) if (key.substring(key.indexOf('.') + 1).startsWith(name + " ")) return true;

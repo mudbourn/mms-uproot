@@ -422,7 +422,7 @@ public final class ClassRemap {
 		private Object bridged(Object arg) {
 			if (arg instanceof Handle s && s.getTag() == Opcodes.H_INVOKESTATIC) { // Foo::staticCall with a callmove rule
 				String[] move = callMove(s.getOwner(), s.getName(), s.getDesc());
-				return move == null ? arg : new Handle(Opcodes.H_INVOKESTATIC, move[0], move[1], move.length > 2 ? move[2] : s.getDesc(), false);
+				return move == null ? arg : new Handle(Opcodes.H_INVOKESTATIC, move[0], move[1], move.length > 2 ? move[2] : s.getDesc(), namer.game().isInterface(move[0]));
 			}
 			if (!(arg instanceof Handle h) || h.getTag() != Opcodes.H_NEWINVOKESPECIAL || !h.getName().equals("<init>")) return arg;
 			Renames.Ctor c = namer.renames().ctor(h.getOwner(), h.getDesc());
@@ -607,7 +607,7 @@ public final class ClassRemap {
 					}
 					String[] move = opcode == Opcodes.INVOKESTATIC ? callMove(owner, methodName, methodDesc) : null;
 					if (move != null) {
-						super.visitMethodInsn(opcode, move[0], move[1], move.length > 2 ? move[2] : methodDesc, false);
+						super.visitMethodInsn(opcode, move[0], move[1], move.length > 2 ? move[2] : methodDesc, namer.game().isInterface(move[0]));
 						return;
 					}
 					Renames.Ctor c = opcode == Opcodes.INVOKESPECIAL && methodName.equals("<init>") ? namer.renames().ctor(owner, methodDesc) : null;

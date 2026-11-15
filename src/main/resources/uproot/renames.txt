@@ -190,6 +190,11 @@ class dev/corgitaco/ohthetreesyoullgrow/world/level/levelgen/feature/configurati
 
 field net/minecraft/core/registries/Registries CONFIGURED_FEATURE FEATURE
 field net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider CODEC DIRECT_CODEC
+# BlockStateProvider.simple(Block|BlockState) is BlockStateProvider.of now, an interface static (a static interface method is not inherited by SimpleStateProvider, so both old owners are named)
+callmove net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider simple (Lnet/minecraft/world/level/block/Block;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
+callmove net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider simple (Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
+callmove net/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider simple (Lnet/minecraft/world/level/block/Block;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
+callmove net/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider simple (Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
 field dev/corgitaco/ohthetreesyoullgrow/world/level/levelgen/feature/TYGFeatures TREE_FROM_NBT_V1 TREE_FROM_NBT_V2
 fieldowner net/minecraft/util/valueproviders/IntProvider net/minecraft/util/valueproviders/IntProviders
 fieldowner net/minecraft/util/valueproviders/FloatProvider net/minecraft/util/valueproviders/FloatProviders
@@ -332,6 +337,8 @@ class net/minecraft/world/entity/ai/goal/TryFindWaterGoal net/minecraft/world/en
 method net/minecraft/data/BlockFamily$Builder dontGenerateRecipe dontGenerateCraftingRecipe 0
 method net/minecraft/server/level/ServerLevel getStructureManager structureManager 0
 field net/minecraft/tags/BlockTags MUSHROOM_GROW_BLOCK OVERRIDES_MUSHROOM_LIGHT_REQUIREMENT
+# 1.21.11's DIRT also held grass, podzol, mycelium, mud and moss; in 26.3 those sit in SUBSTRATE_OVERWORLD, which is exactly the old set
+field net/minecraft/tags/BlockTags DIRT SUBSTRATE_OVERWORLD
 field net/minecraft/world/level/pathfinder/PathType DANGER_FIRE FIRE_IN_NEIGHBOR
 field net/minecraft/world/level/pathfinder/PathType DAMAGE_FIRE FIRE
 field net/minecraft/world/level/pathfinder/PathType DANGER_OTHER DAMAGING_IN_NEIGHBOR
@@ -427,8 +434,8 @@ callinst net/minecraft/ChatFormatting getColor ()Ljava/lang/Integer; info/mudbou
 # Breaking a block hands the server level and player over; a block that reacts to being broken by a player overrides the old shape
 bridge net/minecraft/world/level/block/Block playerDestroy (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/item/ItemStack;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/item/ItemStack;)V
 
-# Client side. Fabric's layer table is gone and 26.3 takes the chunk layer from the sprite, so the stand-in ignores the call; the
-# cutout-mipped layer folded into cutout. Block colours became tint sources (see shim/client).
+# Client side. Fabric's layer table is gone and 26.3 bakes the chunk layer into each quad of a model, so the stand-in wraps the baked
+# model of every block a mod lists and gives its quads the listed layer; the cutout-mipped layer folded into cutout. Block colours became tint sources (see shim/client).
 class net/fabricmc/fabric/api/client/rendering/v1/BlockRenderLayerMap info/mudbourn/mmsuproot/shim/client/BlockRenderLayerMap
 class net/fabricmc/fabric/api/client/rendering/v1/ColorProviderRegistry info/mudbourn/mmsuproot/shim/client/ColorProviderRegistry
 class net/minecraft/client/color/block/BlockColor info/mudbourn/mmsuproot/shim/client/BlockColor
@@ -898,3 +905,59 @@ callinst net/minecraft/world/item/crafting/Recipe assemble (Lnet/minecraft/world
 
 # A dimension's infiniburn is a set of blocks now, 1.21.11's tag when the JSON names one
 callinst net/minecraft/world/level/dimension/DimensionType infiniburn ()Lnet/minecraft/tags/TagKey; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.infiniburn
+
+# --- worldgen gaps ---
+# A world carver is its own settings now, as a feature is: 1.21.11's configured carver (a carver and its settings) is the 26.3 carver
+class net/minecraft/world/level/levelgen/carver/ConfiguredWorldCarver net/minecraft/world/level/levelgen/carver/WorldCarver
+
+# 1.21.11's data generation helpers that made a patch or a placed feature from a feature and its settings; 26.3 has no ConfiguredFeature, so the
+# shim's feature and settings go through shim.feature.LegacyWorldgen. grassPatch was private in 1.21.11 (a mod reaches it through its access widener)
+callmove net/minecraft/data/worldgen/features/FeatureUtils simplePatchConfiguration (Linfo/mudbourn/mmsuproot/shim/feature/LegacyFeature;Linfo/mudbourn/mmsuproot/shim/feature/FeatureConfiguration;)Linfo/mudbourn/mmsuproot/shim/feature/RandomPatchConfiguration; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen simplePatchConfiguration
+callmove net/minecraft/data/worldgen/features/FeatureUtils simplePatchConfiguration (Linfo/mudbourn/mmsuproot/shim/feature/LegacyFeature;Linfo/mudbourn/mmsuproot/shim/feature/FeatureConfiguration;Ljava/util/List;I)Linfo/mudbourn/mmsuproot/shim/feature/RandomPatchConfiguration; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen simplePatchConfiguration
+callmove net/minecraft/data/worldgen/placement/PlacementUtils inlinePlaced (Linfo/mudbourn/mmsuproot/shim/feature/LegacyFeature;Linfo/mudbourn/mmsuproot/shim/feature/FeatureConfiguration;[Lnet/minecraft/world/level/levelgen/placement/PlacementModifier;)Lnet/minecraft/core/Holder; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen inlinePlaced
+callmove net/minecraft/data/worldgen/placement/PlacementUtils onlyWhenEmpty (Linfo/mudbourn/mmsuproot/shim/feature/LegacyFeature;Linfo/mudbourn/mmsuproot/shim/feature/FeatureConfiguration;)Lnet/minecraft/core/Holder; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen onlyWhenEmpty
+callmove net/minecraft/data/worldgen/features/VegetationFeatures grassPatch (Lnet/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider;I)Linfo/mudbourn/mmsuproot/shim/feature/RandomPatchConfiguration; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen grassPatch
+
+# A spawner's count is an int provider and its category is the builder's argument, not the type's (1.21.11 had min and max, and the category beside the weight)
+ctoradapt net/minecraft/world/level/biome/MobSpawnSettings$SpawnerData (Lnet/minecraft/world/entity/EntityType;II)V (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/util/valueproviders/IntProvider;)V info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.spawnerData
+callinst net/minecraft/world/level/biome/MobSpawnSettings$Builder addSpawn (Lnet/minecraft/world/entity/MobCategory;ILnet/minecraft/world/level/biome/MobSpawnSettings$SpawnerData;)Lnet/minecraft/world/level/biome/MobSpawnSettings$Builder; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.addSpawn
+
+# Providers that rules and decorators hold are held through a holder now, and the noise provider takes the made noise
+ctoradapt net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider (JLinfo/mudbourn/mmsuproot/shim/noise/NoiseParameters;F)V (JLnet/minecraft/world/level/levelgen/synth/NormalNoise;F)V info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.noiseBasedStateProvider
+ctoradapt net/minecraft/world/level/levelgen/feature/stateproviders/RuleBasedStateProvider (Lnet/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider;Ljava/util/List;)V (Lnet/minecraft/core/Holder;Ljava/util/List;)V info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.ruleBasedStateProvider
+ctoradapt net/minecraft/world/level/levelgen/feature/stateproviders/RuleBasedStateProvider$Rule (Lnet/minecraft/world/level/levelgen/blockpredicates/BlockPredicate;Lnet/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider;)V (Lnet/minecraft/world/level/levelgen/blockpredicates/BlockPredicate;Lnet/minecraft/core/Holder;)V info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.ruleBasedStateProviderRule
+ctoradapt net/minecraft/world/level/levelgen/feature/treedecorators/AttachedToLogsDecorator (FLnet/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider;Ljava/util/List;)V (FLnet/minecraft/core/Holder;Ljava/util/List;)V info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.attachedToLogsDecorator
+
+# A timeline runs on a clock; the old ones all ran on the overworld's
+callmove net/minecraft/world/timeline/Timeline builder ()Lnet/minecraft/world/timeline/Timeline$Builder; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen timeline
+
+# The snow layer's support tags were renamed (the tag files are aliased in data.ConvertedView)
+field net/minecraft/tags/BlockTags SNOW_LAYER_CANNOT_SURVIVE_ON CANNOT_SUPPORT_SNOW_LAYER
+field net/minecraft/tags/BlockTags SNOW_LAYER_CAN_SURVIVE_ON SUPPORT_OVERRIDE_SNOW_LAYER
+# --- end worldgen gaps ---
+
+# --- gameplay gaps ---
+# The banner and glass pane items are per-colour collections now (Items.BANNER.white()); a stack's strict codec is CODEC checked by validateStrict
+fieldmove net/minecraft/world/item/Items WHITE_BANNER info/mudbourn/mmsuproot/shim/item/LegacyItemFields WHITE_BANNER
+fieldmove net/minecraft/world/item/ItemStack STRICT_CODEC info/mudbourn/mmsuproot/shim/item/LegacyItemFields STRICT_CODEC
+
+# iterateOutwards(pos, x, y, z) is withinBoxByManhattanDistance: the box of x, y and z around the position, ordered by distance up to x + y + z
+callmove net/minecraft/core/BlockPos withinManhattan (Lnet/minecraft/core/BlockPos;III)Ljava/lang/Iterable; net/minecraft/core/BlockPos withinBoxByManhattanDistance
+
+# A trigger takes any item instance now (an ItemStack is one)
+calldesc net/minecraft/advancements/triggers/ItemUsedOnLocationTrigger trigger (Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/item/ItemStack;)V (Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/item/ItemInstance;)V
+
+# Knockback also names its source and size now; a block's landing hook is gone, the bounce is the entity's own (Block.bounceOn, the block's bounce restitution), and zeroing the fall speed is its default
+callinst net/minecraft/world/entity/LivingEntity knockback (DDD)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.knockback
+calldrop net/minecraft/world/level/block/Block updateEntityMovementAfterFallOn (Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;)V
+
+# The dragon fight's saved state is the fight itself now (a SavedData); the old Data record has no class
+class net/minecraft/world/level/dimension/end/EndDragonFight$Data net/minecraft/world/level/dimension/end/EnderDragonFight
+# --- end gameplay gaps ---
+
+# --- client gaps ---
+# 26.3 has no immediate-mode buffer sources; the type stays for mods that take one (see shim.client.LegacyBufferSource)
+class net/minecraft/client/renderer/MultiBufferSource info/mudbourn/mmsuproot/shim/client/LegacyBufferSource
+# A particle's light is its light coordinates
+method net/minecraft/client/particle/Particle getLightColor getLightCoords
+# --- end client gaps ---

@@ -29,7 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** A mod Uproot rewrites: where its classes live and how to rename them. */
-final class ModSource {
+public final class ModSource {
 	private static final byte[] MARKER = "net/minecraft/class_".getBytes(StandardCharsets.ISO_8859_1);
 	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot");
 	private static final int[] MINECRAFT = {26, 3, 0};
@@ -140,7 +140,7 @@ final class ModSource {
 				try (Stream<Path> walk = Files.walk(root)) {
 					for (Path p : (Iterable<Path>) walk::iterator) {
 						if (p.getFileName() == null || !p.getFileName().toString().endsWith(".class")) continue;
-						if (indexOf(Files.readAllBytes(p), MARKER) >= 0) return true;
+						if (mentionsIntermediary(Files.readAllBytes(p))) return true;
 					}
 				}
 			}
@@ -149,6 +149,11 @@ final class ModSource {
 			report.note(meta.getId() + ": could not be scanned for intermediary names, so it was not remapped: " + e);
 		}
 		return false;
+	}
+
+	/** Whether a class file names an intermediary class. */
+	public static boolean mentionsIntermediary(byte[] classFile) {
+		return indexOf(classFile, MARKER) >= 0;
 	}
 
 	/**
@@ -163,17 +168,22 @@ final class ModSource {
 			for (Path root : mod.getRootPaths()) {
 				Path file = root.resolve("fabric.mod.json");
 				if (!Files.isRegularFile(file)) continue;
-				Object depends = Json.parseObject(Files.readString(file)).get("depends");
-				if (!(depends instanceof Map<?, ?> deps) || !deps.containsKey("minecraft")) return false;
-				Object range = deps.get("minecraft");
-				if (!Ranges.admits(range, MINECRAFT)) return Ranges.admits(range, new int[] {26, 1, 0}) || Ranges.admits(range, new int[] {26, 2, 0});
-				return namesPre263(mod);
+				Boolean byRange = olderByRange(Json.parseObject(Files.readString(file)));
+				return byRange != null ? byRange : namesPre263(mod);
 			}
 		} catch (IOException | RuntimeException e) {
 			LOGGER.warn("Could not tell whether {} was built for an older 26.x; not remapping it", mod.getMetadata().getId(), e);
 			report.note(mod.getMetadata().getId() + ": could not be scanned for an older 26.x build, so it was not remapped: " + e);
 		}
 		return false;
+	}
+
+	/** What a {@code fabric.mod.json} says about an older 26.x build: true or false, or null when only the class files can tell (an open range). */
+	public static Boolean olderByRange(Map<String, Object> fmj) {
+		if (!(fmj.get("depends") instanceof Map<?, ?> deps) || !deps.containsKey("minecraft")) return false;
+		Object range = deps.get("minecraft");
+		if (!Ranges.admits(range, MINECRAFT)) return Ranges.admits(range, new int[] {26, 1, 0}) || Ranges.admits(range, new int[] {26, 2, 0});
+		return null;
 	}
 
 	/**
@@ -223,16 +233,21 @@ final class ModSource {
 			try (Stream<Path> walk = Files.walk(root)) {
 				for (Path p : (Iterable<Path>) walk::iterator) {
 					if (p.getFileName() == null || !p.getFileName().toString().endsWith(".class")) continue;
-					byte[] data = Files.readAllBytes(p);
-					for (byte[][] names : OLDER_26) {
-						boolean all = true;
-						for (byte[] name : names) {
-							if (indexOf(data, name) < 0) { all = false; break; }
-						}
-						if (all) return true;
-					}
+					if (namesPre263(Files.readAllBytes(p))) return true;
 				}
 			}
+		}
+		return false;
+	}
+
+	/** Whether a class file contains every byte string of one entry of {@link #OLDER_26}. */
+	public static boolean namesPre263(byte[] data) {
+		for (byte[][] names : OLDER_26) {
+			boolean all = true;
+			for (byte[] name : names) {
+				if (indexOf(data, name) < 0) { all = false; break; }
+			}
+			if (all) return true;
 		}
 		return false;
 	}
@@ -253,16 +268,19 @@ final class ModSource {
 	/** Ids that never get remapped: the platform, Uproot itself and Fabric API in all its module names. */
 	static boolean skip(ModContainerImpl mod) {
 		ModMetadata meta = mod.getMetadata();
+		if (skipId(meta.getId()) || "builtin".equals(meta.getType())) return true;
 		String id = meta.getId();
-		if (id.equals("minecraft") || id.equals("java") || id.equals("fabricloader") || id.equals("mms_uproot")
-				|| id.startsWith("fabric-") || fabricApiIds().contains(id) || "builtin".equals(meta.getType())) {
-			return true;
-		}
 		for (Optional<ModContainer> c = mod.getContainingMod(); c.isPresent(); c = c.get().getContainingMod()) {
 			if (c.get().getMetadata().getId().equals("fabric-api")) return true;
 		}
 		return FabricLoader.getInstance().getModContainer("fabric-api")
 				.map(api -> api.getMetadata().getProvides().stream().anyMatch(prov -> prov.equals(id))).orElse(false);
+	}
+
+	/** Ids that never get remapped, by id alone. */
+	public static boolean skipId(String id) {
+		return id.equals("minecraft") || id.equals("java") || id.equals("fabricloader") || id.equals("mms_uproot")
+				|| id.startsWith("fabric-") || fabricApiIds().contains(id);
 	}
 
 	/** Both columns of the alias list: the old and the new Fabric API module ids. */

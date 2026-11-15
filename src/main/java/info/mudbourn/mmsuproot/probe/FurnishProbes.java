@@ -74,13 +74,19 @@ final class FurnishProbes {
 		return new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false);
 	}
 
+	/** Four blocks over the player, kept inside the world: the test world's spawn can stand at the build limit. */
+	private static BlockPos above(ServerPlayer player) {
+		BlockPos at = player.blockPosition();
+		return at.atY(Math.min(at.getY() + 4, player.level().getMaxY() - 2));
+	}
+
 	/** Using a chair puts the player on a seat entity, which is the mod's own entity type. */
 	private static String chair(Probe.Ctx c) {
 		requireMod();
 		return c.onServer(() -> {
 			ServerPlayer player = c.serverPlayer();
 			var level = player.level();
-			BlockPos pos = player.blockPosition().above(4);
+			BlockPos pos = above(player);
 			BlockState before = level.getBlockState(pos);
 			try {
 				level.setBlockAndUpdate(pos, block("acacia_chair").defaultBlockState());
@@ -104,7 +110,7 @@ final class FurnishProbes {
 		return c.onServer(() -> {
 			ServerPlayer player = c.serverPlayer();
 			var level = player.level();
-			BlockPos pos = player.blockPosition().above(4);
+			BlockPos pos = above(player);
 			BlockState before = level.getBlockState(pos);
 			try {
 				BlockState state = block("acacia_cabinet").defaultBlockState();

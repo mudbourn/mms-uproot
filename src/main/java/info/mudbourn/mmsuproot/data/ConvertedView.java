@@ -31,8 +31,8 @@ final class ConvertedView {
 
 	private static final String OLD_FEATURES = "worldgen/configured_feature/";
 	private static final String NEW_FEATURES = "worldgen/feature/";
-	/** Folders whose files may hold block states, the old offset placement or spawn groups. */
-	private static final List<String> GENERIC = List.of("worldgen/placed_feature/", "worldgen/processor_list/", "worldgen/structure/", "worldgen/biome/");
+	/** Folders whose files may hold block states, the old offset placement, spawn groups or renamed block tags. */
+	private static final List<String> GENERIC = List.of("worldgen/placed_feature/", "worldgen/processor_list/", "worldgen/structure/", "worldgen/biome/", "tags/block/");
 
 	private final PackResources pack;
 	private final Report.Entry report;
@@ -124,6 +124,7 @@ final class ConvertedView {
 		List<Object[]> files = new ArrayList<>();
 		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
 			pack.listResources(PackType.SERVER_DATA, ns, "worldgen", (id, supplier) -> files.add(new Object[] {ns, id.getPath(), supplier}));
+			pack.listResources(PackType.SERVER_DATA, ns, "tags/block", (id, supplier) -> files.add(new Object[] {ns, id.getPath(), supplier}));
 		}
 
 		Set<String> ownRecipes = new HashSet<>();

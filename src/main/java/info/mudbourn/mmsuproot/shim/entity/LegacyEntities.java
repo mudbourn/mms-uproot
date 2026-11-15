@@ -15,6 +15,8 @@ import net.minecraft.core.particles.ItemParticleOption;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.stats.Stats;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Prediction;
 import net.minecraft.util.ProblemReporter;
@@ -70,7 +72,20 @@ public final class LegacyEntities {
 		if (stack.isEmpty() || entity.level().isClientSide()) return null;
 		ItemEntity dropped = entity.createItemStackToDrop(stack, dropAround, includeThrower);
 		if (dropped != null) entity.level().addFreshEntity(dropped);
+		// a server player's own drop counted the stack as dropped
+		if (includeThrower && entity instanceof ServerPlayer player) {
+			ItemStack counted = dropped != null ? dropped.getItem() : ItemStack.EMPTY;
+			if (!counted.isEmpty()) {
+				player.awardStat(Stats.ITEM_DROPPED.get(counted.getItem()), stack.getCount());
+				player.awardStat(Stats.DROP);
+			}
+		}
 		return dropped;
+	}
+
+	/** {@code LivingEntity.knockback(double, double, double)}: 26.3 asks where the push came from and a size for it; a push of no source is a generic one of no damage. */
+	public static void knockback(LivingEntity entity, double strength, double x, double z) {
+		entity.knockback(strength, x, z, entity.damageSources().generic(), 0.0F);
 	}
 
 	/** The fixed one-per-entity value a mod kept in {@code LivingEntity.attackAnim}; 26.3 keeps the swing state there. */

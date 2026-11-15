@@ -27,6 +27,13 @@ public final class FeatureJson {
 			"minecraft:dual_noise_provider", "minecraft:dual_noise",
 			"minecraft:rotated_block_provider", "minecraft:rotated");
 
+	/**
+	 * Block tags whose meaning moved in 26.3 (old id to new id), rewritten wherever converted data names one: {@code #id} in tag files and
+	 * holder sets, and the {@code tag} of a rule test or block predicate. 1.21.11's dirt also held grass, podzol, mycelium, mud and moss;
+	 * 26.3's holds only the dirts, and substrate_overworld is exactly the old set.
+	 */
+	private static final Map<String, String> BLOCK_TAGS = Map.of("minecraft:dirt", "minecraft:substrate_overworld");
+
 	/** Feature types 26.3 still has under the same id with the same fields, only without the {@code config} level. */
 	private static final Set<String> FLAT = Set.of("minecraft:random_selector", "minecraft:simple_random_selector", "minecraft:simple_block",
 			"minecraft:delta_feature", "minecraft:disk", "minecraft:fallen_tree");
@@ -423,6 +430,10 @@ public final class FeatureJson {
 			for (Object o : list) out.add(generic(o, stats));
 			return out;
 		}
+		if (value instanceof String ref && ref.startsWith("#") && BLOCK_TAGS.containsKey(ref.substring(1))) { // a holder set or a tag file entry
+			stats.count("block tags");
+			return "#" + BLOCK_TAGS.get(ref.substring(1));
+		}
 		if (!(value instanceof Map<?, ?>)) return value;
 		Map<String, Object> in = (Map<String, Object>) value;
 		Map<String, Object> out = new LinkedHashMap<>();
@@ -445,6 +456,10 @@ public final class FeatureJson {
 			if (out.containsKey("weight")) spawner.put("weight", out.get("weight"));
 			spawner.put("count", count(min, max));
 			return spawner;
+		}
+		if (out.get("tag") instanceof String tag && BLOCK_TAGS.containsKey(tag)) { // matching_block_tag predicates and tag_match rule tests
+			stats.count("block tags");
+			out.put("tag", BLOCK_TAGS.get(tag));
 		}
 		if (out.get("Name") instanceof String name && Set.of("Name", "Properties").containsAll(out.keySet())) {
 			stats.count("block states");

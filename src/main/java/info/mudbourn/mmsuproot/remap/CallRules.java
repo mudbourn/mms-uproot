@@ -236,6 +236,7 @@ final class CallRules extends ClassVisitor {
 			@Override
 			public void visitMethodInsn(int opcode, String owner, String methodName, String methodDesc, boolean itf) {
 				if (opcode != Opcodes.INVOKESTATIC && !methodName.equals("<init>") && renames.hasCallDrop(methodName) && dropped(owner, methodName, methodDesc)) {
+					namer.dropped(droppedBy(owner, methodName, methodDesc));
 					dropCall(this, methodDesc);
 					return;
 				}
@@ -303,6 +304,13 @@ final class CallRules extends ClassVisitor {
 		if (renames.callDrop(owner, name, desc)) return true;
 		for (String ancestor : namer.ancestorsOf(owner)) if (renames.callDrop(ancestor, name, desc)) return true;
 		return false;
+	}
+
+	/** The {@code calldrop} rule, as {@code owner.name desc}, that covers a call {@link #dropped} found. */
+	private String droppedBy(String owner, String name, String desc) {
+		if (renames.callDrop(owner, name, desc)) return owner + "." + name + " " + desc;
+		for (String ancestor : namer.ancestorsOf(owner)) if (renames.callDrop(ancestor, name, desc)) return ancestor + "." + name + " " + desc;
+		return owner + "." + name + " " + desc;
 	}
 
 	/** Replaces an instance call: its arguments and receiver are popped and a null, zero or false stands in for the result. */

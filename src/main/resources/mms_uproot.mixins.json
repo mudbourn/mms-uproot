@@ -25,6 +25,7 @@
 		"LegacyTextInputCloseMixin",
 		"LegacyTextInputMixin",
 		"MinecraftScreenMixin",
+		"PictureInPictureRendererMixin",
 		"ScreenBackgroundMixin",
 		"ShaderManagerMixin"
 	],

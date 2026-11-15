@@ -157,3 +157,45 @@ callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$BooleanRuleBuilder 
 callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$IntegerRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$IntegerRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
 callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$DoubleRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$DoubleRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
 callinst net/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$EnumRuleBuilder category (Linfo/mudbourn/mmsuproot/shim/compat/CustomGameRuleCategory;)Lnet/fabricmc/fabric/api/gamerule/v1/GameRuleBuilder$EnumRuleBuilder; info/mudbourn/mmsuproot/shim/compat/LegacyGameRules.category
+
+# --- worldgen gaps ---
+# The ore feature is its own settings in 26.3, as every feature is: 26.2's ore settings are the ore feature, and a target and its state are a block replacement
+class net/minecraft/world/level/levelgen/feature/configurations/OreConfiguration net/minecraft/world/level/levelgen/feature/OreFeature
+class net/minecraft/world/level/levelgen/feature/configurations/OreConfiguration$TargetBlockState net/minecraft/world/level/levelgen/feature/BlockReplacement
+fieldget net/minecraft/world/level/levelgen/feature/BlockReplacement state state
+fieldget net/minecraft/world/level/levelgen/feature/BlockReplacement target target
+# --- end worldgen gaps ---
+
+# --- gameplay gaps ---
+# A drop around a living entity is createItemStackToDrop's (26.3's drop is the player's throw, which swings)
+callinst net/minecraft/world/entity/LivingEntity drop (Lnet/minecraft/world/item/ItemStack;ZZ)Lnet/minecraft/world/entity/item/ItemEntity; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.drop
+
+# The glass pane items are a per-colour collection now
+fieldmove net/minecraft/world/item/Items GRAY_STAINED_GLASS_PANE info/mudbourn/mmsuproot/shim/item/LegacyItemFields GRAY_STAINED_GLASS_PANE
+
+# The piercing hit search can report the entity's own box or the margin-widened one; the old call always reported the entity's own
+callmove net/minecraft/world/entity/projectile/ProjectileUtil getManyEntityHitResult (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;FLnet/minecraft/world/level/ClipContext$Block;Z)Ljava/util/Collection; info/mudbourn/mmsuproot/shim/entity/LegacyProjectiles getManyEntityHitResult
+# --- end gameplay gaps ---
+
+# --- client gaps ---
+# The quaternion overload of PoseStack.mulPose is rotate in 26.3 (mulPose now takes matrices and a Transformation)
+method com/mojang/blaze3d/vertex/PoseStack mulPose rotate (Lorg/joml/Quaternionfc;)V
+# Word wrap returned nothing; 26.3 returns the height. The tooltip call takes one more flag (see shim.client.LegacyRender)
+callinst net/minecraft/client/gui/GuiGraphicsExtractor textWithWordWrap (Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/FormattedText;IIIIZ)V info/mudbourn/mmsuproot/shim/client/LegacyRender.textWithWordWrap
+callinst net/minecraft/client/gui/GuiGraphicsExtractor tooltip (Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipPositioner;Lnet/minecraft/resources/Identifier;)V info/mudbourn/mmsuproot/shim/client/LegacyRender.tooltip
+# DynamicUniformStorage is DynamicGpuDataStorageMapped in 26.3, with the buffer usage as a third argument
+class net/minecraft/client/renderer/DynamicUniformStorage info/mudbourn/mmsuproot/shim/client/LegacyUniformStorage
+class net/minecraft/client/renderer/DynamicUniformStorage$DynamicUniform info/mudbourn/mmsuproot/shim/client/LegacyUniformStorage$DynamicUniform
+# A texture target names its depth format (null for none) where 26.2 had a flag
+ctoradapt com/mojang/blaze3d/pipeline/TextureTarget (Ljava/lang/String;IIZLcom/mojang/renderpearl/api/GpuFormat;)V (Ljava/lang/String;IILcom/mojang/renderpearl/api/GpuFormat;Lcom/mojang/renderpearl/api/GpuFormat;)V info/mudbourn/mmsuproot/shim/client/LegacyRender.textureTarget
+# The picture-in-picture output targets are fields of LegacyRender, set by PictureInPictureRendererMixin
+fieldmove com/mojang/blaze3d/systems/RenderSystem outputColorTextureOverride info/mudbourn/mmsuproot/shim/client/LegacyRender outputColorTextureOverride
+fieldmove com/mojang/blaze3d/systems/RenderSystem outputDepthTextureOverride info/mudbourn/mmsuproot/shim/client/LegacyRender outputDepthTextureOverride
+# The window no longer knows its backend; the surface of a device takes a minimised check
+callinst com/mojang/blaze3d/platform/Window backend ()Lcom/mojang/renderpearl/api/device/GpuBackend; info/mudbourn/mmsuproot/shim/client/LegacyRender.backend
+callinst com/mojang/renderpearl/api/device/GpuDevice createSurface (J)Lcom/mojang/renderpearl/api/device/GpuSurface; info/mudbourn/mmsuproot/shim/client/LegacyRender.createSurface
+# Binding a texture to a render pass is setting a uniform, same arguments
+method com/mojang/renderpearl/api/commands/RenderPass bindTexture setUniform 3
+# 26.3's texture manager no longer holds the empty identifier
+fieldmove net/minecraft/client/renderer/texture/TextureManager INTENTIONAL_MISSING_TEXTURE info/mudbourn/mmsuproot/shim/client/LegacyRender INTENTIONAL_MISSING_TEXTURE
+# --- end client gaps ---

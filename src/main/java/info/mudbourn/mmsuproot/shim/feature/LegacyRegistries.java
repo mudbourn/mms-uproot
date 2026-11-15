@@ -70,7 +70,7 @@ public final class LegacyRegistries {
 
 	/** The old settings sat under {@code config}, so the codec reads that field and wraps what it finds. */
 	@SuppressWarnings({"unchecked", "rawtypes"})
-	private static MapCodec<LegacyConfiguredFeature<?>> adapter(LegacyFeature<?> feature) {
+	static MapCodec<LegacyConfiguredFeature<?>> adapter(LegacyFeature<?> feature) {
 		LegacyFeature raw = feature;
 		MapCodec config = raw.configCodec() == NoneFeatureConfiguration.CODEC
 				? MapCodec.unit(NoneFeatureConfiguration.INSTANCE)

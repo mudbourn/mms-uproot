@@ -67,6 +67,17 @@ tasks.register('uprootOverrides', JavaExec) {
 	onlyIf { mods.isDirectory() }
 }
 
+// Offline gap scan: lists what the mods in run/mods (and any jar or folder in -PscanMods, comma separated) still reference that 26.3 lacks.
+tasks.register('uprootScan', JavaExec) {
+	group = 'uproot'
+	description = 'Writes build/uproot-scan/gaps.md and gaps.json, the references the target mods make that 26.3 lacks, without launching the game'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'info.mudbourn.mmsuproot.tool.ScanTool'
+	maxHeapSize = '3g'
+	def extra = providers.gradleProperty('scanMods').getOrElse('').split(',').collect { it.trim() }.findAll { !it.isEmpty() }
+	args = ['--out', file('build/uproot-scan').path, '--cache', file('run/mms-uproot/cache').path, file('run/mods').path] + extra
+}
+
 tasks.matching { it.name == 'runClient' }.configureEach {
 	dependsOn 'uprootOverrides'
 }
@@ -75,6 +86,11 @@ tasks.matching { it.name == 'runClient' }.configureEach {
 def probeFile = file('run/mms-uproot/probe.txt')
 tasks.matching { it.name == 'runUprootProbe' }.configureEach {
 	dependsOn 'uprootOverrides'
+	// Keep the probe client from taking focus: SDL reads these hints from the environment. A background app gets no
+	// Dock icon and is never activated, so the window opens behind whatever the user is working in.
+	environment 'SDL_WINDOW_ACTIVATE_WHEN_SHOWN', '0'
+	environment 'SDL_WINDOW_ACTIVATE_WHEN_RAISED', '0'
+	environment 'SDL_MAC_BACKGROUND_APP', '1'
 	timeout = java.time.Duration.ofMinutes(15)
 	doFirst { probeFile.delete() }
 }

@@ -43,6 +43,8 @@ final class FrostifulClientProbes {
 			Probe.once("frostiful.client.entity-render-path", FrostifulClientProbes::entities),
 			Probe.once("frostiful.client.ice-skate-layer", FrostifulClientProbes::skateLayer),
 			Probe.once("frostiful.client.block-models", FrostifulClientProbes::blockModels),
+			Probe.once("layers.block-render-layer-map", FrostifulClientProbes::cutoutLayers),
+			Probe.steps("layers.icicle-pixels", 300, FrostifulClientProbes::cutoutPixels),
 			Probe.steps("frostiful.client.cold-hud", 400, FrostifulClientProbes::coldHud),
 			Probe.steps("frostiful.client.shiver-view-shake", 400, FrostifulClientProbes::shiverShake),
 			Probe.steps("frostiful.client.screenshots", 700, FrostifulClientProbes::screenshots));
@@ -115,6 +117,163 @@ final class FrostifulClientProbes {
 		Block icicle = BuiltInRegistries.BLOCK.getValue(Identifier.fromNamespaceAndPath(NAMESPACE, "icicle"));
 		if (icicle == null || icicle == net.minecraft.world.level.block.Blocks.AIR) throw new Probe.Fail("frostiful:icicle is not registered");
 		return blocks + " blocks, " + states + " states resolve to a model other than the missing one (frostiful:icicle has " + icicle.getStateDefinition().getPossibleStates().size() + ")";
+	}
+
+	/**
+	 * Every block a mod gave to {@code BlockRenderLayerMap.putBlock} bakes only quads on the layer it asked for or a later one (a quad
+	 * whose sprite has soft pixels stays translucent under a cutout request).
+	 */
+	@SuppressWarnings("unchecked")
+	private static String cutoutLayers(Probe.Ctx c) throws ReflectiveOperationException {
+		Field table = Class.forName("info.mudbourn.mmsuproot.shim.client.BlockRenderLayerMap").getDeclaredField("LAYERS");
+		table.setAccessible(true);
+		var layers = (java.util.Map<Block, net.minecraft.client.renderer.chunk.ChunkSectionLayer>) table.get(null);
+		if (layers.isEmpty()) throw new Probe.Skip("no mod registered a block layer");
+		BlockStateModelSet models = c.mc.getModelManager().getBlockStateModelSet();
+		List<String> wrong = new ArrayList<>();
+		for (var entry : layers.entrySet()) {
+			Block block = entry.getKey();
+			String name = BuiltInRegistries.BLOCK.getKey(block).toString();
+			int quads = 0;
+			for (BlockState state : block.getStateDefinition().getPossibleStates()) {
+				List<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart> parts = new ArrayList<>();
+				models.get(state).collectParts(net.minecraft.util.RandomSource.create(42L), parts);
+				for (var part : parts) {
+					List<net.minecraft.client.resources.model.geometry.BakedQuad> all = new ArrayList<>(part.getQuads(null));
+					for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) all.addAll(part.getQuads(d));
+					for (var quad : all) {
+						quads++;
+						var layer = quad.materialInfo().layer();
+						if (layer.ordinal() < entry.getValue().ordinal() && !wrong.contains(name + " asked " + entry.getValue() + ", got " + layer)) wrong.add(name + " asked " + entry.getValue() + ", got " + layer);
+					}
+				}
+			}
+			if (quads == 0) throw new Probe.Fail(name + " has no quads");
+		}
+		if (!wrong.isEmpty()) throw new Probe.Fail(wrong.size() + " layer mismatches: " + wrong);
+		long translucent = layers.values().stream().filter(l -> l == net.minecraft.client.renderer.chunk.ChunkSectionLayer.TRANSLUCENT).count();
+		return layers.size() + " blocks (" + translucent + " translucent, " + (layers.size() - translucent) + " cutout) bake only on the layer asked for or a later one";
+	}
+
+	/**
+	 * A tip icicle stands in front of a red wall and the framebuffer is read back: the sprite is mostly transparent, so the blue of the
+	 * icicle must fill little of its own bounding box (a quad on the solid layer would fill all of it with blue), and red must show
+	 * through inside that box. Also saves a scene with every icicle thickness and two sun lichens for a person to look at.
+	 */
+	private static String cutoutPixels(Probe.Ctx c, int tick) throws IOException {
+		requireMod();
+		Minecraft mc = c.mc;
+		Path dir = FabricLoader.getInstance().getGameDir().resolve("mms-uproot").resolve("screenshots");
+		if (tick == 1) {
+			Files.createDirectories(dir);
+			c.state.put("camera", mc.options.getCameraType());
+			mc.options.pauseOnLostFocus = false;
+			mc.options.setCameraType(CameraType.FIRST_PERSON);
+			var p = mc.player.position();
+			c.state.put("home", p.x + " " + p.y + " " + p.z);
+			run(c, "gamemode creative @p");
+			run(c, "time set noon");
+			run(c, "weather clear");
+			run(c, "gamerule advance_time false");
+			run(c, "tp @p ~ 300 ~");
+			run(c, "fill ~-8 ~-1 ~-8 ~8 ~-1 ~16 minecraft:smooth_stone");
+			run(c, "fill ~-8 ~ ~-8 ~8 ~6 ~16 minecraft:air");
+			run(c, "fill ~-12 ~-1 ~6 ~12 ~10 ~6 minecraft:red_concrete");
+			run(c, "tp @p ~ ~ ~ 0 5");
+			return null;
+		}
+		if (tick == 15) {
+			run(c, "setblock ~ ~ ~3 frostiful:icicle[thickness=tip,vertical_direction=up]");
+			return null;
+		}
+		if (tick < 60) return null;
+		if (tick == 60) {
+			Screenshot.takeScreenshot(mc.gameRenderer.mainRenderTarget(), image -> {
+				try (image) {
+					image.writeToFile(dir.resolve("frostiful-cutout.png"));
+					int w = image.getWidth();
+					int h = image.getHeight();
+					int minX = w, minY = h, maxX = -1, maxY = -1;
+					for (int y = h * 25 / 100; y < h * 70 / 100; y++) {
+						for (int x = w * 30 / 100; x < w * 70 / 100; x++) {
+							if (!blueish(image.getPixel(x, y))) continue;
+							minX = Math.min(minX, x);
+							maxX = Math.max(maxX, x);
+							minY = Math.min(minY, y);
+							maxY = Math.max(maxY, y);
+						}
+					}
+					int blue = 0;
+					int red = 0;
+					for (int y = Math.max(minY, 0); y <= maxY; y++) {
+						for (int x = minX; x <= maxX; x++) {
+							int px = image.getPixel(x, y);
+							if (blueish(px)) blue++;
+							else if (((px >> 16) & 255) > (px & 255) + 40) red++;
+						}
+					}
+					c.state.put("stats", new int[] {minX, minY, maxX, maxY, blue, red});
+				} catch (IOException e) {
+					throw new IllegalStateException(e);
+				}
+			});
+			return null;
+		}
+		if (!c.state.containsKey("stats")) return tick > 200 ? failPixels("the screenshot was never read back") : null;
+		if (!c.state.containsKey("staged")) {
+			c.state.put("staged", true);
+			// the rest of the scene, for a person: every thickness, hanging ones under a ceiling, and a sun lichen on the wall
+			run(c, "setblock ~ ~ ~3 minecraft:air");
+			run(c, "fill ~-4 ~4 ~3 ~4 ~4 ~3 minecraft:stone");
+			int x = -4;
+			for (String thickness : List.of("tip", "frustum", "middle", "base")) {
+				run(c, "setblock ~" + x + " ~3 ~3 frostiful:icicle[thickness=" + thickness + ",vertical_direction=down]");
+				run(c, "setblock ~" + (x + 5) + " ~ ~3 frostiful:icicle[thickness=" + thickness + ",vertical_direction=up]");
+				x++;
+			}
+			run(c, "setblock ~ ~1 ~5 frostiful:cold_sun_lichen[south=true]");
+			run(c, "setblock ~2 ~2 ~5 frostiful:warm_sun_lichen[south=true]");
+			run(c, "tp @p ~ ~ ~-1 0 5");
+			c.state.put("stagedAt", tick);
+			return null;
+		}
+		int at = (int) c.state.get("stagedAt");
+		if (tick == at + 40) {
+			Screenshot.takeScreenshot(mc.gameRenderer.mainRenderTarget(), image -> {
+				try (image) {
+					image.writeToFile(dir.resolve("frostiful-cutout-scene.png"));
+					c.state.put("scene", true);
+				} catch (IOException e) {
+					throw new IllegalStateException(e);
+				}
+			});
+			return null;
+		}
+		if (!c.state.containsKey("scene")) return tick > at + 150 ? failPixels("the scene screenshot was never read back") : null;
+		int[] stats = (int[]) c.state.get("stats");
+		run(c, "tp @p " + c.state.get("home"));
+		run(c, "gamerule advance_time true");
+		mc.options.setCameraType((CameraType) c.state.get("camera"));
+		if (stats[4] == 0) throw new Probe.Fail("no icicle pixels found in the screenshot (" + java.util.Arrays.toString(stats) + ")");
+		double fill = stats[4] / (double) (stats[4] + stats[5]);
+		String detail = "icicle bounding box " + (stats[2] - stats[0] + 1) + "x" + (stats[3] - stats[1] + 1) + " px, blue " + stats[4] + ", red showing through " + stats[5]
+			+ ", fill " + Math.round(fill * 100) + "%; screenshots run/mms-uproot/screenshots/frostiful-cutout.png and frostiful-cutout-scene.png are for a person to judge";
+		if (stats[5] == 0 || fill > MAX_ICICLE_FILL) throw new Probe.Fail("the icicle is drawn as a solid block: " + detail);
+		return detail;
+	}
+
+	/** Most of a tip icicle's quad is transparent sprite; solid blue over the whole box would be a quad on the solid layer. */
+	private static final double MAX_ICICLE_FILL = 0.6;
+
+	private static String failPixels(String why) {
+		throw new Probe.Fail(why);
+	}
+
+	/** The pale blue of Frostiful's ice, against the red wall and the grey stone. */
+	private static boolean blueish(int argb) {
+		int r = (argb >> 16) & 255;
+		int b = argb & 255;
+		return b > r + 40;
 	}
 
 	private static final String THERMOO_EVENTS = "com.github.thedeathlycow.thermoo.api.client.StatusBarOverlayRenderEvents";

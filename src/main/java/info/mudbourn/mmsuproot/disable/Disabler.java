@@ -60,6 +60,21 @@ public final class Disabler {
 		LOGGER.info("Disable rules loaded: {}", d.rules.size());
 	}
 
+	/** One rule as the scanner sees it: {@code kind} is stub, noop, skip or mixin; {@code owner} and {@code name} are as in the rule file; {@code hits} is how often it has acted so far. */
+	public record Applied(String kind, String owner, String name, String describe, String reason, int line, int hits) { }
+
+	/** A snapshot of every rule with its hit count. */
+	public static List<Applied> applied() {
+		Disabler d = instance;
+		if (d == null) {
+			init(null);
+			d = instance;
+		}
+		List<Applied> out = new ArrayList<>();
+		for (Rule r : d.rules) out.add(new Applied(r.kind().name().toLowerCase(), r.owner(), r.name(), r.describe(), r.reason(), r.line(), r.hits().get()));
+		return out;
+	}
+
 	/** Applies the rules to one class. Returns the same array when no rule touches it. */
 	public static byte[] transform(String className, byte[] bytes) {
 		Disabler d = instance;

@@ -32,6 +32,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.VegetationBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -60,9 +61,10 @@ final class BwgProbes {
 			Probe.steps("bwg.locate-biomes", 1200, BwgProbes::locate),
 			Probe.steps("bwg.chunks-generate-in-bwg-biomes", 1200, BwgProbes::generate),
 			Probe.steps("bwg.place-every-feature", 3000, BwgProbes::features),
+			Probe.once("bwg.plants-survive-on-every-legacy-dirt", BwgProbes::soils),
 			Probe.steps("bwg.place-structures", 1200, BwgProbes::structures),
 			Probe.once("bwg.loot-tables-roll", BwgProbes::loot),
-			Probe.steps("bwg.entities-spawn-and-tick", 600, BwgProbes::entities),
+			Probe.steps("bwg.entities-spawn-and-tick", 1200, BwgProbes::entities),
 			Probe.once("bwg.blocks-and-items-register", BwgProbes::blocks));
 	}
 
@@ -274,6 +276,27 @@ final class BwgProbes {
 	}
 
 	/**
+	 * Empties the top blocks of the loaded columns around a point. The structures are placed at the platform's height and blend into
+	 * the terrain around it by that column's height; a tree or peak that reaches the last block makes a lake write one above the
+	 * world (BWG's LargeLakePiece.blendTerrain does, on 1.21.11 as well), which the test world's seed has near the platform.
+	 */
+	private static void clearBuildLimit(ServerLevel level, BlockPos center, int radius) {
+		java.util.Set<net.minecraft.world.level.chunk.LevelChunk> chunks = new java.util.LinkedHashSet<>();
+		for (int x = center.getX() - radius; x <= center.getX() + radius; x++) {
+			for (int z = center.getZ() - radius; z <= center.getZ() + radius; z++) {
+				if (!level.hasChunk(x >> 4, z >> 4)) continue;
+				chunks.add(level.getChunk(x >> 4, z >> 4));
+				for (int y = level.getMaxY() - 8; y <= level.getMaxY(); y++) {
+					BlockPos at = new BlockPos(x, y, z);
+					if (!level.getBlockState(at).isAir()) level.setBlock(at, Blocks.AIR.defaultBlockState(), 2 | 16);
+				}
+			}
+		}
+		// the world-generation surface heightmap is only read from the blocks once, and setBlock does not keep it
+		for (var chunk : chunks) net.minecraft.world.level.levelgen.Heightmap.primeHeightmaps(chunk, java.util.EnumSet.of(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE_WG));
+	}
+
+	/**
 	 * Places every configured feature of the mod on the real terrain, each in its own cell of a grid around the player (32 blocks apart,
 	 * the chunks around it generated first), at the surface. An exception is a failure; "did not place" is counted, since a feature that
 	 * wants other soil (sand, water) does not place on whatever the cell holds.
@@ -286,11 +309,13 @@ final class BwgProbes {
 		List<String> notPlaced = (List<String>) c.state.computeIfAbsent("notPlaced", k -> new ArrayList<String>());
 		@SuppressWarnings("unchecked")
 		List<String> thrown = (List<String>) c.state.computeIfAbsent("thrown", k -> new ArrayList<String>());
+		@SuppressWarnings("unchecked")
+		Map<String, String> samples = (Map<String, String>) c.state.computeIfAbsent("samples", k -> new TreeMap<String, String>());
 		if (from >= ids.size()) {
 			if (!thrown.isEmpty()) throw new Probe.Fail(thrown.size() + " features threw: " + thrown.stream().limit(5).toList());
 			int placed = ids.size() - notPlaced.size();
-			if (placed < ids.size() * 0.6) throw new Probe.Fail("only " + placed + " of " + ids.size() + " features placed; not placed: " + notPlaced.stream().limit(40).toList());
-			return placed + " of " + ids.size() + " configured features placed on real terrain, none threw; did not place (need other soil or surroundings): " + notPlaced;
+			if (placed < ids.size() * 0.6) throw new Probe.Fail("only " + placed + " of " + ids.size() + " features placed; not placed: " + notPlaced.stream().limit(40).toList() + "; one sample per feature type: " + samples);
+			return placed + " of " + ids.size() + " configured features placed on real terrain, none threw; did not place (need sand, water or other surroundings): " + notPlaced;
 		}
 		BlockPos origin = platformCentre(c);
 		c.onServer(() -> {
@@ -301,18 +326,79 @@ final class BwgProbes {
 				int cz = (origin.getZ() >> 4) + 2 * (i / 23) + 4;
 				for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) level.getChunk(cx + dx, cz + dz, ChunkStatus.FULL, true);
 				BlockPos at = level.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, new BlockPos(cx * 16 + 8, 0, cz * 16 + 8));
+				groundCell(level, at);
 				Identifier id = Identifier.parse(ids.get(i));
 				Feature feature = registry.get(ResourceKey.create(Registries.FEATURE, id)).orElseThrow().value();
 				try {
 					boolean ok = feature.place(level, level.getChunkSource().getGenerator(), level.getRandom(), at);
-					if (!ok) notPlaced.add(id.getPath() + "<" + feature.getClass().getSimpleName() + ">");
+					if (!ok) {
+						notPlaced.add(id.getPath() + "<" + feature.getClass().getSimpleName() + ">");
+						samples.putIfAbsent(feature.getClass().getSimpleName(), id.getPath() + " at " + at + " on " + level.getBlockState(at.below()) + " = " + feature);
+					}
 				} catch (Throwable t) {
-					thrown.add(id.getPath() + ": " + t);
+					thrown.add(id.getPath() + "<" + feature.getClass().getSimpleName() + ">: " + t);
 				}
 			}
 			return null;
 		});
 		return null;
+	}
+
+	/** The members of 1.21.11's #dirt tag (read from its data/minecraft/tags/block/dirt.json). */
+	private static final List<Block> LEGACY_DIRT = List.of(Blocks.DIRT, Blocks.GRASS_BLOCK, Blocks.PODZOL, Blocks.COARSE_DIRT, Blocks.MYCELIUM,
+			Blocks.ROOTED_DIRT, Blocks.MOSS_BLOCK, Blocks.PALE_MOSS_BLOCK, Blocks.MUD, Blocks.MUDDY_MANGROVE_ROOTS);
+
+	/**
+	 * Soil predicates, checked directly (the feature probe grounds every cell on grass, which hides a broken one): every BWG vegetation
+	 * block that survives on plain dirt must survive on each of the other members of 1.21.11's #dirt as well. A plant that needs other
+	 * soil (sand, water, a light level) fails on plain dirt too and is not judged.
+	 */
+	private static String soils(Probe.Ctx c) {
+		BlockPos centre = platformCentre(c);
+		return c.onServer(() -> {
+			ServerLevel level = c.server().overworld();
+			BlockPos pos = centre.above();
+			level.getChunk(pos);
+			int dirtPlants = 0, other = 0;
+			List<String> failures = new ArrayList<>();
+			for (Block block : BuiltInRegistries.BLOCK) {
+				Identifier id = BuiltInRegistries.BLOCK.getKey(block);
+				if (!id.getNamespace().equals(NS) || !(block instanceof VegetationBlock)) continue;
+				BlockState plant = block.defaultBlockState();
+				if (!survives(level, pos, plant, Blocks.DIRT)) {
+					other++;
+					continue;
+				}
+				dirtPlants++;
+				List<String> refused = new ArrayList<>();
+				for (Block soil : LEGACY_DIRT) {
+					if (!survives(level, pos, plant, soil)) refused.add(BuiltInRegistries.BLOCK.getKey(soil).getPath());
+				}
+				if (!refused.isEmpty()) failures.add(id.getPath() + " refuses " + refused);
+			}
+			level.setBlock(pos.below(), Blocks.AIR.defaultBlockState(), 2 | 16);
+			if (dirtPlants < 10) throw new Probe.Fail("only " + dirtPlants + " BWG plants survive on dirt; the check is not reaching the plants");
+			if (!failures.isEmpty()) throw new Probe.Fail(failures.size() + " of " + dirtPlants + " BWG plants that survive on dirt refuse another 1.21.11 dirt: " + failures.stream().limit(10).toList());
+			return dirtPlants + " BWG plants survive on all " + LEGACY_DIRT.size() + " blocks of 1.21.11's #dirt (" + other + " other vegetation blocks need other soil or light)";
+		});
+	}
+
+	private static boolean survives(ServerLevel level, BlockPos pos, BlockState plant, Block soil) {
+		level.setBlock(pos.below(), soil.defaultBlockState(), 2 | 16);
+		level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2 | 16);
+		level.setBlock(pos.above(), Blocks.AIR.defaultBlockState(), 2 | 16);
+		return plant.canSurvive(level, pos);
+	}
+
+	/** A patch of grass over dirt with open air above it, so that plants and trees have the soil and room they need wherever the cell lies. */
+	private static void groundCell(ServerLevel level, BlockPos at) {
+		for (int dx = -10; dx <= 10; dx++) {
+			for (int dz = -10; dz <= 10; dz++) {
+				level.setBlock(at.offset(dx, -1, dz), Blocks.GRASS_BLOCK.defaultBlockState(), 2 | 16);
+				level.setBlock(at.offset(dx, -2, dz), Blocks.DIRT.defaultBlockState(), 2 | 16);
+				for (int dy = 0; dy <= 40; dy++) level.setBlock(at.offset(dx, dy, dz), Blocks.AIR.defaultBlockState(), 2 | 16);
+			}
+		}
 	}
 
 	private static String command(Probe.Ctx c, String command) {
@@ -367,6 +453,8 @@ final class BwgProbes {
 		BlockPos center = platformCentre(c);
 		c.onServer(() -> {
 			platform(c, c.server().overworld(), center, Blocks.GRASS_BLOCK);
+			// a structure needs its chunks loaded (the command refuses otherwise), and a big lake reaches well past 100 blocks: every loaded one
+			if (tick == 1) clearBuildLimit(c.server().overworld(), center, 208);
 			return null;
 		});
 		String out = command(c, "place structure " + ids.get(i) + " ~ ~1 ~");
@@ -425,17 +513,18 @@ final class BwgProbes {
 			c.onServer(() -> {
 				ServerLevel level = c.server().overworld();
 				platform(c, level, center, Blocks.GRASS_BLOCK);
-				int x = -8;
+				int n = 0;
 				List<Integer> ids = new ArrayList<>();
 				List<String> names = new ArrayList<>();
 				for (EntityType<?> type : types) {
 					Entity e = type.create(level, EntitySpawnReason.COMMAND);
 					if (e == null) throw new Probe.Fail(BuiltInRegistries.ENTITY_TYPE.getKey(type) + " could not be created");
-					e.setPos(center.getX() + x, center.getY() + 1, center.getZ());
+					// a grid on the platform (9 to a row), so every one is near the player and ticks
+					e.setPos(center.getX() - 12 + 3 * (n % 9), center.getY() + 1, center.getZ() - 12 + 4 * (n / 9));
 					level.addFreshEntity(e);
 					ids.add(e.getId());
 					names.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).getPath());
-					x += 4;
+					n++;
 				}
 				c.state.put("entityIds", ids);
 				c.state.put("entityNames", names);
@@ -447,11 +536,18 @@ final class BwgProbes {
 		List<Integer> ids = (List<Integer>) c.state.get("entityIds");
 		@SuppressWarnings("unchecked")
 		List<String> spawned = (List<String>) c.state.get("entityNames");
-		// give the server 40 ticks of the slowest entity before judging (it may run behind the client)
-		if (tick < 500 && c.onServer(() -> ids.stream().anyMatch(id -> {
-			Entity e = c.server().overworld().getEntity(id);
-			return e != null && e.tickCount < 45;
-		}))) return null;
+		// an entity counts once it has been seen alive after 40 ticks: a wreath hangs on nothing here and takes itself away at its next survival
+		// check (100 ticks), which a lagging server may reach before this probe looks again; give the slowest entity until tick 1000 to get there
+		@SuppressWarnings("unchecked")
+		java.util.Set<Integer> seen = (java.util.Set<Integer>) c.state.computeIfAbsent("seen", k -> new java.util.HashSet<Integer>());
+		boolean done = c.onServer(() -> {
+			for (int id : ids) {
+				Entity e = c.server().overworld().getEntity(id);
+				if (e != null && e.isAlive() && e.tickCount >= 40) seen.add(id);
+			}
+			return seen.size() == ids.size();
+		});
+		if (!done && tick < 1000) return null;
 		return c.onServer(() -> {
 			ServerLevel level = c.server().overworld();
 			List<String> bad = new ArrayList<>();
@@ -459,8 +555,8 @@ final class BwgProbes {
 			for (int n = 0; n < ids.size(); n++) {
 				Entity e = level.getEntity(ids.get(n));
 				String name = spawned.get(n);
-				if (e == null || !e.isAlive() || e.tickCount < 40) bad.add(name + " (alive=" + (e != null && e.isAlive()) + ", tickCount=" + (e == null ? -1 : e.tickCount) + ")");
-				else names.add(name + " tick " + e.tickCount);
+				if (!seen.contains(ids.get(n))) bad.add(name + " (alive=" + (e != null && e.isAlive()) + ", tickCount=" + (e == null ? -1 : e.tickCount) + ")");
+				else names.add(name);
 				if (e != null) e.discard();
 			}
 			if (!bad.isEmpty()) throw new Probe.Fail("not alive and ticking: " + bad);
