@@ -18,6 +18,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * skip  REGISTRY ID           | reason      (REGISTRY is the path, e.g. entity_type)
  * mixin CLASS                 | reason      (a mixin class of a mod, left out of its mixin config)
  * </pre>
+ * A line may start with {@code legacy} (as in {@code legacy noop CLASS METHOD DESC}): the rule then applies only to mods remapped from
+ * 1.21.11, not to mods built for 26.1 or 26.2, whose class of the same name may need no switching off.
  * Class names take slashes or dots. The names are those the class has when the rule runs, so a
  * descriptor that mentions Minecraft uses the 26.3 names; only mod types and {@code *} are safe
  * to write before that is checked.
@@ -41,7 +43,9 @@ final class RuleFile {
 				int bar = line.indexOf('|');
 				String reason = bar < 0 ? "no reason given" : line.substring(bar + 1).strip();
 				String[] p = (bar < 0 ? line : line.substring(0, bar)).strip().split("\\s+");
-				Rule rule = parse(p, reason, n);
+				boolean legacyOnly = p[0].equals("legacy");
+				if (legacyOnly) p = java.util.Arrays.copyOfRange(p, 1, p.length);
+				Rule rule = parse(p, reason, n, legacyOnly);
 				if (rule != null) rules.add(rule);
 			}
 		} catch (IOException e) {
@@ -50,20 +54,20 @@ final class RuleFile {
 		return rules;
 	}
 
-	private static Rule parse(String[] p, String reason, int line) {
+	private static Rule parse(String[] p, String reason, int line, boolean legacyOnly) {
 		AtomicInteger hits = new AtomicInteger();
 		switch (p[0]) {
 			case "stub":
-				if (p.length == 2) return new Rule(Rule.Kind.STUB, internal(p[1]), "", "", reason, line, hits);
+				if (p.length == 2) return new Rule(Rule.Kind.STUB, internal(p[1]), "", "", reason, line, hits, legacyOnly);
 				break;
 			case "noop":
-				if (p.length == 4 && (!p[2].startsWith("<") || p[2].equals("<clinit>"))) return new Rule(Rule.Kind.NOOP, internal(p[1]), p[2], p[3], reason, line, hits);
+				if (p.length == 4 && (!p[2].startsWith("<") || p[2].equals("<clinit>"))) return new Rule(Rule.Kind.NOOP, internal(p[1]), p[2], p[3], reason, line, hits, legacyOnly);
 				break;
 			case "skip":
-				if (p.length == 3) return new Rule(Rule.Kind.SKIP, p[1], p[2], "", reason, line, hits);
+				if (p.length == 3) return new Rule(Rule.Kind.SKIP, p[1], p[2], "", reason, line, hits, legacyOnly);
 				break;
 			case "mixin":
-				if (p.length == 2) return new Rule(Rule.Kind.MIXIN, internal(p[1]), "", "", reason, line, hits);
+				if (p.length == 2) return new Rule(Rule.Kind.MIXIN, internal(p[1]), "", "", reason, line, hits, legacyOnly);
 				break;
 			default:
 		}

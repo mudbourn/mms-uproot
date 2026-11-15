@@ -28,6 +28,8 @@ public final class Report {
 	/** Numbers and lists for one mod. */
 	public static final class Entry {
 		public final String id;
+		/** Whether the mod is remapped from 1.21.11, which some disable rules are limited to. */
+		public volatile boolean legacy;
 		public final AtomicInteger classesRemapped = new AtomicInteger();
 		public final AtomicInteger classesFailed = new AtomicInteger();
 		public final AtomicInteger mixinConfigs = new AtomicInteger();

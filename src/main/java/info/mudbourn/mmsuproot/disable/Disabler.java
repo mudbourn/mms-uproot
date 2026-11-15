@@ -46,9 +46,18 @@ public final class Disabler {
 		this.rules = rules;
 		for (Rule r : rules) {
 			if (r.kind() == Rule.Kind.SKIP) skips.put(r.owner() + " " + r.name(), r);
-			else if (r.kind() == Rule.Kind.MIXIN) mixins.put(r.owner(), r);
+			else if (r.kind() == Rule.Kind.MIXIN) mixins.put(mixinKey(r.owner(), r.legacyOnly()), r);
 			else byClass.computeIfAbsent(r.owner(), k -> new ArrayList<>()).add(r);
 		}
+	}
+
+	private static String mixinKey(String owner, boolean legacyOnly) {
+		return legacyOnly ? owner + " legacy" : owner;
+	}
+
+	private Rule mixinRule(String internal, boolean legacy) {
+		Rule r = mixins.get(mixinKey(internal, false));
+		return r != null || !legacy ? r : mixins.get(mixinKey(internal, true));
 	}
 
 	/** Loads the rules and hands the report a live view of them. Safe to call more than once. */
@@ -61,7 +70,7 @@ public final class Disabler {
 	}
 
 	/** One rule as the scanner sees it: {@code kind} is stub, noop, skip or mixin; {@code owner} and {@code name} are as in the rule file; {@code hits} is how often it has acted so far. */
-	public record Applied(String kind, String owner, String name, String describe, String reason, int line, int hits) { }
+	public record Applied(String kind, String owner, String name, String describe, String reason, int line, int hits, boolean legacyOnly) { }
 
 	/** A snapshot of every rule with its hit count. */
 	public static List<Applied> applied() {
@@ -71,18 +80,18 @@ public final class Disabler {
 			d = instance;
 		}
 		List<Applied> out = new ArrayList<>();
-		for (Rule r : d.rules) out.add(new Applied(r.kind().name().toLowerCase(), r.owner(), r.name(), r.describe(), r.reason(), r.line(), r.hits().get()));
+		for (Rule r : d.rules) out.add(new Applied(r.kind().name().toLowerCase(), r.owner(), r.name(), r.describe(), r.reason(), r.line(), r.hits().get(), r.legacyOnly()));
 		return out;
 	}
 
-	/** Applies the rules to one class. Returns the same array when no rule touches it. */
-	public static byte[] transform(String className, byte[] bytes) {
+	/** Applies the rules to one class; {@code legacy} says the mod is remapped from 1.21.11. Returns the same array when no rule touches it. */
+	public static byte[] transform(String className, byte[] bytes, boolean legacy) {
 		Disabler d = instance;
 		if (d == null) {
 			init(null);
 			d = instance;
 		}
-		return d.apply(className.replace('.', '/'), bytes);
+		return d.apply(className.replace('.', '/'), bytes, legacy);
 	}
 
 	/** Called by {@link RegistryGate}: whether a registration is switched off. */
@@ -96,23 +105,25 @@ public final class Disabler {
 	}
 
 	/** Whether a mixin class is left out of its config; counts as a use of the rule. */
-	public static boolean dropsMixin(String internal) {
+	public static boolean dropsMixin(String internal, boolean legacy) {
 		Disabler d = instance;
-		Rule r = d == null ? null : d.mixins.get(internal);
+		Rule r = d == null ? null : d.mixinRule(internal, legacy);
 		if (r == null) return false;
 		r.hits().incrementAndGet();
 		return true;
 	}
 
 	/** Why a mixin class is left out of its config, or null when it is not. Does not count. */
-	public static String mixinReason(String internal) {
+	public static String mixinReason(String internal, boolean legacy) {
 		Disabler d = instance;
-		Rule r = d == null ? null : d.mixins.get(internal);
+		Rule r = d == null ? null : d.mixinRule(internal, legacy);
 		return r == null ? null : r.reason();
 	}
 
-	private byte[] apply(String internal, byte[] bytes) {
+	private byte[] apply(String internal, byte[] bytes, boolean legacy) {
 		List<Rule> own = byClass.get(internal);
+		if (own != null && !legacy) own = own.stream().filter(r -> !r.legacyOnly()).toList();
+		if (own != null && own.isEmpty()) own = null;
 		boolean gate = !skips.isEmpty() && mentions(bytes, REGISTRY_BYTES);
 		if (own == null && !gate) return bytes;
 		seenClasses.put(internal, Boolean.TRUE);

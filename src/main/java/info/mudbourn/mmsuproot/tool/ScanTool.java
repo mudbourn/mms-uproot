@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -180,6 +181,7 @@ public final class ScanTool {
 	private final Map<String, Gap> gaps = new TreeMap<>();
 	private final Map<String, Summary> summaries = new TreeMap<>();
 	private final Map<String, Set<String>> users = new HashMap<>(); // a mod class to the mod classes that mention it
+	private Map<String, Set<String>> ownAdded; // what Uproot's own mixins give the game classes; read when first needed
 	private final Map<String, Set<String>> added = new HashMap<>(); // a game class to the members ("name+desc", "name:desc") a mod's mixin or injected interface gives it
 	private final Map<String, Lossy> lossy = new LinkedHashMap<>();
 	private final List<String[]> typesOnlyCalls = new ArrayList<>(); // {mod, user class, 26.3 owner, "method name desc"} of a call of a member of a typesonly class
@@ -378,9 +380,10 @@ public final class ScanTool {
 			namers.put(j.id(), namer);
 			Set<String> own = new HashSet<>();
 			for (Path p : files.get(j.id())) own.add(internal(j.root(), p));
-			for (Disabler.Applied a : Disabler.applied()) if (a.kind().equals("mixin") && own.contains(a.owner())) lossyUse(lossy("disable-mixin", a.describe(), a.reason()), j.id(), 1);
+			for (Disabler.Applied a : Disabler.applied()) if (a.kind().equals("mixin") && own.contains(a.owner()) && (!a.legacyOnly() || j.kind() == Kind.LEGACY)) lossyUse(lossy("disable-mixin", a.describe(), a.reason()), j.id(), 1);
 			for (Path p : files.get(j.id())) {
 				String name = internal(j.root(), p);
+				if (Disabler.mixinReason(name, j.kind() == Kind.LEGACY) != null) continue; // left out of its mixin config, so it never loads and nothing in it runs; the lossy list says so
 				try {
 					byte[] mapped = ClassRemap.remap(Files.readAllBytes(p), namer);
 					for (String call : namer.takeTypesOnlyCalls().keySet()) {
@@ -388,11 +391,12 @@ public final class ScanTool {
 						typesOnlyCalls.add(new String[] {j.id(), name, part[0], "method " + part[1]});
 					}
 					Map<Integer, Integer> before = disableHits();
-					byte[] disabled = Disabler.transform(name, mapped);
+					byte[] disabled = Disabler.transform(name, mapped, j.kind() == Kind.LEGACY);
 					for (Disabler.Applied a : Disabler.applied()) {
 						int n = a.hits() - before.getOrDefault(a.line(), 0);
 						if (n > 0 && !a.kind().equals("mixin")) lossyUse(lossy("disable-" + a.kind(), a.describe(), a.reason()), j.id(), n);
 					}
+					dump(j.id(), name, disabled);
 					remapped.add(new Remapped(j.id(), name, disabled));
 					s.classes++;
 				} catch (IOException e) {
@@ -584,8 +588,27 @@ public final class ScanTool {
 		return null;
 	}
 
+	/** With {@code -Duproot.scan.dump=DIR} the classes of the mods named in {@code -Duproot.scan.dump.mods} (all when unset) are written as remapped, for javap. */
+	private static void dump(String mod, String name, byte[] bytes) {
+		String dir = System.getProperty("uproot.scan.dump");
+		if (dir == null) return;
+		String only = System.getProperty("uproot.scan.dump.mods");
+		if (only != null && !List.of(only.split(",")).contains(mod)) return;
+		try {
+			Path file = Path.of(dir, mod, name + ".class");
+			Files.createDirectories(file.getParent());
+			Files.write(file, bytes);
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
+
 	/** What a mixin class gives its targets: its own members that are not {@code @Shadow} or {@code @Overwrite}, and the methods of the interfaces it implements. */
 	private void collectMixin(byte[] bytes, Namer namer) {
+		collectMixin(bytes, namer::cls, added);
+	}
+
+	private void collectMixin(byte[] bytes, java.util.function.UnaryOperator<String> cls, Map<String, Set<String>> into) {
 		ClassReader reader = new ClassReader(bytes);
 		List<String> targets = new ArrayList<>();
 		Set<String> members = new HashSet<>();
@@ -646,7 +669,7 @@ public final class ScanTool {
 		}, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 		if (!mixin[0]) return;
 		for (String itf : reader.getInterfaces()) interfaceMembers(itf, members, new HashSet<>());
-		for (String t : targets) added.computeIfAbsent(namer.cls(t), k -> new HashSet<>()).addAll(members);
+		for (String t : targets) into.computeIfAbsent(cls.apply(t), k -> new HashSet<>()).addAll(members);
 	}
 
 	/**
@@ -686,7 +709,33 @@ public final class ScanTool {
 
 	/** Whether a mod's mixin (or an interface injected by one) gives this member to the game class or something above it. */
 	private boolean mixinAdded(String owner, String key) {
-		String member = key.substring(key.indexOf(' ') + 1);
+		return addedTo(added, owner, key.substring(key.indexOf(' ') + 1));
+	}
+
+	/** What Uproot's own mixins give the game classes (the ones listed in {@code mms_uproot.mixins.json}): these members exist at run time. */
+	private Map<String, Set<String>> ownMixins() {
+		if (ownAdded != null) return ownAdded;
+		Map<String, Set<String>> out = new HashMap<>();
+		try (java.io.InputStream in = loader.getResourceAsStream("mms_uproot.mixins.json")) {
+			if (in != null) {
+				Map<String, Object> config = Json.parseObject(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+				String pkg = String.valueOf(config.get("package")).replace('.', '/');
+				for (String list : List.of("mixins", "client")) {
+					if (!(config.get(list) instanceof List<?> names)) continue;
+					for (Object name : names) {
+						try (java.io.InputStream cls = loader.getResourceAsStream(pkg + "/" + String.valueOf(name).replace('.', '/') + ".class")) {
+							if (cls != null) collectMixin(cls.readAllBytes(), UnaryOperator.identity(), out);
+						}
+					}
+				}
+			}
+		} catch (IOException | RuntimeException e) {
+			System.err.println("could not read Uproot's own mixins: " + e);
+		}
+		return ownAdded = out;
+	}
+
+	private boolean addedTo(Map<String, Set<String>> added, String owner, String member) {
 		Set<String> seen = new HashSet<>();
 		java.util.ArrayDeque<String> todo = new java.util.ArrayDeque<>(List.of(owner));
 		while (!todo.isEmpty()) {
@@ -753,8 +802,8 @@ public final class ScanTool {
 	}
 
 	private boolean has(String owner, String name, String desc, boolean field) {
-		if (field) return game.findField(owner, name, desc);
-		return game.findMethod(owner, name, desc) || game.findMethod("java/lang/Object", name, desc);
+		if (field ? game.findField(owner, name, desc) : game.findMethod(owner, name, desc) || game.findMethod("java/lang/Object", name, desc)) return true;
+		return addedTo(ownMixins(), owner, field ? name + ":" + desc : name + desc);
 	}
 
 	/**

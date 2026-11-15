@@ -84,7 +84,7 @@ public final class ModSource {
 		if (p == null) return null;
 		byte[] out;
 		try {
-			out = Disabler.transform(internalName, ClassRemap.remap(Files.readAllBytes(p), namer));
+			out = Disabler.transform(internalName, ClassRemap.remap(Files.readAllBytes(p), namer), report.legacy);
 		} catch (RuntimeException e) {
 			report.classesFailed.incrementAndGet();
 			throw e;

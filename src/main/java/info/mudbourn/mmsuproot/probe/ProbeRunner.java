@@ -29,8 +29,8 @@ import org.slf4j.LoggerFactory;
  */
 public final class ProbeRunner implements ClientModInitializer {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot-probe");
-	/** The save the uprootProbe task quick-plays into (build.gradle). */
-	private static final String TEST_WORLD = "uproot_check";
+	/** The save the uprootProbe task quick-plays into (build.gradle); -Duproot.probe.world names another, which is made when it does not exist. */
+	private static final String TEST_WORLD = System.getProperty("uproot.probe.world", "uproot_check");
 	/** Ticks the player is in the world before the first probe, so chunks, entities and the first frames are settled. */
 	private static final int SETTLE_TICKS = 100;
 	/** The whole run gives up after this long, whatever the probes are doing. */
@@ -79,9 +79,10 @@ public final class ProbeRunner implements ClientModInitializer {
 		probes.addAll(BadPacketsProbes.all());
 		probes.addAll(CrawlProbes.all());
 		probes.addAll(DeadHookProbes.all());
-		// -Duproot.probe.only=bwg. runs just the probes whose name starts so (for working on one mod)
+		probes.addAll(GapProbes.all());
+		// -Duproot.probe.only=bwg. runs just the probes whose name starts so (for working on one mod); several prefixes go after commas
 		String only = System.getProperty("uproot.probe.only");
-		if (only != null) probes.removeIf(p -> !p.name().startsWith(only));
+		if (only != null) probes.removeIf(p -> java.util.Arrays.stream(only.split(",")).noneMatch(prefix -> p.name().startsWith(prefix)));
 		append("PROBE PLAN " + probes.size());
 		ClientTickEvents.END_CLIENT_TICK.register(this::tick);
 	}

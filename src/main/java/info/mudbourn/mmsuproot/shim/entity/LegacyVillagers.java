@@ -19,4 +19,9 @@ public final class LegacyVillagers {
 	public static void increaseProfessionLevelOnUpdate(Villager villager, boolean increase) {
 		((LegacyVillagerLevelUp) villager).mms_uproot$setLevelUpPending(increase);
 	}
+
+	/** {@code Villager.assignProfessionWhenSpawned()}: true from a structure spawn until the villager's first server tick. */
+	public static boolean assignProfessionWhenSpawned(Villager villager) {
+		return ((StructureSpawnedVillager) villager).mms_uproot$assignProfessionWhenSpawned();
+	}
 }

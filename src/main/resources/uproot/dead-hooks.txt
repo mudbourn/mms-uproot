@@ -13,3 +13,14 @@ io/wispforest/owo/mixin/extension/json5/FileToIdConverterMixin json5$findResourc
 io/wispforest/owo/mixin/extension/json5/FileToIdConverterMixin json5$findAllResources | real break, rarely used: owo's .json5 resource discovery (stacks), same cause as findResources
 io/wispforest/owo/mixin/braid/GuiRendererMixin injectTextureFilter | real break, accepted: owo's texture filter for its braid/blur surface; GuiRenderer.executeDraw and RenderPass.bindTexture were rebuilt (see the owo blur note in disable.txt)
 it/crystalnest/prometheus/mixin/client/FlameFeatureRendererMixin * | real break, rarely seen: Prometheus's per-entity fire sprite on a burning entity; 26.3's FlameFeatureRenderer picks the two flame sprites once per batch of entities, so a burning entity shows the vanilla flame whatever its fire type
+
+# --- owo-lib built for 1.21.11 (the 26.2 build has its own versions of these mixins and none of these hooks is dead there) ---
+io/wispforest/owo/mixin/ui/MinecraftMixin afterRender | harmless today: ClientRenderCallback.AFTER is only listened to by owo's blur surface, which is switched off (disable.txt)
+io/wispforest/owo/mixin/ui/MinecraftMixin beforeSwap | harmless today: ClientRenderCallback.BEFORE_SWAP is only listened to by Braid's secondary window scheduler, and those windows are switched off (disable.txt)
+io/wispforest/owo/mixin/ui/MinecraftMixin initBlurRenderer | harmless today: it only sets up the blur surface's input target, and that surface is switched off (disable.txt)
+io/wispforest/owo/mixin/ui/MinecraftMixin captureSetScreen | real break, rarely seen: Minecraft.setScreen is the HUD's now, which a mixin on Minecraft cannot reach; a Braid screen is no longer disposed when it closes, so its surface lives until the game quits
+io/wispforest/owo/mixin/ui/AbstractContainerScreenMixin injectSlotScissors | real break, rarely seen: slots of an owo container screen are no longer clipped to their scroll area; the hook set an immediate GL scissor, which 26.3's GUI extraction has no use for
+io/wispforest/owo/mixin/ui/AbstractContainerScreenMixin clearSlotScissors | real break, rarely seen: the other half of the slot clipping above
+io/wispforest/owo/mixin/ui/AbstractContainerScreenMixin doNoThrow | real break, rarely seen: a click on an owo slot that lies outside the vanilla container background throws the carried stack, where it used to be a slot click; 26.3's mouseClicked has no touchscreen option read to hang the hook on
+io/wispforest/owo/mixin/ext/ItemStackMixin deriveComponents4 | real break, rarely used: owo's derived item components are not recomputed after applyComponents(DataComponentMap); the overloads of applyComponents share one name in 26.3, which the hook's method name cannot choose between (the other two derive hooks run)
+io/wispforest/owo/mixin/ui/display/GuiMixin injectDisplayCrosshair | harmless today: it draws the crosshair of Braid in-world displays, which are switched off (disable.txt)

@@ -79,3 +79,47 @@ mixin io/wispforest/owo/mixin/ui/display/GameRendererMixin | Braid displays draw
 mixin io/wispforest/owo/mixin/ui/CubeMapMixin | CommandEncoder.createRenderPass changed its arguments
 # owo's own link opener for macOS and Linux (Util.OS.openUri(URI)); 26.3 opens links in Blaze3D
 mixin io/wispforest/owo/mixin/tweaks/OperatingSystemMixin | Util$OS has no openUri(URI) to overwrite in 26.3
+
+# --- owo-lib built for 1.21.11 (the rules below are limited to that build; the 26.2 build has its own versions of these classes) ---
+# The GUI renderer hooks: fixNonQuadIndexing swaps in a shared index buffer for owo's triangle fan and strip pipelines, and 26.3's GuiRenderer builds
+# the index buffer of every draw from the pipeline's primitive topology itself. The other two hooks serve the blur surface, which is switched off above.
+legacy mixin io/wispforest/owo/mixin/ui/GuiRendererMixin | hooks on 1.21.11's GuiRenderer.executeDraw and addElementToMesh; 26.3 indexes non-quad topologies itself and the blur surface is off
+legacy noop io/wispforest/owo/mixin/ui/GuiRendererMixin fixNonQuadIndexing * | body reads 1.21.11's Draw record and index buffers; its hook is left out
+legacy noop io/wispforest/owo/mixin/ui/GuiRendererMixin drawBlur * | body drives the blur surface, which is switched off
+legacy mixin io/wispforest/owo/mixin/ui/access/GlCommandEncoderAccessor | only the left-out GuiRendererMixin reads it
+# The blur surface's lambda is numbered differently in this build (the 26.2 build's is lambda$blur$0, switched off above)
+legacy noop io/wispforest/owo/ui/core/Surface lambda$blur$6 * | blur surface draws a quad through the removed uniform ring and the left-out GuiRendererMixin; the surface paints nothing instead
+# Braid's retargeting of the GUI renderer (texture and window surfaces) sits on 1.21.11's render internals, and Braid's windows and displays are off already
+legacy mixin io/wispforest/owo/mixin/braid/GuiRendererMixin | hooks on 1.21.11's GuiRenderer internals for Braid's texture and window surfaces, which are off
+legacy noop io/wispforest/owo/mixin/braid/GuiRendererMixin injectSurfaceDimensions * | body reads 1.21.11's cached projection buffer; its hook is left out
+legacy noop io/wispforest/owo/braid/util/BraidGuiRenderer render * | draws Braid's texture and window surfaces through the hooks left out above
+# Braid's in-world displays: the hook draws them after the block entities of 1.21.11's main level pass (a lambda 26.3 does not have, with a render-graph handle among its locals)
+legacy mixin io/wispforest/owo/mixin/braid/LevelRendererMixin | draws automatic Braid displays inside 1.21.11's level pass lambda, which 26.3 does not have; the displays' own mixin is left out above
+
+# --- Noisium ---
+# Noisium speeds up 1.21.11's terrain fill by overwriting methods of the noise chunk, the chunk section and the noise generator: the chained
+# block source (NoiseChunk's list of material rules), the biome fill of a chunk section and the generator's doFill. 26.3 rebuilt that whole path
+# (material rules, density volumes, a noise settings record with no cell sizes, a private doFill over a noise chunk), so none of the overwritten
+# or redirected methods exist in the shape Noisium wrote them for. They are left out and terrain is made by the game's own code, which makes the same terrain more slowly.
+legacy mixin io/github/steveplays28/noisium/mixin/ChainedBlockSourceMixin | overwrites the noise chunk's chained block source, which 26.3 replaced with material rules; terrain uses the game's own path
+legacy mixin io/github/steveplays28/noisium/mixin/ChunkSectionMixin | overwrites the chunk section's biome fill by sampler, which 26.3 resolves differently; the game's own fill runs
+legacy mixin io/github/steveplays28/noisium/mixin/GenerationShapeConfigMixin | caches the cell sizes of the noise settings constructor, which is two arguments with no cell sizes in 26.3
+legacy mixin io/github/steveplays28/noisium/mixin/NoiseChunkGeneratorMixin | redirects a call inside the 1.21.11 doFill, which 26.3 rewrote as a private fill over a noise chunk
+legacy mixin io/github/steveplays28/noisium/mixin/compat/lithium/LithiumNoiseChunkGeneratorMixin | Lithium compatibility for the redirect above; it shadows doFill and the cell height, which 26.3 has neither of
+
+# --- Basic Weapons ---
+# The pike's first-person pose hooks the head of the first-person item renderer's arm-and-item method. 26.3 draws the held item from a render state
+# the player was extracted into, in another class with other arguments, so the hook has nothing to read the player, hand or swing from. The pike is
+# still held and swung with the vanilla hand pose in first person; its third-person pose (HumanoidModelMixin) is not affected.
+legacy mixin com/khazoda/basicweapons/mixin/client/ItemInHandRendererMixin | first-person pike pose hooks ItemInHandRenderer's arm-and-item method, which 26.3 split into state extraction and submission
+
+# --- Jobs+ Tools ---
+# The tool mode's highlight of the blocks a multi-block tool will change is drawn by a hook in the level renderer's block outline method, through
+# ShapeRenderer.renderShape. 26.3 has neither (outlines are extracted into the level render state and drawn as gizmos). Only the highlight is lost.
+legacy mixin com/daqem/jobsplustools/mixin/client/MixinLevelRenderer | draws the multi-block highlight through LevelRenderer's block outline method and ShapeRenderer, which 26.3 does not have
+
+# --- owo-lib built for 1.21.11, debug-only tweaks ---
+# Both hooks do something only when owo's debug flag is on (a development-environment tweak of two game rules, and word separators for a text box),
+# and their targets changed shape (the level settings constructor, the word position method).
+legacy mixin io/wispforest/owo/mixin/tweaks/LevelSettingsMixin | only acts with owo's debug flag; the level settings constructor changed shape
+legacy mixin io/wispforest/owo/mixin/tweaks/EditBoxMixin | only acts with owo's debug flag; the word position method changed shape

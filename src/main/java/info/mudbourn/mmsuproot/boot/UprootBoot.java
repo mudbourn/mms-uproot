@@ -139,6 +139,7 @@ public final class UprootBoot implements LanguageAdapter {
 	private static void prepare(ModContainerImpl mod, Namer namer, boolean legacyData, List<ModSource> sources) {
 		String id = mod.getMetadata().getId();
 		Report.Entry entry = report.mod(id);
+		entry.legacy = legacyData;
 		ModSource src = new ModSource(mod, namer, entry);
 		if (legacyData) DataShim.target(id, entry);
 		try {

@@ -49,6 +49,15 @@ public abstract class LegacySingleItemRecipe extends SingleItemRecipe {
 		return recipe.assemble(new SingleRecipeInput(ItemStack.EMPTY));
 	}
 
+	/**
+	 * The arguments of 26.3's constructor for a call of 1.21.11's {@code SingleItemRecipe(group, ingredient, result)} that names the game's
+	 * class itself, as a mixin class that extends it does: the notification flag, the ingredient and the result as a template. The group is
+	 * not part of 26.3's base.
+	 */
+	public static Object[] gameBaseArgs(String group, Ingredient ingredient, ItemStack result) {
+		return new Object[] {new Recipe.CommonInfo(true), ingredient, template(result)};
+	}
+
 	/** {@code new ItemStackSlotDisplay(stack)} as 26.3 takes it. */
 	public static Object[] slotDisplayArgs(ItemStack stack) {
 		return new Object[] {ItemStackTemplate.fromStack(stack)};

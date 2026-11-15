@@ -142,4 +142,49 @@ public final class LegacyClient {
 		}
 		return new Object[] {callback, uri, trusted};
 	}
+
+	/** 1.21.11's {@code Minecraft.getMainRenderTarget()}: the game renderer holds the main target now. */
+	public static com.mojang.blaze3d.pipeline.RenderTarget mainRenderTarget(Minecraft minecraft) {
+		return minecraft.gameRenderer.mainRenderTarget();
+	}
+
+	/** 1.21.11's {@code Minecraft.getToastManager()}: the screen-holding {@code Gui} keeps the toasts now. */
+	public static net.minecraft.client.gui.components.toasts.ToastManager toastManager(Minecraft minecraft) {
+		return minecraft.gui.toastManager();
+	}
+
+	/** 1.21.11's {@code Minecraft.renderBuffers()}: the game renderer holds them now. */
+	public static net.minecraft.client.renderer.RenderBuffers renderBuffers(Minecraft minecraft) {
+		return minecraft.gameRenderer.renderBuffers();
+	}
+
+	/** 1.21.11's {@code I18n.exists(key)}: the language answers it. */
+	public static boolean i18nExists(String key) {
+		return net.minecraft.locale.Language.getInstance().has(key);
+	}
+
+	/** {@code new LocalPlayer(...)} without the chat abilities 26.3 also takes: none are restricted, and the item-activation animation is a fresh one. */
+	public static Object[] localPlayerNoChat(Minecraft minecraft, net.minecraft.client.multiplayer.ClientLevel level,
+			net.minecraft.client.multiplayer.ClientPacketListener connection, net.minecraft.stats.StatsCounter stats,
+			net.minecraft.client.ClientRecipeBook recipes, net.minecraft.world.entity.player.Input input, boolean wasShiftKeyDown) {
+		return localPlayer(minecraft, level, connection, stats, recipes, input, wasShiftKeyDown, net.minecraft.client.multiplayer.chat.ChatAbilities.NO_RESTRICTIONS);
+	}
+
+	/** {@code new WorldSessionTelemetryManager(sender, enabled, duration, name)}: 26.3 also takes the session's world id, which is none here. */
+	public static Object[] worldSessionTelemetryManager(net.minecraft.client.telemetry.TelemetryEventSender sender, boolean enabled,
+			java.time.Duration duration, String name) {
+		return new Object[] {sender, enabled, duration, name, null};
+	}
+
+	/**
+	 * {@code EntityType.create(level, reason)}: a client level hands a new entity the id 0, which 1.21.11 let it keep and 26.3's {@code getId} refuses
+	 * as unassigned, so the renderer of an entity a mod only draws crashes. An entity made for a client level gets -1 (what the level gives it
+	 * again if it is added to the level).
+	 */
+	public static <T extends net.minecraft.world.entity.Entity> T createEntity(net.minecraft.world.entity.EntityType<T> type, net.minecraft.world.level.Level level,
+			net.minecraft.world.entity.EntitySpawnReason reason) {
+		T entity = type.create(level, reason);
+		if (entity != null && level.isClientSide()) entity.setId(-1);
+		return entity;
+	}
 }

@@ -17,6 +17,11 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.InputQuirks;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 
 /**
  * owo-lib's config screens, which every owo-config mod here (hwr and the Expanded * Enchanting mods) registers in
@@ -53,6 +58,8 @@ final class OwoProbes {
 				throw new Probe.Skip("no config screen provider for hwr");
 			}));
 		}
+		list.add(Probe.steps("owo.ui-components-render", 200, OwoProbes::components));
+		list.add(Probe.eyes("owo.ui-components-look", "open the owo component screen the probe above builds (an item, a block, an entity, a label and a box) and confirm each draws where it sits, with its own lighting"));
 		list.add(Probe.eyes("owo.config-screen-layout", "open each Expanded * Enchanting config screen from Mod Menu and confirm labels, toggles and the search box do not overlap or clip"));
 		return list;
 	}
@@ -170,5 +177,84 @@ final class OwoProbes {
 		if (!"potion".equals(query) || list.isEmpty()) throw new Probe.Fail("search for 'potion' gave query '" + query + "' and " + list.size() + " matches, want at least one (hwr has potion_recipe and potion_colour)");
 		mc.gui.setScreen(null);
 		return "Ctrl+F focused search-field; typed 'pot'; Ctrl+A + 'x' replaced it; 'potion' + Enter found " + list.size() + " option(s)";
+	}
+
+	/**
+	 * A screen of owo components that draw through picture-in-picture renderers (an item, a block and an entity) and through plain GUI
+	 * elements (a label and a box). The game draws it for real, one frame per tick, so a renderer that is bridged wrongly fails the frame.
+	 */
+	private static final class ComponentScreen extends Screen {
+		private Object adapter;
+
+		ComponentScreen() {
+			super(Component.literal("owo components"));
+		}
+
+		@Override
+		protected void init() {
+			try {
+				ClassLoader l = OwoProbes.class.getClassLoader();
+				Class<?> sizing = Class.forName("io.wispforest.owo.ui.core.Sizing", true, l);
+				Class<?> uiComponents = Class.forName("io.wispforest.owo.ui.component.UIComponents", true, l);
+				Class<?> containers = Class.forName("io.wispforest.owo.ui.container.UIContainers", true, l);
+				Class<?> adapterClass = Class.forName("io.wispforest.owo.ui.core.OwoUIAdapter", true, l);
+				Class<?> component = Class.forName("io.wispforest.owo.ui.core.UIComponent", true, l);
+				Object fixed = sizing.getMethod("fixed", int.class).invoke(null, 64);
+				Method root = containers.getMethod("horizontalFlow", sizing, sizing);
+				adapter = adapterClass.getMethod("create", Screen.class, java.util.function.BiFunction.class)
+						.invoke(null, this, (java.util.function.BiFunction<Object, Object, Object>) (w, h) -> {
+							try {
+								return root.invoke(null, w, h);
+							} catch (ReflectiveOperationException e) {
+								throw new IllegalStateException(e);
+							}
+						});
+				Object rootComponent = adapterClass.getField("rootComponent").get(adapter);
+				Method add = rootComponent.getClass().getMethod("child", component);
+				Method size = component.getMethod("sizing", sizing);
+				Object item = uiComponents.getMethod("item", ItemStack.class).invoke(null, new ItemStack(Items.DIAMOND_SWORD));
+				Object block = uiComponents.getMethod("block", net.minecraft.world.level.block.state.BlockState.class).invoke(null, Blocks.CHEST.defaultBlockState());
+				Object entity = uiComponents.getMethod("entity", sizing, EntityType.class, net.minecraft.nbt.CompoundTag.class).invoke(null, fixed, net.minecraft.world.entity.EntityTypes.PIG, null);
+				Object label = uiComponents.getMethod("label", Component.class).invoke(null, Component.literal("owo"));
+				Object box = uiComponents.getMethod("box", sizing, sizing).invoke(null, fixed, fixed);
+				size.invoke(item, fixed);
+				size.invoke(block, fixed);
+				for (Object c : new Object[] {item, block, entity, label, box}) add.invoke(rootComponent, c);
+				adapterClass.getMethod("inflateAndMount").invoke(adapter);
+			} catch (ReflectiveOperationException e) {
+				throw new IllegalStateException("could not build the owo component screen", e);
+			}
+		}
+
+		@Override
+		public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+			super.extractRenderState(graphics, mouseX, mouseY, a);
+			try {
+				adapter.getClass().getMethod("extractRenderState", GuiGraphicsExtractor.class, int.class, int.class, float.class).invoke(adapter, graphics, mouseX, mouseY, a);
+			} catch (ReflectiveOperationException e) {
+				throw new IllegalStateException("the owo adapter did not render", e);
+			}
+		}
+	}
+
+	private static String components(Probe.Ctx c, int tick) {
+		Minecraft mc = c.mc;
+		if (tick == 1) {
+			try {
+				Class.forName("io.wispforest.owo.ui.component.UIComponents", true, OwoProbes.class.getClassLoader());
+			} catch (ClassNotFoundException | LinkageError e) {
+				throw new Probe.Skip("owo is not installed: " + e);
+			}
+			ComponentScreen screen = new ComponentScreen();
+			c.state.put("screen", screen);
+			mc.gui.setScreen(screen);
+			return null;
+		}
+		if (tick < 40) {
+			if (mc.gui.screen() != c.state.get("screen")) throw new Probe.Fail("the component screen closed itself: now " + mc.gui.screen());
+			return null;
+		}
+		mc.gui.setScreen(null);
+		return "an item, a block, an entity, a label and a box rendered through the game's GUI renderer for " + (tick - 1) + " ticks";
 	}
 }

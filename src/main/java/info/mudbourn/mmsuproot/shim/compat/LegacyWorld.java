@@ -67,6 +67,16 @@ public final class LegacyWorld {
 	}
 
 	/**
+	 * The loot table the running server has under the key, or an empty table while no server is up. A world being created validates its loot
+	 * tables, nested ones included, before its server exists; the entry then checks against an empty table, and is read from the server's
+	 * tables once loot is rolled.
+	 */
+	public static net.minecraft.world.level.storage.loot.LootTable lootTableOrEmpty(ResourceKey<net.minecraft.world.level.storage.loot.LootTable> key) {
+		MinecraftServer s = server;
+		return s == null ? net.minecraft.world.level.storage.loot.LootTable.EMPTY : s.reloadableRegistries().getLootTable(key);
+	}
+
+	/**
 	 * The registries of the running server, for a mixin handler that was given them by an old call. The game also writes the level data
 	 * once before its server exists (a world being opened); no registries are available then, and an empty set stands in.
 	 */
@@ -207,5 +217,17 @@ public final class LegacyWorld {
 	public static net.minecraft.tags.TagKey<net.minecraft.world.level.block.Block> infiniburn(net.minecraft.world.level.dimension.DimensionType type) {
 		if (type.infiniburn() instanceof net.minecraft.core.HolderSet.Named<net.minecraft.world.level.block.Block> named) return named.key();
 		return net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK, net.minecraft.resources.Identifier.fromNamespaceAndPath("mms_uproot", "no_infiniburn"));
+	}
+
+	/** {@code new ChunkPos(long)}: the packed position holds x in its low half and z in its high half, which is what 26.3's {@code unpack} reads. */
+	public static Object[] chunkPos(long packed) {
+		return new Object[] {(int) packed, (int) (packed >> 32)};
+	}
+
+	/** {@code StateHolder.getValues()}: the property to value map, in property order; 26.3 gives the same pairs as a stream. */
+	public static java.util.Map<net.minecraft.world.level.block.state.properties.Property<?>, Comparable<?>> stateValues(BlockState state) {
+		java.util.Map<net.minecraft.world.level.block.state.properties.Property<?>, Comparable<?>> out = new java.util.LinkedHashMap<>();
+		state.getValues().forEach(v -> out.put(v.property(), v.value()));
+		return out;
 	}
 }

@@ -169,7 +169,7 @@ final class Hooks {
 		if (owner != null) {
 			registerErrorHandler();
 			String[] refmapName = new String[1];
-			String soft = MixinConfigs.soften(text, refmapName, Disabler::dropsMixin, owner.id.equals(System.getProperty("uproot.strictMixins")));
+			String soft = MixinConfigs.soften(text, refmapName, internal -> Disabler.dropsMixin(internal, owner.report.legacy), owner.id.equals(System.getProperty("uproot.strictMixins")));
 			if (soft == null) {
 				owner.report.mixinIssues.add(name + ": config could not be parsed, left as is");
 				return null;

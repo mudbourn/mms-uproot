@@ -965,3 +965,239 @@ class net/minecraft/client/renderer/MultiBufferSource info/mudbourn/mmsuproot/sh
 # A particle's light is its light coordinates
 method net/minecraft/client/particle/Particle getLightColor getLightCoords
 # --- end client gaps ---
+
+# --- owo-lib gaps (GUI and render) ---
+# 1.21.11's vertex format modes and index types are 26.3's primitive topologies and index types, same constants
+class com/mojang/blaze3d/vertex/VertexFormat$Mode com/mojang/renderpearl/api/pipeline/PrimitiveTopology
+class com/mojang/blaze3d/vertex/VertexFormat$IndexType com/mojang/renderpearl/api/pipeline/IndexType
+method com/mojang/renderpearl/api/pipeline/RenderPipeline getVertexFormatMode getPrimitiveTopology
+# GUI drawing calls that were renamed
+method net/minecraft/client/gui/GuiGraphicsExtractor renderFakeItem fakeItem
+method net/minecraft/client/gui/GuiGraphicsExtractor renderItemDecorations itemDecorations
+method net/minecraft/client/gui/GuiGraphicsExtractor hLine horizontalLine
+method net/minecraft/client/gui/GuiGraphicsExtractor vLine verticalLine
+method net/minecraft/client/gui/GuiGraphicsExtractor renderOutline outline
+method net/minecraft/client/gui/GuiGraphicsExtractor renderComponentHoverEffect componentHoverEffect
+method net/minecraft/client/gui/screens/inventory/tooltip/TooltipRenderUtil renderTooltipBackground extractTooltipBackground
+method net/minecraft/client/renderer/state/gui/GuiRenderState submitItem addItem
+method net/minecraft/client/renderer/state/gui/GuiRenderState submitText addText
+method net/minecraft/client/renderer/state/gui/GuiRenderState submitPicturesInPictureState addPicturesInPictureState
+method net/minecraft/client/renderer/state/gui/GuiRenderState submitGuiElement addGuiElement
+method net/minecraft/client/renderer/state/gui/GuiRenderState submitBlitToCurrentLayer addBlitToCurrentLayer
+method net/minecraft/client/renderer/state/gui/GuiRenderState submitGlyphToCurrentLayer addGlyphToCurrentLayer
+# The deferred elements (hover effect, tooltip) are extracted for the mouse position the graphics was made with
+callinst net/minecraft/client/gui/GuiGraphicsExtractor renderDeferredElements ()V info/mudbourn/mmsuproot/shim/client/LegacyRender.renderDeferredElements
+# Word wrap returned nothing; 26.3 returns the height
+callinst net/minecraft/client/gui/GuiGraphicsExtractor textWithWordWrap (Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/FormattedText;IIIIZ)V info/mudbourn/mmsuproot/shim/client/LegacyRender.textWithWordWrap
+# The scissor stack's push gave back the rectangle it pushed
+callinst net/minecraft/client/gui/GuiGraphicsExtractor$ScissorStack push (Lnet/minecraft/client/gui/navigation/ScreenRectangle;)Lnet/minecraft/client/gui/navigation/ScreenRectangle; info/mudbourn/mmsuproot/shim/client/LegacyRender.pushScissor
+# Texture targets, clears and the empty texture
+ctoradapt com/mojang/blaze3d/pipeline/TextureTarget (Ljava/lang/String;IIZ)V (Ljava/lang/String;IILcom/mojang/renderpearl/api/GpuFormat;Lcom/mojang/renderpearl/api/GpuFormat;)V info/mudbourn/mmsuproot/shim/client/LegacyRender.textureTargetNoFormat
+callinst com/mojang/renderpearl/api/commands/CommandEncoder clearColorAndDepthTextures (Lcom/mojang/renderpearl/api/textures/GpuTexture;ILcom/mojang/renderpearl/api/textures/GpuTexture;D)V info/mudbourn/mmsuproot/shim/client/LegacyRender.clearColorAndDepthTextures
+method com/mojang/renderpearl/api/commands/RenderPass bindTexture setUniform 3
+fieldmove com/mojang/blaze3d/systems/RenderSystem outputColorTextureOverride info/mudbourn/mmsuproot/shim/client/LegacyRender outputColorTextureOverride
+fieldmove com/mojang/blaze3d/systems/RenderSystem outputDepthTextureOverride info/mudbourn/mmsuproot/shim/client/LegacyRender outputDepthTextureOverride
+fieldmove net/minecraft/client/renderer/texture/TextureManager INTENTIONAL_MISSING_TEXTURE info/mudbourn/mmsuproot/shim/client/LegacyRender INTENTIONAL_MISSING_TEXTURE
+fieldmove net/minecraft/client/Minecraft UNIFORM_FONT info/mudbourn/mmsuproot/shim/client/LegacyRender UNIFORM_FONT
+# Things that moved off Minecraft and GameRenderer
+callinst net/minecraft/client/Minecraft getMainRenderTarget ()Lcom/mojang/blaze3d/pipeline/RenderTarget; info/mudbourn/mmsuproot/shim/client/LegacyClient.mainRenderTarget
+callinst net/minecraft/client/Minecraft getToastManager ()Lnet/minecraft/client/gui/components/toasts/ToastManager; info/mudbourn/mmsuproot/shim/client/LegacyClient.toastManager
+method net/minecraft/client/renderer/GameRenderer getLighting lighting 0
+method net/minecraft/client/renderer/GameRenderer getFeatureRenderDispatcher featureRenderDispatcher 0
+# Fabric API: the screen events are extract events now, and its creative and serialization views were renamed
+class net/fabricmc/fabric/api/client/screen/v1/ScreenEvents$AfterRender net/fabricmc/fabric/api/client/screen/v1/ScreenEvents$AfterExtract
+class net/fabricmc/fabric/api/client/screen/v1/ScreenEvents$BeforeRender net/fabricmc/fabric/api/client/screen/v1/ScreenEvents$BeforeExtract
+method net/fabricmc/fabric/api/client/screen/v1/ScreenEvents afterRender afterExtract
+method net/fabricmc/fabric/api/client/screen/v1/ScreenEvents beforeRender beforeExtract
+method net/fabricmc/fabric/api/client/screen/v1/ScreenEvents$AfterExtract afterRender afterExtract
+method net/fabricmc/fabric/api/client/screen/v1/ScreenEvents$BeforeExtract beforeRender beforeExtract
+class net/fabricmc/fabric/api/client/itemgroup/v1/FabricCreativeInventoryScreen net/fabricmc/fabric/api/client/creativetab/v1/FabricCreativeModeInventoryScreen
+method net/fabricmc/fabric/api/client/creativetab/v1/FabricCreativeModeInventoryScreen getItemGroupsOnPage getTabsOnPage
+method net/fabricmc/fabric/api/client/creativetab/v1/FabricCreativeModeInventoryScreen getSelectedItemGroup getSelectedTab
+method net/fabricmc/fabric/api/client/creativetab/v1/FabricCreativeModeInventoryScreen setSelectedItemGroup setSelectedTab
+class net/fabricmc/fabric/api/serialization/v1/view/FabricReadView net/fabricmc/fabric/api/serialization/v1/value/FabricValueInput
+method net/fabricmc/fabric/api/serialization/v1/value/FabricValueInput keys keySet
+method net/fabricmc/fabric/api/networking/v1/ServerConfigurationNetworking$Context networkHandler packetListener
+method net/fabricmc/fabric/api/transfer/v1/fluid/FluidVariant withComponentChanges withComponents
+method net/fabricmc/fabric/api/transfer/v1/item/ItemVariant withComponentChanges withComponents
+# Render pipeline builders: vertex format and mode, blend, samplers and uniforms are different calls now (shim.client.LegacyGpu)
+fieldmove net/minecraft/client/renderer/RenderPipelines MATRICES_PROJECTION_SNIPPET info/mudbourn/mmsuproot/shim/client/LegacyGpu MATRICES_PROJECTION_SNIPPET
+callinst com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder withVertexFormat (Lcom/mojang/renderpearl/api/vertex/VertexFormat;Lcom/mojang/renderpearl/api/pipeline/PrimitiveTopology;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder; info/mudbourn/mmsuproot/shim/client/LegacyGpu.withVertexFormat
+callinst com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder withBlend (Lcom/mojang/renderpearl/api/pipeline/BlendFunction;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder; info/mudbourn/mmsuproot/shim/client/LegacyGpu.withBlend
+callinst com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder withoutBlend ()Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder; info/mudbourn/mmsuproot/shim/client/LegacyGpu.withoutBlend
+callinst com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder withSampler (Ljava/lang/String;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder; info/mudbourn/mmsuproot/shim/client/LegacyGpu.withSampler
+callinst com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder build ()Lcom/mojang/renderpearl/api/pipeline/RenderPipeline; info/mudbourn/mmsuproot/shim/client/LegacyGpu.build
+callinst com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder withUniform (Ljava/lang/String;Lcom/mojang/renderpearl/api/pipeline/UniformType;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder; info/mudbourn/mmsuproot/shim/client/LegacyGpu.withUniform
+# Picture-in-picture renderers: 26.3 hands the render its own collector and draws it afterwards; Fabric API's registry was renamed (see shim.client.LegacyRender)
+class net/fabricmc/fabric/api/client/rendering/v1/SpecialGuiElementRegistry net/fabricmc/fabric/api/client/rendering/v1/PictureInPictureRendererRegistry
+class net/fabricmc/fabric/api/client/rendering/v1/SpecialGuiElementRegistry$Factory net/fabricmc/fabric/api/client/rendering/v1/PictureInPictureRendererRegistry$Factory
+class net/fabricmc/fabric/api/client/rendering/v1/SpecialGuiElementRegistry$Context net/fabricmc/fabric/api/client/rendering/v1/PictureInPictureRendererRegistry$Context
+method net/fabricmc/fabric/api/client/rendering/v1/PictureInPictureRendererRegistry$Factory createSpecialRenderer createRenderer
+method net/fabricmc/fabric/api/client/rendering/v1/PictureInPictureRendererRegistry$Context client minecraft
+callinst net/fabricmc/fabric/api/client/rendering/v1/PictureInPictureRendererRegistry$Context vertexConsumers ()Linfo/mudbourn/mmsuproot/shim/client/LegacyBufferSource$BufferSource; info/mudbourn/mmsuproot/shim/client/LegacyRender.vertexConsumers
+bridge net/minecraft/client/gui/render/pip/PictureInPictureRenderer renderToTexture (Lnet/minecraft/client/renderer/state/gui/pip/PictureInPictureRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;)V (Lnet/minecraft/client/renderer/state/gui/pip/PictureInPictureRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;)V
+ctoradapt net/minecraft/client/gui/render/pip/PictureInPictureRenderer (Linfo/mudbourn/mmsuproot/shim/client/LegacyBufferSource$BufferSource;)V ()V info/mudbourn/mmsuproot/shim/client/LegacyRender.pictureInPictureConstructor
+fieldget net/minecraft/client/gui/render/pip/PictureInPictureRenderer bufferSource info/mudbourn/mmsuproot/shim/client/LegacyRender.bufferSource
+callinst net/minecraft/client/renderer/RenderBuffers bufferSource ()Linfo/mudbourn/mmsuproot/shim/client/LegacyBufferSource$BufferSource; info/mudbourn/mmsuproot/shim/client/LegacyRender.bufferSource
+callinst net/minecraft/client/Minecraft renderBuffers ()Lnet/minecraft/client/renderer/RenderBuffers; info/mudbourn/mmsuproot/shim/client/LegacyClient.renderBuffers
+callinst net/minecraft/client/Minecraft getBlockRenderer ()Linfo/mudbourn/mmsuproot/shim/client/BlockRenderDispatcher; info/mudbourn/mmsuproot/shim/client/BlockRenderDispatcher.of
+callinst net/minecraft/client/renderer/feature/FeatureRenderDispatcher getSubmitNodeStorage ()Lnet/minecraft/client/renderer/SubmitNodeStorage; info/mudbourn/mmsuproot/shim/client/LegacyRender.submitNodeStorage
+callinst net/minecraft/client/renderer/feature/FeatureRenderDispatcher renderAllFeatures ()V info/mudbourn/mmsuproot/shim/client/LegacyRender.renderAllFeatures
+callinst net/minecraft/client/renderer/GameRenderer getSubmitNodeStorage ()Lnet/minecraft/client/renderer/SubmitNodeStorage; info/mudbourn/mmsuproot/shim/client/LegacyRender.gameSubmitNodeStorage
+# The title screen's panorama renderer drew into any target; 26.3 draws the panorama from the GUI render state
+class net/minecraft/client/renderer/PanoramaRenderer info/mudbourn/mmsuproot/shim/client/LegacyPanoramaRenderer
+callinst net/minecraft/client/renderer/GameRenderer getPanorama ()Linfo/mudbourn/mmsuproot/shim/client/LegacyPanoramaRenderer; info/mudbourn/mmsuproot/shim/client/LegacyPanoramaRenderer.of
+# Widgets, items and text that were renamed or moved
+method net/minecraft/client/gui/components/Renderable render extractRenderState 4
+method net/minecraft/client/gui/components/AbstractWidget renderWidget extractWidgetRenderState 4
+method net/minecraft/client/gui/components/AbstractTextAreaWidget renderContents extractContents 4
+method net/minecraft/client/gui/components/AbstractButton renderContents extractContents 4
+method net/minecraft/client/gui/components/AbstractButton renderDefaultLabel extractDefaultLabel 1
+method net/minecraft/client/gui/components/AbstractButton renderDefaultSprite extractDefaultSprite 1
+method net/minecraft/client/gui/components/toasts/Toast render extractRenderState 3
+method net/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipComponent renderText extractText 4
+method net/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipComponent renderImage extractImage 6
+method net/fabricmc/fabric/api/client/rendering/v1/hud/HudElement render extractRenderState 2
+method net/minecraft/client/gui/components/AbstractTextAreaWidget renderDecorations extractDecorations 1
+callinst net/minecraft/client/gui/components/EditBox setFilter (Ljava/util/function/Predicate;)V info/mudbourn/mmsuproot/shim/client/LegacyRender.setFilter
+callmove net/minecraft/client/resources/language/I18n exists (Ljava/lang/String;)Z info/mudbourn/mmsuproot/shim/client/LegacyClient i18nExists
+callinst net/minecraft/util/Util$OS openUri (Ljava/lang/String;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.openUri
+ctoradapt net/minecraft/client/gui/screens/ConfirmLinkScreen (Lit/unimi/dsi/fastutil/booleans/BooleanConsumer;Ljava/lang/String;Z)V (Lit/unimi/dsi/fastutil/booleans/BooleanConsumer;Ljava/net/URI;Z)V info/mudbourn/mmsuproot/shim/client/LegacyClient.confirmLinkScreen
+ctoradapt net/minecraft/client/player/LocalPlayer (Lnet/minecraft/client/Minecraft;Lnet/minecraft/client/multiplayer/ClientLevel;Lnet/minecraft/client/multiplayer/ClientPacketListener;Lnet/minecraft/stats/StatsCounter;Lnet/minecraft/client/ClientRecipeBook;Lnet/minecraft/world/entity/player/Input;Z)V (Lnet/minecraft/client/Minecraft;Lnet/minecraft/client/multiplayer/ClientLevel;Lnet/minecraft/client/multiplayer/ClientPacketListener;Lnet/minecraft/stats/StatsCounter;Lnet/minecraft/client/ClientRecipeBook;Lnet/minecraft/world/entity/player/Input;ZLnet/minecraft/client/multiplayer/chat/ChatAbilities;Lnet/minecraft/client/player/ItemActivation;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.localPlayerNoChat
+ctoradapt net/minecraft/client/telemetry/WorldSessionTelemetryManager (Lnet/minecraft/client/telemetry/TelemetryEventSender;ZLjava/time/Duration;Ljava/lang/String;)V (Lnet/minecraft/client/telemetry/TelemetryEventSender;ZLjava/time/Duration;Ljava/lang/String;Ljava/util/UUID;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.worldSessionTelemetryManager
+# Small world and text calls
+ctoradapt net/minecraft/world/level/ChunkPos (J)V (II)V info/mudbourn/mmsuproot/shim/compat/LegacyWorld.chunkPos
+callinst net/minecraft/ChatFormatting getColor ()Ljava/lang/Integer; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getColor
+callinst net/minecraft/world/level/block/state/BlockState getValues ()Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.stateValues
+# A command's parsed item is an item input now, a holder and component patch as before
+class net/minecraft/commands/arguments/item/ItemParser$ItemResult net/minecraft/commands/arguments/item/ItemInput
+# The old ore settings are the ore feature, and a target with its state a block replacement (as for 26.2 mods)
+class net/minecraft/world/level/levelgen/feature/configurations/OreConfiguration net/minecraft/world/level/levelgen/feature/OreFeature
+class net/minecraft/world/level/levelgen/feature/configurations/OreConfiguration$TargetBlockState net/minecraft/world/level/levelgen/feature/BlockReplacement
+fieldget net/minecraft/world/level/levelgen/feature/BlockReplacement state state
+fieldget net/minecraft/world/level/levelgen/feature/BlockReplacement target target
+# DynamicUniformStorage is DynamicGpuDataStorageMapped in 26.3 (shim.client.LegacyUniformStorage)
+class net/minecraft/client/renderer/DynamicUniformStorage info/mudbourn/mmsuproot/shim/client/LegacyUniformStorage
+class net/minecraft/client/renderer/DynamicUniformStorage$DynamicUniform info/mudbourn/mmsuproot/shim/client/LegacyUniformStorage$DynamicUniform
+# The OpenGL backend classes moved into the render library; the cached ortho projection buffer is the projection buffer. For types only:
+# its getBuffer(width, height) has no 26.3 answer, so a call of it stays in the scan as a gap (no member of the old class is on the new one)
+class com/mojang/blaze3d/opengl/GlCommandEncoder com/mojang/renderpearl/backend/opengl/GlCommandEncoder
+class com/mojang/blaze3d/opengl/GlDebug com/mojang/renderpearl/backend/opengl/GlDebug
+class net/minecraft/client/renderer/CachedOrthoProjectionMatrixBuffer net/minecraft/client/renderer/ProjectionMatrixBuffer
+# ...and the wrap of its call that Braid's GUI renderer hook names (the hook is left out in disable.txt) names the projection call that took its place
+injectat net/minecraft/client/renderer/ProjectionMatrixBuffer getBuffer (FF)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice; net/minecraft/client/renderer/ProjectionMatrixBuffer getBuffer (Lnet/minecraft/client/renderer/Projection;)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;
+# Fabric's transfer variants: the component patch is getComponentsPatch and the map is getComponents
+method net/fabricmc/fabric/api/transfer/v1/storage/TransferVariant getComponents getComponentsPatch 0
+method net/fabricmc/fabric/api/transfer/v1/storage/TransferVariant getComponentMap getComponents 0
+method net/fabricmc/fabric/api/transfer/v1/storage/TransferVariant withComponentChanges withComponents
+# A vertex consumer takes the vector as a read-only one
+calldesc com/mojang/blaze3d/vertex/VertexConsumer addVertex (Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lorg/joml/Vector3f;)Lcom/mojang/blaze3d/vertex/VertexConsumer; (Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lorg/joml/Vector3fc;)Lcom/mojang/blaze3d/vertex/VertexConsumer;
+calldesc com/mojang/blaze3d/vertex/VertexConsumer setNormal (Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lorg/joml/Vector3f;)Lcom/mojang/blaze3d/vertex/VertexConsumer; (Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lorg/joml/Vector3fc;)Lcom/mojang/blaze3d/vertex/VertexConsumer;
+method net/minecraft/client/gui/components/AbstractScrollArea scrollbarVisible scrollable 0
+# A GUI renderer takes the feature dispatcher alone; the buffer source and the collector had no part in what a subclass drew
+ctoradapt net/minecraft/client/gui/render/GuiRenderer (Lnet/minecraft/client/renderer/state/gui/GuiRenderState;Linfo/mudbourn/mmsuproot/shim/client/LegacyBufferSource$BufferSource;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;Ljava/util/List;)V (Lnet/minecraft/client/renderer/state/gui/GuiRenderState;Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;Ljava/util/List;)V info/mudbourn/mmsuproot/shim/client/LegacyRender.guiRenderer
+# Hooks of owo's mixins: the resize and screen layer renames, the json5 listing (as for 26.2: 26.3's listing filter is a Selector), and the derived item components
+# of a stack, whose private constructor takes a holder now (the handler never reads the item)
+method net/minecraft/client/Minecraft resizeDisplay resizeGui 0
+method net/minecraft/client/gui/screens/Screen renderWithTooltipAndSubtitles extractRenderStateWithTooltipAndSubtitles 4
+optional io/wispforest/owo/mixin/extension/json5/FileToIdConverterMixin json5$findResources
+optional io/wispforest/owo/mixin/extension/json5/FileToIdConverterMixin json5$findAllResources
+handler io/wispforest/owo/mixin/ext/ItemStackMixin injectDerivedComponentMap (Lnet/minecraft/core/Holder;ILnet/minecraft/core/component/PatchedDataComponentMap;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,1,2
+# A hook on the call that closed a chat screen: the screen is the HUD's to close now (a mixin can only name the call where it is made)
+injectat net/minecraft/client/Minecraft setScreen (Lnet/minecraft/client/gui/screens/Screen;)V net/minecraft/client/gui/Gui setScreen (Lnet/minecraft/client/gui/screens/Screen;)V
+# An entity made for a client level to be drawn, never added: 26.3 refuses the id 0 it is made with (shim.client.LegacyClient.createEntity)
+callinst net/minecraft/world/entity/EntityType create (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/EntitySpawnReason;)Lnet/minecraft/world/entity/Entity; info/mudbourn/mmsuproot/shim/client/LegacyClient.createEntity
+# Cursors: 26.3 has no GLFW; the mouse cursor is SDL's (see shim.client.LegacyCursors)
+callmove org/lwjgl/glfw/GLFW glfwCreateStandardCursor (I)J info/mudbourn/mmsuproot/shim/client/LegacyCursors createStandardCursor
+callmove org/lwjgl/glfw/GLFW glfwSetCursor (JJ)V info/mudbourn/mmsuproot/shim/client/LegacyCursors setCursor
+callmove org/lwjgl/glfw/GLFW glfwDestroyCursor (J)V info/mudbourn/mmsuproot/shim/client/LegacyCursors destroyCursor
+# --- end owo-lib gaps ---
+
+# --- gaps of the 1.21.11 mods with no 26.3 build (expanded weaponry, jobs+, arc, guard villagers, noisium, bura, locator border and others) ---
+# Item and stack accessors (shim.compat.LegacyStacks)
+method net/minecraft/world/item/ItemStack getItemHolder typeHolder 0
+callinst net/minecraft/world/item/ItemStack getTags ()Ljava/util/stream/Stream; info/mudbourn/mmsuproot/shim/compat/LegacyStacks.getTags
+callinst net/minecraft/world/item/Item getName ()Lnet/minecraft/network/chat/Component; info/mudbourn/mmsuproot/shim/compat/LegacyStacks.getName
+callinst net/minecraft/ChatFormatting getName ()Ljava/lang/String; info/mudbourn/mmsuproot/shim/compat/LegacyStacks.formattingName
+callinst net/minecraft/ChatFormatting isColor ()Z info/mudbourn/mmsuproot/shim/compat/LegacyStacks.formattingIsColor
+fieldmove net/minecraft/world/item/Items GRAY_STAINED_GLASS_PANE info/mudbourn/mmsuproot/shim/item/LegacyItemFields GRAY_STAINED_GLASS_PANE
+# SoundEvents.HOE_TILL is a registry entry now; the old field held the event
+fieldmove net/minecraft/sounds/SoundEvents HOE_TILL info/mudbourn/mmsuproot/shim/compat/LegacySounds HOE_TILL
+# EnchantmentHelper reads the level off any item instance now; a stack is one
+callmove net/minecraft/world/item/enchantment/EnchantmentHelper getItemEnchantmentLevel (Lnet/minecraft/core/Holder;Lnet/minecraft/world/item/ItemStack;)I net/minecraft/world/item/enchantment/EnchantmentHelper getItemEnchantmentLevel (Lnet/minecraft/core/Holder;Lnet/minecraft/world/item/ItemInstance;)I
+# DisplayInfo is a record now
+method net/minecraft/advancements/DisplayInfo getTitle title 0
+method net/minecraft/advancements/DisplayInfo getDescription description 0
+method net/minecraft/advancements/DisplayInfo getType type 0
+method net/minecraft/advancements/DisplayInfo shouldAnnounceChat announceToChat 0
+# Containers and bundles: the bundle and container contents hold item templates, and a simple container has no listeners (shim.compat.LegacyContainers)
+method net/minecraft/world/item/component/BundleContents itemCopyStream itemCopies 0
+method net/minecraft/world/item/component/ItemContainerContents stream itemCopies 0
+ctoradapt net/minecraft/world/item/component/BundleContents$Mutable (Lnet/minecraft/world/item/component/BundleContents;)V (Ljava/util/List;Lorg/apache/commons/lang3/math/Fraction;I)V info/mudbourn/mmsuproot/shim/compat/LegacyContainers.bundleMutableArgs
+class net/minecraft/world/ContainerListener info/mudbourn/mmsuproot/shim/compat/LegacyContainerListener
+callinst net/minecraft/world/SimpleContainer addListener (Linfo/mudbourn/mmsuproot/shim/compat/LegacyContainerListener;)V info/mudbourn/mmsuproot/shim/compat/LegacyContainers.addListener
+callinst net/minecraft/world/SimpleContainer removeListener (Linfo/mudbourn/mmsuproot/shim/compat/LegacyContainerListener;)V info/mudbourn/mmsuproot/shim/compat/LegacyContainers.removeListener
+# The menu click type is the container input now, with the same constants
+class net/minecraft/world/inventory/ClickType net/minecraft/world/inventory/ContainerInput
+# Server and world calls (shim.compat.LegacyServerCalls)
+callinst net/minecraft/server/level/ServerLevel setDayTime (J)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.setDayTime
+callinst net/minecraft/server/level/ServerLevel setWeatherParameters (IIZZ)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.setWeatherParameters
+callinst net/minecraft/world/entity/LivingEntity randomTeleport (DDDZ)Z info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.randomTeleport
+callinst net/minecraft/client/Minecraft isSingleplayer ()Z info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.isSingleplayer
+callmove net/minecraft/data/registries/VanillaRegistries createLookup ()Lnet/minecraft/core/HolderLookup$Provider; info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls createLookup
+callinst net/minecraft/world/entity/ai/gossip/GossipContainer transferFrom (Lnet/minecraft/world/entity/ai/gossip/GossipContainer;Lnet/minecraft/util/RandomSource;I)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.transferFrom
+callinst net/minecraft/world/entity/projectile/Projectile deflect (Lnet/minecraft/world/entity/projectile/ProjectileDeflection;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/entity/EntityReference;Z)Z info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.deflect
+ctoradapt net/minecraft/commands/CommandSourceStack (Lnet/minecraft/commands/CommandSource;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec2;Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/server/permissions/PermissionSet;Ljava/lang/String;Lnet/minecraft/network/chat/Component;Lnet/minecraft/server/MinecraftServer;Lnet/minecraft/world/entity/Entity;)V (Lnet/minecraft/commands/CommandSource;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec2;Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/server/permissions/PermissionSet;Lnet/minecraft/commands/CommandSourceStack$NamesProvider;Lnet/minecraft/server/MinecraftServer;Lnet/minecraft/world/entity/Entity;)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.commandSourceArgs
+ctoradapt net/minecraft/network/chat/HoverEvent$ShowItem (Lnet/minecraft/world/item/ItemStack;)V (Lnet/minecraft/world/item/ItemStackTemplate;)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.showItemArgs
+callinst net/minecraft/world/entity/npc/villager/Villager assignProfessionWhenSpawned ()Z info/mudbourn/mmsuproot/shim/entity/LegacyVillagers.assignProfessionWhenSpawned
+# Shield blocking takes the damage source, the damage and whether the shield was disabled now
+bridge net/minecraft/world/entity/LivingEntity blockUsingItem (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;FZ)V
+bridge net/minecraft/world/entity/LivingEntity blockedByItem (Lnet/minecraft/world/entity/LivingEntity;)V (Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;FZ)V
+method net/minecraft/world/level/lighting/LightEngine getLightBlockInto getLightDampeningInto 4
+# Client: view, picking and options (shim.client.LegacyView)
+callinst net/minecraft/client/renderer/GameRenderer pick (F)V info/mudbourn/mmsuproot/shim/client/LegacyView.pick
+# Panoramic screenshots are gone, so the game is never in panoramic mode
+calldrop net/minecraft/client/renderer/GameRenderer isPanoramicMode ()Z
+callinst net/minecraft/client/renderer/LevelRenderer needsUpdate ()V info/mudbourn/mmsuproot/shim/client/LegacyView.needsUpdate
+callinst net/minecraft/world/level/block/state/BlockState isViewBlocking (Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Z info/mudbourn/mmsuproot/shim/client/LegacyView.isViewBlocking
+callmove net/minecraft/client/OptionInstance createBoolean (Ljava/lang/String;Lnet/minecraft/client/OptionInstance$TooltipSupplier;ZLjava/util/function/Consumer;)Lnet/minecraft/client/OptionInstance; info/mudbourn/mmsuproot/shim/client/LegacyView createBoolean
+callmove net/minecraft/client/OptionInstance createBoolean (Ljava/lang/String;ZLjava/util/function/Consumer;)Lnet/minecraft/client/OptionInstance; info/mudbourn/mmsuproot/shim/client/LegacyView createBoolean
+callinst net/minecraft/client/gui/GuiGraphicsExtractor renderTooltip (Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipPositioner;Lnet/minecraft/resources/Identifier;)V info/mudbourn/mmsuproot/shim/client/LegacyView.renderTooltip
+# The humanoid render state's attack arm is worked out from the swing (mixin.HumanoidAttackArmMixin)
+fieldget net/minecraft/client/renderer/entity/state/HumanoidRenderState attackArm mms_uproot$attackArm
+# Client: the face renderer is an extractor, and two screen methods were renamed
+class net/minecraft/client/gui/components/PlayerFaceRenderer net/minecraft/client/gui/components/PlayerFaceExtractor
+method net/minecraft/client/gui/components/PlayerFaceExtractor draw extractRenderState
+method net/minecraft/client/gui/screens/inventory/AbstractContainerScreen renderLabels extractLabels 3
+method net/minecraft/client/gui/screens/inventory/InventoryScreen renderEntityInInventoryFollowsMouse extractEntityInInventoryFollowsMouse
+# The locator bar is a contextual bar like the others, and the HUD took over from Gui (Locator Border)
+class net/minecraft/client/gui/contextualbar/LocatorBarRenderer net/minecraft/client/gui/contextualbar/LocatorBar
+method net/minecraft/client/gui/contextualbar/LocatorBar render extractRenderState 2
+method net/minecraft/client/gui/contextualbar/LocatorBar renderBackground extractBackground 2
+mixintarget dev/liqw/locatorborder/mixin/GuiMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+method net/minecraft/client/gui/Hud renderHotbarAndDecorations extractHotbarAndDecorations
+method net/minecraft/client/gui/Hud render extractRenderState 2
+# Fabric API: creative tab output, data generation output, menus and level changes were renamed
+method net/fabricmc/fabric/api/creativetab/v1/FabricCreativeModeTabOutput addAfter insertAfter
+method net/fabricmc/fabric/api/creativetab/v1/FabricCreativeModeTabOutput addBefore insertBefore
+class net/fabricmc/fabric/api/datagen/v1/FabricDataOutput net/fabricmc/fabric/api/datagen/v1/FabricPackOutput
+class net/fabricmc/fabric/api/screenhandler/v1/ExtendedScreenHandlerFactory net/fabricmc/fabric/api/menu/v1/ExtendedMenuProvider
+class net/fabricmc/fabric/api/screenhandler/v1/ExtendedScreenHandlerType net/fabricmc/fabric/api/menu/v1/ExtendedMenuType
+class net/fabricmc/fabric/api/entity/event/v1/ServerEntityWorldChangeEvents net/fabricmc/fabric/api/entity/event/v1/ServerEntityLevelChangeEvents
+field net/fabricmc/fabric/api/entity/event/v1/ServerEntityLevelChangeEvents AFTER_PLAYER_CHANGE_WORLD AFTER_PLAYER_CHANGE_LEVEL
+field net/fabricmc/fabric/api/entity/event/v1/ServerEntityLevelChangeEvents AFTER_ENTITY_CHANGE_WORLD AFTER_ENTITY_CHANGE_LEVEL
+method net/fabricmc/fabric/api/entity/event/v1/ServerEntityLevelChangeEvents$AfterPlayerChange afterChangeWorld afterChangeLevel
+method net/fabricmc/fabric/api/entity/event/v1/ServerEntityLevelChangeEvents$AfterEntityChange afterChangeWorld afterChangeLevel
+# Stand-in for Mojang's nullness annotation, which the logging library no longer ships
+class com/mojang/logging/annotations/MethodsReturnNonnullByDefault info/mudbourn/mmsuproot/shim/compat/MethodsReturnNonnullByDefault
+# Arc's mixin class extends the game's SingleItemRecipe (a mixin class keeps its real superclass); its constructor calls the old one
+ctoradapt net/minecraft/world/item/crafting/SingleItemRecipe (Ljava/lang/String;Lnet/minecraft/world/item/crafting/Ingredient;Lnet/minecraft/world/item/ItemStack;)V (Lnet/minecraft/world/item/crafting/Recipe$CommonInfo;Lnet/minecraft/world/item/crafting/Ingredient;Lnet/minecraft/world/item/ItemStackTemplate;)V info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe.gameBaseArgs
+# AbstractScrollArea's scrollbar drawing is an extract method (Arc and Jobs+ scroll panels)
+method net/minecraft/client/gui/components/AbstractScrollArea renderScrollbar extractScrollbar 3
+# Brewing: the world's brewing table is asked through the brewing recipes (shim.compat.PotionBrewing)
+callinst net/minecraft/world/level/Level potionBrewing ()Linfo/mudbourn/mmsuproot/shim/compat/PotionBrewing; info/mudbourn/mmsuproot/shim/compat/PotionBrewing.of
+# Bura throttles the chunk section compile queue: the compile task is the section task (the task type the dispatcher takes), the dispatcher's
+# schedule is private, and a section's rebuild is compileAsync now. The task it passes on is the same object, so the old type name serves.
+class net/minecraft/client/renderer/chunk/SectionRenderDispatcher$RenderSection$CompileTask net/minecraft/client/renderer/chunk/SectionRenderDispatcher$RenderSection$SectionTask
+method net/minecraft/client/renderer/chunk/SectionRenderDispatcher$RenderSection rebuildSectionAsync compileAsync
+# --- end gaps of the 1.21.11 mods ---

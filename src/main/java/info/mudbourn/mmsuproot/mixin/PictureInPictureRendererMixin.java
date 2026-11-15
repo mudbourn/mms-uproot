@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.At;
 /**
  * 26.2 held the picture-in-picture render's targets in {@code RenderSystem.outputColorTextureOverride} and
  * {@code outputDepthTextureOverride} while it drew; 26.3 passes them straight to the render pass. This sets the two
- * fields of {@link LegacyRender} around the draw, for the mods that read the old ones, and clears them when the draw throws too.
+ * fields of {@link LegacyRender} and the collector the render submits to around the draw, for the mods that read the old ones, and clears them when the draw throws too.
  */
 @Mixin(PictureInPictureRenderer.class)
 public abstract class PictureInPictureRendererMixin {
@@ -29,11 +29,13 @@ public abstract class PictureInPictureRendererMixin {
 	private void mms_uproot$legacyOutput(PictureInPictureRenderer<?> self, PictureInPictureRenderState state, PoseStack pose, SubmitNodeCollector collector, Operation<Void> original) {
 		LegacyRender.outputColorTextureOverride = textureView;
 		LegacyRender.outputDepthTextureOverride = depthTextureView;
+		LegacyRender.collector = collector;
 		try {
 			original.call(self, state, pose, collector);
 		} finally {
 			LegacyRender.outputColorTextureOverride = null;
 			LegacyRender.outputDepthTextureOverride = null;
+			LegacyRender.collector = null;
 		}
 	}
 }

@@ -50,7 +50,7 @@ final class MixinAudit {
 
 	private static void audit(ModSource src, String internal) {
 		String label = internal.substring(internal.lastIndexOf('/') + 1);
-		String dropped = Disabler.mixinReason(internal);
+		String dropped = Disabler.mixinReason(internal, src.report.legacy);
 		if (dropped != null) {
 			src.report.mixinIssues.add(label + ": left out of the config on purpose: " + dropped);
 			return;

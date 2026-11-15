@@ -77,7 +77,7 @@ public final class LegacyLoot {
 
 		@Override
 		public LootTable value() {
-			return LegacyWorld.lootTable(key());
+			return LegacyWorld.lootTableOrEmpty(key());
 		}
 
 		@Override

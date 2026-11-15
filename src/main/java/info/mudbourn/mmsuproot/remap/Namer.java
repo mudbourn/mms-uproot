@@ -66,6 +66,7 @@ public final class Namer {
 	 */
 	public void audit(String user, int opcode, String owner, String name, String desc, boolean field) {
 		if (!game.has(owner) || owner.indexOf('[') >= 0) return;
+		if (name.startsWith("mms_uproot$")) return; // a member one of Uproot's own mixins adds to the game class
 		boolean found = field ? game.findField(owner, name, desc) : game.findMethod(owner, name, desc);
 		if (!found && !field && game.findMethod("java/lang/Object", name, desc)) found = true;
 		if (found && field && game.isPrivateField(owner, name, desc)) {
