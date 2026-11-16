@@ -1,8 +1,5 @@
 package info.mudbourn.mmsuproot.remap;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -17,10 +14,6 @@ import info.mudbourn.mmsuproot.map.GameClasses;
 import info.mudbourn.mmsuproot.map.NameTable;
 import info.mudbourn.mmsuproot.map.Renames;
 import info.mudbourn.mmsuproot.util.Json;
-import org.objectweb.asm.AnnotationVisitor;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
 /**
@@ -47,9 +40,9 @@ public final class Namer {
 	private final ModClasses mods;
 	private final Map<String, String> classCache = new ConcurrentHashMap<>();
 	private final Map<String, Set<String>> ancestorCache = new ConcurrentHashMap<>();
-	private final Map<String, List<String>> headerCache = new ConcurrentHashMap<>();
 	private final Map<String, Integer> drops = new java.util.concurrent.ConcurrentSkipListMap<>();
 	private final Map<String, Integer> typesOnlyCalls = new java.util.concurrent.ConcurrentSkipListMap<>();
+	private final Clashes clashes;
 
 	public Namer(NameTable table, Renames renames, GameClasses game, ModClasses mods, Report.Entry report) {
 		this.table = table;
@@ -57,6 +50,7 @@ public final class Namer {
 		this.game = game;
 		this.mods = mods;
 		this.report = report;
+		this.clashes = new Clashes(this);
 	}
 
 	/**
@@ -94,6 +88,11 @@ public final class Namer {
 		Map<String, Integer> out = new java.util.TreeMap<>(typesOnlyCalls);
 		typesOnlyCalls.keySet().removeAll(out.keySet());
 		return out;
+	}
+
+	/** Notes a gap the remap itself leaves: a member clash it could not resolve, in the form of the other unresolved entries. */
+	void unresolved(String text) {
+		report.unresolved.add(text);
 	}
 
 	/** Adds a line to the mod's report notes, once. */
@@ -155,9 +154,15 @@ public final class Namer {
 
 	/**
 	 * Member name for a method. {@code owner} is the intermediary owner, or null when unknown;
-	 * {@code desc} the intermediary descriptor, or null when unknown.
+	 * {@code desc} the intermediary descriptor, or null when unknown. A mod method that would share its name and descriptor
+	 * with another member of the class once named is told apart (see {@link Clashes}).
 	 */
 	public String method(String owner, String name, String desc) {
+		return clashes.method(owner, name, desc, baseMethod(owner, name, desc));
+	}
+
+	/** The method's name before clashes are looked at. */
+	String baseMethod(String owner, String name, String desc) {
 		if (name.startsWith("method_") || name.startsWith("comp_")) { // comp_: a record component's accessor
 			String m = table.methods.get(name);
 			if (m == null) {
@@ -174,6 +179,16 @@ public final class Namer {
 	}
 
 	public String field(String owner, String name) {
+		return baseField(owner, name);
+	}
+
+	/** Name for a field read from its descriptor too, which tells a mod's field from a clashing one (see {@link Clashes}). */
+	public String field(String owner, String name, String desc) {
+		return clashes.field(owner, name, desc, baseField(owner, name));
+	}
+
+	/** The field's name before clashes are looked at. */
+	String baseField(String owner, String name) {
 		if (name.startsWith("field_") || name.startsWith("comp_")) { // comp_: a record component's field
 			String f = table.fields.get(name);
 			if (f == null) {
@@ -241,40 +256,26 @@ public final class Namer {
 		});
 	}
 
+	/** The classes a mod class extends or implements (and a mixin's targets), in the mod's own names. */
+	List<String> modParents(String name) {
+		return header(name);
+	}
+
+	/** The member clashes found so far in the classes this namer has remapped: see {@link Clashes}. */
+	public java.util.Collection<Clashes.Clash> clashes() {
+		return clashes.found().values();
+	}
+
+	/** Whether the bridge method {@code name desc} of a mod class was merged into the method it forwards to, and so is left out. */
+	public boolean droppedBridge(String modClass, String name, String desc) {
+		return clashes.dropped(modClass, name, desc);
+	}
+
 	/** Super class, interfaces and {@code @Mixin} targets of a mod class, in the mod's own names. */
 	private List<String> header(String name) {
-		List<String> cached = headerCache.get(name);
-		if (cached != null) return cached;
-		List<String> parents = new ArrayList<>();
-		Path p = mods.path(name);
-		if (p != null) {
-			try {
-				ClassReader reader = new ClassReader(Files.readAllBytes(p));
-				if (reader.getSuperName() != null) parents.add(reader.getSuperName());
-				parents.addAll(List.of(reader.getInterfaces()));
-				reader.accept(new ClassVisitor(Opcodes.ASM9) {
-					@Override
-					public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-						if (!desc.equals("Lorg/spongepowered/asm/mixin/Mixin;")) return null;
-						return new AnnotationVisitor(Opcodes.ASM9) {
-							@Override
-							public AnnotationVisitor visitArray(String key) {
-								return new AnnotationVisitor(Opcodes.ASM9) {
-									@Override
-									public void visit(String k, Object value) {
-										if (value instanceof Type t && t.getSort() == Type.OBJECT) parents.add(t.getInternalName());
-										else if (value instanceof String s && "targets".equals(key)) parents.add(s.replace('.', '/'));
-									}
-								};
-							}
-						};
-					}
-				}, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-			} catch (IOException | RuntimeException e) {
-				report.notes.add("could not read the header of " + name + ": " + e);
-			}
-		}
-		headerCache.put(name, parents);
+		List<String> parents = mods.parents(name);
+		String error = mods.readError(name);
+		if (error != null) note("could not read the header of " + name + ": " + error);
 		return parents;
 	}
 
@@ -309,19 +310,46 @@ public final class Namer {
 		return m.appendTail(sb).toString();
 	}
 
+	/** The new name of a method of a mod class that a clash renamed ({@code owner} in the mod's names), or null: for the name of a lambda's interface method. */
+	public String clashed(String owner, String name, String desc) {
+		return clashes.method(owner, name, desc, null);
+	}
+
+	/** The new name a clash gave the member {@code name} (a bare name) of {@code mixinClass} or what it targets, or null; {@code desc} is its descriptor, or null when unknown. */
+	public String clashedMember(String name, String mixinClass, boolean field, String desc) {
+		return mods.has(mixinClass) ? bare(name, mixinClass, field, desc, null) : null;
+	}
+
+	/** Whether the string names a member of a mod class in the form {@code Lowner;name(desc)} or {@code Lowner;name:desc}. */
+	public boolean refersToModMember(String s) {
+		if (s.indexOf(';') < 0) return false;
+		Matcher m = MEMBER_REF.matcher(s);
+		while (m.find()) if (mods.has(m.group(1))) return true;
+		return false;
+	}
+
 	/** Rewrites the names inside a string: mixin targets, annotation values, descriptors. */
 	public String rewrite(String s) {
-		return rewrite(s, null, false);
+		return rewrite(s, null, false, null);
+	}
+
+	public String rewrite(String s, String mixinClass, boolean field) {
+		return rewrite(s, mixinClass, field, null);
 	}
 
 	/**
 	 * As {@link #rewrite(String)}, and a bare member name such as {@code render} or {@code name(desc)}
 	 * is renamed with {@code mixinClass} as its owner, which follows the class up to its mixin targets.
-	 * {@code field} says whether a bare name with no parenthesis is a field.
+	 * {@code field} says whether a bare name with no parenthesis is a field. {@code memberDesc} is the descriptor of the member a bare name
+	 * with none stands for, when the annotation it is in says (an {@code @Invoker}'s method, an {@code @Accessor}'s field type), and only
+	 * member clashes read it.
 	 */
-	public String rewrite(String s, String mixinClass, boolean field) {
+	public String rewrite(String s, String mixinClass, boolean field, String memberDesc) {
 		if (!(s.contains("net/minecraft") || s.contains("net.minecraft") || s.contains("com/mojang/blaze3d") || s.contains("com.mojang.blaze3d") || s.contains("method_") || s.contains("field_") || s.contains("comp_")
-				|| mixinClass != null && (renames.hasMethod(bareName(s)) || renames.hasField(bareName(s))))) return s;
+				|| mixinClass != null && (renames.hasMethod(bareName(s)) || renames.hasField(bareName(s))) || refersToModMember(s))) {
+			// nothing the rename rules know, but a member of a mod class that a clash renamed is still followed
+			return mixinClass != null && mods.has(mixinClass) ? bare(s, mixinClass, field, memberDesc, s) : s;
+		}
 
 		if (mixinClass != null) {
 			Matcher b = BARE.matcher(s);
@@ -329,7 +357,7 @@ public final class Namer {
 				String rest = b.group(2) == null ? "" : b.group(2);
 				boolean isField = rest.startsWith(":") || rest.isEmpty() && field;
 				String name = isField ? field(mixinClass, b.group(1)) : method(mixinClass, b.group(1), rest.isEmpty() ? null : rest);
-				s = name + rest;
+				s = bare(s, mixinClass, field, memberDesc, name + rest);
 			}
 		}
 
@@ -337,7 +365,7 @@ public final class Namer {
 		StringBuilder sb = new StringBuilder();
 		while (m.find()) {
 			String rest = s.substring(m.end());
-			String name = rest.startsWith(":") ? field(m.group(1), m.group(2)) : method(m.group(1), m.group(2), rest);
+			String name = rest.startsWith(":") ? field(m.group(1), m.group(2), rest.substring(1)) : method(m.group(1), m.group(2), rest);
 			m.appendReplacement(sb, Matcher.quoteReplacement("L" + m.group(1) + ";" + name));
 		}
 		s = m.appendTail(sb).toString();
@@ -376,6 +404,25 @@ public final class Namer {
 	private static String bareName(String s) {
 		Matcher b = BARE.matcher(s);
 		return b.matches() ? b.group(1) : "";
+	}
+
+	/**
+	 * The member name in {@code original} (a bare {@code name}, {@code name(desc)} or {@code name:desc} of a member of {@code mixinClass} or what it targets),
+	 * with the new name a member clash gave it, when it has one. {@code current} is the string as far as the rename rules took it, which is
+	 * returned when no clash applies.
+	 */
+	private String bare(String original, String mixinClass, boolean field, String memberDesc, String current) {
+		Matcher b = BARE.matcher(original);
+		if (!b.matches()) return current;
+		String name = b.group(1);
+		String rest = b.group(2) == null ? "" : b.group(2);
+		String renamed;
+		if (rest.startsWith(":")) renamed = clashes.field(mixinClass, name, rest.substring(1), null);
+		else if (rest.startsWith("(")) renamed = clashes.method(mixinClass, name, rest, null);
+		else if (rest.isEmpty() && field) renamed = memberDesc == null ? null : clashes.field(mixinClass, name, memberDesc, null);
+		else if (rest.isEmpty()) renamed = memberDesc != null ? clashes.method(mixinClass, name, memberDesc, null) : clashes.methodByName(mixinClass, name, null);
+		else renamed = null;
+		return renamed == null ? current : renamed + rest;
 	}
 
 	/**

@@ -33,6 +33,8 @@ public final class ClassRemap {
 		ClassWriter writer = new ClassWriter(0);
 		ClassVisitor chain = new MixinShadows(new MixinParams(new CtorAdapters(new CallRules(new FieldMoves(new SuperSwap(writer, namer), namer), namer), namer), namer), namer);
 		chain = new ClassRemapper(chain, new NameRemapper(namer, namer.renames().mixinTargetsOf(reader.getClassName())));
+		chain = new LambdaNames(chain, namer);
+		chain = new BridgeMerge(chain, namer);
 		chain = new AnnotationStrings(chain, namer);
 		chain = new StringNames(chain, namer);
 		reader.accept(chain, 0);
@@ -77,6 +79,62 @@ public final class ClassRemap {
 		}
 	}
 
+	/** Leaves out a compiler bridge that a member clash merged into the method it forwards to (see {@link Clashes}). Runs before the names change. */
+	private static final class BridgeMerge extends ClassVisitor {
+		private final Namer namer;
+		private String className;
+
+		BridgeMerge(ClassVisitor next, Namer namer) {
+			super(API, next);
+			this.namer = namer;
+		}
+
+		@Override
+		public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+			className = name;
+			super.visit(version, access, name, signature, superName, interfaces);
+		}
+
+		@Override
+		public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+			if (namer.droppedBridge(className, name, descriptor)) return null;
+			return super.visitMethod(access, name, descriptor, signature, exceptions);
+		}
+	}
+
+	/**
+	 * A lambda or method reference names the method of the functional interface it implements ({@code invokedynamic foo()Lmod/I;}), and the
+	 * name mapper cannot tell which interface that is. When {@code foo} of that mod interface was renamed by a clash (see {@link Clashes}), the
+	 * call site says so here, before the names are mapped, so the lambda still implements the method. Runs before the names change.
+	 */
+	private static final class LambdaNames extends ClassVisitor {
+		private final Namer namer;
+
+		LambdaNames(ClassVisitor next, Namer namer) {
+			super(API, next);
+			this.namer = namer;
+		}
+
+		@Override
+		public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+			MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+			if (mv == null) return null;
+			return new MethodVisitor(API, mv) {
+				@Override
+				public void visitInvokeDynamicInsn(String indyName, String indyDesc, Handle bsm, Object... args) {
+					if (bsm.getOwner().equals("java/lang/invoke/LambdaMetafactory") && args.length > 0 && args[0] instanceof Type sam && sam.getSort() == Type.METHOD) {
+						Type itf = Type.getReturnType(indyDesc);
+						if (itf.getSort() == Type.OBJECT) {
+							String renamed = namer.clashed(itf.getInternalName(), indyName, sam.getDescriptor());
+							if (renamed != null) indyName = renamed;
+						}
+					}
+					super.visitInvokeDynamicInsn(indyName, indyDesc, bsm, args);
+				}
+			};
+		}
+	}
+
 	/** Maps names through the {@link Namer}; intermediary names are unique, so owners do not matter. */
 	private static final class NameRemapper extends Remapper {
 		private final Namer namer;
@@ -108,7 +166,7 @@ public final class ClassRemap {
 
 		@Override
 		public String mapFieldName(String owner, String name, String descriptor) {
-			return namer.field(owner, name);
+			return namer.field(owner, name, descriptor);
 		}
 
 		@Override
@@ -119,8 +177,10 @@ public final class ClassRemap {
 
 	/**
 	 * Rewrites a string constant that names an intermediary class ({@code net/minecraft/class_123}, a descriptor with one, or the
-	 * dotted form). Code that builds classes or looks members up by reflection carries its names as strings, which the class
-	 * remapper does not see. Constants in fields (compile-time constants) and {@code ldc} both count.
+	 * dotted form), or a member of a mod class in the form {@code Lowner;name(desc)} (which a member clash may have renamed). Code that builds
+	 * classes or looks members up by reflection carries its names as strings, which the class remapper does not see. A string that is only a
+	 * member name ({@code Class.getMethod("foo")}) cannot be told from any other text and is left alone, as {@link Clashes} says. Constants in
+	 * fields (compile-time constants) and {@code ldc} both count.
 	 */
 	private static final class StringNames extends ClassVisitor {
 		private final Namer namer;
@@ -131,7 +191,7 @@ public final class ClassRemap {
 		}
 
 		private Object names(Object value) {
-			if (value instanceof String s && (s.contains("net/minecraft/class_") || s.contains("net.minecraft.class_"))) return namer.rewrite(s);
+			if (value instanceof String s && (s.contains("net/minecraft/class_") || s.contains("net.minecraft.class_") || namer.refersToModMember(s))) return namer.rewrite(s);
 			return value;
 		}
 
@@ -172,17 +232,31 @@ public final class ClassRemap {
 			super.visit(version, access, name, signature, superName, interfaces);
 		}
 
-		private AnnotationVisitor wrap(AnnotationVisitor av, String desc) {
+		/**
+		 * {@code memberName} and {@code memberDesc} are the member the annotation is on (a method or a field of this class), which an
+		 * {@code @Accessor} or {@code @Invoker} without a name takes its target from.
+		 */
+		private AnnotationVisitor wrap(AnnotationVisitor av, String desc, String memberName, String memberDesc, boolean onMethod) {
 			if (av == null) return null;
 			boolean injector = desc != null && (desc.startsWith("Lorg/spongepowered/asm/mixin/injection/") || desc.startsWith("Lcom/llamalad7/mixinextras/"));
 			boolean accessor = desc != null && desc.equals("Lorg/spongepowered/asm/mixin/gen/Accessor;");
 			boolean invoker = desc != null && desc.equals("Lorg/spongepowered/asm/mixin/gen/Invoker;");
-			return new Strings(av, namer, injector, injector || accessor || invoker ? className : null, accessor, null);
+			String targetDesc = null; // the descriptor of the member a bare name stands for
+			if (onMethod && memberDesc != null) {
+				if (invoker) targetDesc = memberDesc;
+				else if (accessor) {
+					Type[] args = Type.getArgumentTypes(memberDesc);
+					targetDesc = args.length == 1 ? args[0].getDescriptor() : Type.getReturnType(memberDesc).getDescriptor();
+				}
+			}
+			Strings strings = new Strings(av, namer, injector, injector || accessor || invoker ? className : null, accessor, null, targetDesc);
+			if ((accessor || invoker) && onMethod && memberName != null) strings.inferName(memberName);
+			return strings;
 		}
 
 		@Override
 		public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
-			return wrap(super.visitAnnotation(descriptor, visible), descriptor);
+			return wrap(super.visitAnnotation(descriptor, visible), descriptor, null, null, false);
 		}
 
 		@Override
@@ -192,7 +266,7 @@ public final class ClassRemap {
 			return new FieldVisitor(API, fv) {
 				@Override
 				public AnnotationVisitor visitAnnotation(String d, boolean visible) {
-					return wrap(super.visitAnnotation(d, visible), d);
+					return wrap(super.visitAnnotation(d, visible), d, name, descriptor, false);
 				}
 			};
 		}
@@ -204,31 +278,59 @@ public final class ClassRemap {
 			return new MethodVisitor(API, mv) {
 				@Override
 				public AnnotationVisitor visitAnnotation(String d, boolean visible) {
-					return wrap(super.visitAnnotation(d, visible), d);
+					return wrap(super.visitAnnotation(d, visible), d, name, descriptor, true);
 				}
 
 				@Override
 				public AnnotationVisitor visitParameterAnnotation(int parameter, String d, boolean visible) {
-					return wrap(super.visitParameterAnnotation(parameter, d, visible), d);
+					return wrap(super.visitParameterAnnotation(parameter, d, visible), d, null, null, false);
 				}
 			};
 		}
 	}
 
 	private static final class Strings extends AnnotationVisitor {
+		/** {@code get}, {@code is}, {@code set}, {@code call} and {@code invoke}: the prefixes Mixin takes off an accessor or invoker's name to find its target (read from Mixin's AccessorInfo). */
+		private static final java.util.regex.Pattern INFLECT = java.util.regex.Pattern.compile("^(get|is|set|call|invoke)(([A-Z])(.*?))(_\\$md.*)?$");
+
 		private final Namer namer;
 		private final boolean injector;
 		private final String owner; // class that names bare members, or null when bare names are not members
 		private final boolean field; // a bare name with no parenthesis is a field
 		private final String element; // the array this visitor is inside, or null
+		private final String targetDesc; // descriptor of the member a bare name with none stands for (an invoker's method, an accessor's field), or null
+		private String inferred; // the target Mixin takes from the name of an accessor or invoker method that names none, or null
+		private boolean named; // the annotation named its target
 
-		Strings(AnnotationVisitor next, Namer namer, boolean injector, String owner, boolean field, String element) {
+		Strings(AnnotationVisitor next, Namer namer, boolean injector, String owner, boolean field, String element, String targetDesc) {
 			super(API, next);
 			this.namer = namer;
 			this.injector = injector;
 			this.owner = owner;
 			this.field = field;
 			this.element = element;
+			this.targetDesc = targetDesc;
+		}
+
+		/**
+		 * An {@code @Accessor} or {@code @Invoker} that names no target takes it from its method's name ({@code getFoo} reads {@code foo}); when a clash
+		 * renamed that member, the annotation has to say so, since the method's name no longer leads to it.
+		 */
+		void inferName(String methodName) {
+			java.util.regex.Matcher m = INFLECT.matcher(methodName);
+			if (!m.matches()) return;
+			String rest = m.group(2);
+			boolean allUpper = rest.equals(rest.toUpperCase(java.util.Locale.ROOT));
+			inferred = (allUpper ? m.group(3) : m.group(3).toLowerCase(java.util.Locale.ROOT)) + m.group(4);
+		}
+
+		@Override
+		public void visitEnd() {
+			if (inferred != null && !named && owner != null && targetDesc != null) {
+				String renamed = namer.clashedMember(inferred, owner, field, targetDesc);
+				if (renamed != null) super.visit("value", renamed);
+			}
+			super.visitEnd();
 		}
 
 		@Override
@@ -236,7 +338,8 @@ public final class ClassRemap {
 			if (injector && "require".equals(name)) return;
 			String key = name != null ? name : element;
 			boolean member = owner != null && ("method".equals(key) || "target".equals(key) || "value".equals(key) || "field".equals(key));
-			super.visit(name, value instanceof String s ? namer.rewrite(s, member ? owner : null, field) : value);
+			if (member && element == null && "value".equals(key)) named = true;
+			super.visit(name, value instanceof String s ? namer.rewrite(s, member ? owner : null, field, targetDesc) : value);
 		}
 
 		@Override
@@ -249,13 +352,13 @@ public final class ClassRemap {
 		@Override
 		public AnnotationVisitor visitAnnotation(String name, String descriptor) {
 			AnnotationVisitor av = super.visitAnnotation(name, descriptor);
-			return av == null ? null : new Strings(av, namer, false, owner, false, null);
+			return av == null ? null : new Strings(av, namer, false, owner, false, null, null);
 		}
 
 		@Override
 		public AnnotationVisitor visitArray(String name) {
 			AnnotationVisitor av = super.visitArray(name);
-			return av == null ? null : new Strings(av, namer, false, owner, field, name);
+			return av == null ? null : new Strings(av, namer, false, owner, field, name, targetDesc);
 		}
 	}
 

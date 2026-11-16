@@ -1,8 +1,6 @@
 package info.mudbourn.mmsuproot.shim.compat;
 
 import info.mudbourn.mmsuproot.shim.Approximate;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.Holder;
@@ -55,12 +53,6 @@ public final class LegacyServerCalls {
 	@Approximate("the target is also pulled inside the world border, as 26.3's own overload does")
 	public static boolean randomTeleport(LivingEntity entity, double x, double y, double z, boolean particles) {
 		return entity.randomTeleport(x, y, z, particles, state -> false);
-	}
-
-	/** {@code Minecraft.isSingleplayer()}: a local server that has not been opened to a LAN. */
-	public static boolean isSingleplayer(Minecraft minecraft) {
-		IntegratedServer server = minecraft.getSingleplayerServer();
-		return server != null && !server.isPublished();
 	}
 
 	/**

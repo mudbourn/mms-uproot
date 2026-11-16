@@ -24,5 +24,9 @@ accessible method net/minecraft/world/item/component/BundleContents$Mutable <ini
 # the section dispatcher's private queueing call, which a mod that throttles chunk compiles makes itself (Bura)
 accessible method net/minecraft/client/renderer/chunk/SectionRenderDispatcher schedule (Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher$RenderSection$SectionTask;)V
 
-# a pipeline built the 1.21.11 way names no colour target unless it blends (shim.client.LegacyGpu.build)
+# a pipeline built the 1.21.11 way names no colour target unless it blends (shim.client.LegacyGpu.build); 26.3 keeps the count private
 accessible field com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder activeColorTargetStateCount I
+
+# 1.21.11 left these public and 26.3 made them private: the item registration helper that mods call with a resource key, and the time a villager last gossiped
+accessible method net/minecraft/world/item/Items registerItem (Lnet/minecraft/resources/ResourceKey;Ljava/util/function/Function;Lnet/minecraft/world/item/Item$Properties;)Lnet/minecraft/world/item/Item;
+accessible field net/minecraft/world/entity/npc/villager/Villager lastGossipTime J

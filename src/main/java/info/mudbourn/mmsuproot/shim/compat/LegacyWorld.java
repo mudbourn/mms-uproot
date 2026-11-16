@@ -230,4 +230,16 @@ public final class LegacyWorld {
 		state.getValues().forEach(v -> out.put(v.property(), v.value()));
 		return out;
 	}
+
+	/**
+	 * {@code EntityType.create(level, reason)}: a client level hands a new entity the id 0, which 1.21.11 let it keep and 26.3's {@code getId} refuses
+	 * as unassigned, so the renderer of an entity a mod only draws crashes. An entity made for a client level gets -1 (what the level gives it
+	 * again if it is added to the level).
+	 */
+	public static <T extends net.minecraft.world.entity.Entity> T createEntity(net.minecraft.world.entity.EntityType<T> type, net.minecraft.world.level.Level level,
+			net.minecraft.world.entity.EntitySpawnReason reason) {
+		T entity = type.create(level, reason);
+		if (entity != null && level.isClientSide()) entity.setId(-1);
+		return entity;
+	}
 }

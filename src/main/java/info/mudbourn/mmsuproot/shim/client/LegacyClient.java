@@ -176,15 +176,23 @@ public final class LegacyClient {
 		return new Object[] {sender, enabled, duration, name, null};
 	}
 
+	/** {@code Minecraft.isSingleplayer()}: a local server that has not been opened to a LAN. */
+	public static boolean isSingleplayer(net.minecraft.client.Minecraft minecraft) {
+		net.minecraft.client.server.IntegratedServer server = minecraft.getSingleplayerServer();
+		return server != null && !server.isPublished();
+	}
+
 	/**
-	 * {@code EntityType.create(level, reason)}: a client level hands a new entity the id 0, which 1.21.11 let it keep and 26.3's {@code getId} refuses
-	 * as unassigned, so the renderer of an entity a mod only draws crashes. An entity made for a client level gets -1 (what the level gives it
-	 * again if it is added to the level).
+	 * {@code SkyRenderState.skyColor}, read: 26.3 keeps the colour as a red, green and blue vector, 1.21.11 as an int. In 1.21.11 that int is the
+	 * sky colour attribute, which the game reads from a hex colour through {@code ARGB.opaque}, so its alpha byte is 0xFF; 26.3's
+	 * {@code ARGB.colorFromVector3f} gives alpha 255 as well.
 	 */
-	public static <T extends net.minecraft.world.entity.Entity> T createEntity(net.minecraft.world.entity.EntityType<T> type, net.minecraft.world.level.Level level,
-			net.minecraft.world.entity.EntitySpawnReason reason) {
-		T entity = type.create(level, reason);
-		if (entity != null && level.isClientSide()) entity.setId(-1);
-		return entity;
+	public static int skyColor(net.minecraft.client.renderer.state.level.SkyRenderState state) {
+		return net.minecraft.util.ARGB.colorFromVector3f(state.skyColor);
+	}
+
+	/** {@code SkyRenderState.skyColor}, written: the RGB int becomes the vector the sky is drawn with (the alpha byte, which the sky never used, is dropped). */
+	public static void setSkyColor(net.minecraft.client.renderer.state.level.SkyRenderState state, int color) {
+		state.skyColor = net.minecraft.util.ARGB.vector3fFromRGB24(color);
 	}
 }

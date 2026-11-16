@@ -197,7 +197,6 @@ callmove net/minecraft/world/level/levelgen/feature/stateproviders/BlockStatePro
 callmove net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider simple (Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
 callmove net/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider simple (Lnet/minecraft/world/level/block/Block;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
 callmove net/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider simple (Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
-field dev/corgitaco/ohthetreesyoullgrow/world/level/levelgen/feature/TYGFeatures TREE_FROM_NBT_V1 TREE_FROM_NBT_V2
 fieldowner net/minecraft/util/valueproviders/IntProvider net/minecraft/util/valueproviders/IntProviders
 fieldowner net/minecraft/util/valueproviders/FloatProvider net/minecraft/util/valueproviders/FloatProviders
 fieldmove net/minecraft/core/registries/BuiltInRegistries FEATURE info/mudbourn/mmsuproot/shim/feature/LegacyRegistries FEATURE
@@ -1105,8 +1104,8 @@ optional io/wispforest/owo/mixin/extension/json5/FileToIdConverterMixin json5$fi
 handler io/wispforest/owo/mixin/ext/ItemStackMixin injectDerivedComponentMap (Lnet/minecraft/core/Holder;ILnet/minecraft/core/component/PatchedDataComponentMap;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,1,2
 # A hook on the call that closed a chat screen: the screen is the HUD's to close now (a mixin can only name the call where it is made)
 injectat net/minecraft/client/Minecraft setScreen (Lnet/minecraft/client/gui/screens/Screen;)V net/minecraft/client/gui/Gui setScreen (Lnet/minecraft/client/gui/screens/Screen;)V
-# An entity made for a client level to be drawn, never added: 26.3 refuses the id 0 it is made with (shim.client.LegacyClient.createEntity)
-callinst net/minecraft/world/entity/EntityType create (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/EntitySpawnReason;)Lnet/minecraft/world/entity/Entity; info/mudbourn/mmsuproot/shim/client/LegacyClient.createEntity
+# An entity made for a client level to be drawn, never added: 26.3 refuses the id 0 it is made with (shim.compat.LegacyWorld.createEntity)
+callinst net/minecraft/world/entity/EntityType create (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/EntitySpawnReason;)Lnet/minecraft/world/entity/Entity; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.createEntity
 # Cursors: 26.3 has no GLFW; the mouse cursor is SDL's (see shim.client.LegacyCursors)
 callmove org/lwjgl/glfw/GLFW glfwCreateStandardCursor (I)J info/mudbourn/mmsuproot/shim/client/LegacyCursors createStandardCursor
 callmove org/lwjgl/glfw/GLFW glfwSetCursor (JJ)V info/mudbourn/mmsuproot/shim/client/LegacyCursors setCursor
@@ -1143,7 +1142,7 @@ class net/minecraft/world/inventory/ClickType net/minecraft/world/inventory/Cont
 callinst net/minecraft/server/level/ServerLevel setDayTime (J)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.setDayTime
 callinst net/minecraft/server/level/ServerLevel setWeatherParameters (IIZZ)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.setWeatherParameters
 callinst net/minecraft/world/entity/LivingEntity randomTeleport (DDDZ)Z info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.randomTeleport
-callinst net/minecraft/client/Minecraft isSingleplayer ()Z info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.isSingleplayer
+callinst net/minecraft/client/Minecraft isSingleplayer ()Z info/mudbourn/mmsuproot/shim/client/LegacyClient.isSingleplayer
 callmove net/minecraft/data/registries/VanillaRegistries createLookup ()Lnet/minecraft/core/HolderLookup$Provider; info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls createLookup
 callinst net/minecraft/world/entity/ai/gossip/GossipContainer transferFrom (Lnet/minecraft/world/entity/ai/gossip/GossipContainer;Lnet/minecraft/util/RandomSource;I)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.transferFrom
 callinst net/minecraft/world/entity/projectile/Projectile deflect (Lnet/minecraft/world/entity/projectile/ProjectileDeflection;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/entity/EntityReference;Z)Z info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.deflect
@@ -1200,4 +1199,24 @@ callinst net/minecraft/world/level/Level potionBrewing ()Linfo/mudbourn/mmsuproo
 # schedule is private, and a section's rebuild is compileAsync now. The task it passes on is the same object, so the old type name serves.
 class net/minecraft/client/renderer/chunk/SectionRenderDispatcher$RenderSection$CompileTask net/minecraft/client/renderer/chunk/SectionRenderDispatcher$RenderSection$SectionTask
 method net/minecraft/client/renderer/chunk/SectionRenderDispatcher$RenderSection rebuildSectionAsync compileAsync
+# Charged crossbow projectiles (Kielson's API): 26.3's ChargedProjectiles keeps item templates, not stacks. getItems() was a copying view of the
+# stacks, and of(List) copied them in; ofNonEmpty is the 26.3 entry for a list of stacks (see shim.compat.LegacyStacks)
+callinst net/minecraft/world/item/component/ChargedProjectiles getItems ()Ljava/util/List; info/mudbourn/mmsuproot/shim/compat/LegacyStacks.chargedItems
+callmove net/minecraft/world/item/component/ChargedProjectiles of (Ljava/util/List;)Lnet/minecraft/world/item/component/ChargedProjectiles; info/mudbourn/mmsuproot/shim/compat/LegacyStacks chargedProjectilesOf
+# The first-person hand picker moved from ItemInHandRenderer to FirstPersonHandsAndItems, and the bow-like use branch became part of
+# evaluateWhichHandsToRender. renderArmWithItem is the renderer's submitArmWithItem now, on a render state, which a hook there cannot reach (dead-hooks.txt)
+mixintarget com/kielson/mixin/client/HeldItemRendererMixin net/minecraft/client/renderer/ItemInHandRenderer net/minecraft/client/player/FirstPersonHandsAndItems
+method net/minecraft/client/player/FirstPersonHandsAndItems selectionUsingItemWhileHoldingBowLike evaluateWhichHandsToRender
+# The sky colour of a sky render state is a colour vector (red, green, blue, 0 to 1) now, an RGB int before (Immersive Storms)
+fieldget net/minecraft/client/renderer/state/level/SkyRenderState skyColor info/mudbourn/mmsuproot/shim/client/LegacyClient.skyColor
+fieldset net/minecraft/client/renderer/state/level/SkyRenderState skyColor info/mudbourn/mmsuproot/shim/client/LegacyClient.setSkyColor
+# Terraform's leaves extend the leaves block with a particle chance; 26.3 moved the chance and the falling particles to FallingParticlesLeavesBlock
+# (which has the abstract spawnFallingLeavesParticle the mod already overrides), and LeavesBlock takes an ambient sound player instead
+super com/terraformersmc/terraform/leaves/api/block/ExtendedLeavesBlock net/minecraft/world/level/block/FallingParticlesLeavesBlock
+super com/terraformersmc/terraform/leaves/api/block/ColoredParticleLeavesBlock net/minecraft/world/level/block/FallingParticlesLeavesBlock
+ctor net/minecraft/world/level/block/LeavesBlock (FLnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (FLnet/minecraft/world/level/block/sounds/AmbientLeavesBlockSoundPlayer;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V 1=info/mudbourn/mmsuproot/shim/block/LegacyBlocks.NO_AMBIENT_SOUND:Lnet/minecraft/world/level/block/sounds/AmbientLeavesBlockSoundPlayer;
+# The game rules screen of a world's rules is AbstractGameRulesScreen's family now (MCEF tests a screen against the old class by instanceof).
+# Valid for types only: nothing can construct or call the old class
+class net/minecraft/client/gui/screens/worldselection/EditGameRulesScreen net/minecraft/client/gui/screens/worldselection/AbstractGameRulesScreen
+typesonly net/minecraft/client/gui/screens/worldselection/EditGameRulesScreen
 # --- end gaps of the 1.21.11 mods ---

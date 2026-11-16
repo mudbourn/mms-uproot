@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import info.mudbourn.mmsuproot.shim.client.LegacyView;
 import info.mudbourn.mmsuproot.shim.compat.LegacyContainerListener;
 import info.mudbourn.mmsuproot.shim.compat.LegacyContainers;
+import info.mudbourn.mmsuproot.shim.client.LegacyClient;
 import info.mudbourn.mmsuproot.shim.compat.LegacyServerCalls;
 import info.mudbourn.mmsuproot.shim.compat.LegacySounds;
 import info.mudbourn.mmsuproot.shim.compat.LegacyStacks;
@@ -17,6 +18,7 @@ import info.mudbourn.mmsuproot.shim.item.LegacyItemFields;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.OptionInstance;
+import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
@@ -172,7 +174,7 @@ final class GapProbes {
 	}
 
 	private static String singleplayer(Probe.Ctx c) {
-		if (!LegacyServerCalls.isSingleplayer(c.mc)) throw new Probe.Fail("an unpublished integrated server is not singleplayer");
+		if (!LegacyClient.isSingleplayer(c.mc)) throw new Probe.Fail("an unpublished integrated server is not singleplayer");
 		return "an integrated server that is not on LAN is singleplayer";
 	}
 
@@ -253,18 +255,25 @@ final class GapProbes {
 	}
 
 	private static String attackArm(Probe.Ctx c) throws Exception {
-		HumanoidRenderState state = new HumanoidRenderState();
+		ArmedEntityRenderState state = new ArmedEntityRenderState();
 		state.mainArm = HumanoidArm.RIGHT;
 		java.lang.reflect.Method m = HumanoidRenderState.class.getMethod("mms_uproot$attackArm");
-		state.currentSwing = null;
-		if (m.invoke(state) != HumanoidArm.RIGHT) throw new Probe.Fail("not swinging gave " + m.invoke(state));
-		state.currentSwing = new LivingEntity.SwingDescription(InteractionHand.MAIN_HAND, ItemStack.EMPTY.getAttackAnimation(), 6);
+		java.lang.reflect.Field hand = ArmedEntityRenderState.class.getDeclaredField("mms_uproot$swingingArm");
+		hand.setAccessible(true);
+		if (m.invoke(state) != HumanoidArm.LEFT) throw new Probe.Fail("before the first swing gave " + m.invoke(state));
+		hand.set(state, InteractionHand.MAIN_HAND);
 		if (m.invoke(state) != HumanoidArm.RIGHT) throw new Probe.Fail("main hand gave " + m.invoke(state));
-		state.currentSwing = new LivingEntity.SwingDescription(InteractionHand.OFF_HAND, ItemStack.EMPTY.getAttackAnimation(), 6);
+		hand.set(state, InteractionHand.OFF_HAND);
 		if (m.invoke(state) != HumanoidArm.LEFT) throw new Probe.Fail("off hand gave " + m.invoke(state));
 		state.mainArm = HumanoidArm.LEFT;
 		if (m.invoke(state) != HumanoidArm.RIGHT) throw new Probe.Fail("off hand of a left-handed player gave " + m.invoke(state));
-		return "the attack arm is the swinging hand's arm: main hand to the main arm, off hand to the other";
+		// the hand of a real entity: unset until its first swing, kept once it has swung
+		LivingEntity fresh = (LivingEntity) EntityTypes.ZOMBIE.create(c.mc.level, EntitySpawnReason.COMMAND);
+		var holder = (info.mudbourn.mmsuproot.shim.entity.SwingingArmHolder) fresh;
+		if (holder.mms_uproot$lastSwingHand() != null) throw new Probe.Fail("an entity that never swung had " + holder.mms_uproot$lastSwingHand());
+		fresh.swing(InteractionHand.OFF_HAND, ItemStack.EMPTY.getAttackAnimation(), false);
+		if (holder.mms_uproot$lastSwingHand() != InteractionHand.OFF_HAND) throw new Probe.Fail("the swing hand was " + holder.mms_uproot$lastSwingHand() + " after an off-hand swing");
+		return "the attack arm follows the last swing's hand, the other arm before any swing; an entity remembers the hand it swung";
 	}
 
 	private static String view(Probe.Ctx c) {

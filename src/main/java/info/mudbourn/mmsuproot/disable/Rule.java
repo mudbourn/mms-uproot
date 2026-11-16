@@ -12,12 +12,13 @@ record Rule(Kind kind, String owner, String name, String desc, String reason, in
 
 	/** For MIXIN rules {@code owner} is the mixin class. For SKIP rules {@code owner} is the registry path and {@code name} the full id. */
 	String describe() {
-		return switch (kind) {
+		String what = switch (kind) {
 			case STUB -> "stub " + owner;
 			case NOOP -> "noop " + owner + "." + name + desc;
 			case SKIP -> "skip " + owner + " " + name;
 			case MIXIN -> "mixin " + owner;
 		};
+		return legacyOnly ? "legacy " + what : what;
 	}
 
 	boolean matchesMethod(String methodName, String methodDesc) {

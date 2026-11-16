@@ -84,14 +84,11 @@ mixin io/wispforest/owo/mixin/tweaks/OperatingSystemMixin | Util$OS has no openU
 # The GUI renderer hooks: fixNonQuadIndexing swaps in a shared index buffer for owo's triangle fan and strip pipelines, and 26.3's GuiRenderer builds
 # the index buffer of every draw from the pipeline's primitive topology itself. The other two hooks serve the blur surface, which is switched off above.
 legacy mixin io/wispforest/owo/mixin/ui/GuiRendererMixin | hooks on 1.21.11's GuiRenderer.executeDraw and addElementToMesh; 26.3 indexes non-quad topologies itself and the blur surface is off
-legacy noop io/wispforest/owo/mixin/ui/GuiRendererMixin fixNonQuadIndexing * | body reads 1.21.11's Draw record and index buffers; its hook is left out
-legacy noop io/wispforest/owo/mixin/ui/GuiRendererMixin drawBlur * | body drives the blur surface, which is switched off
 legacy mixin io/wispforest/owo/mixin/ui/access/GlCommandEncoderAccessor | only the left-out GuiRendererMixin reads it
 # The blur surface's lambda is numbered differently in this build (the 26.2 build's is lambda$blur$0, switched off above)
 legacy noop io/wispforest/owo/ui/core/Surface lambda$blur$6 * | blur surface draws a quad through the removed uniform ring and the left-out GuiRendererMixin; the surface paints nothing instead
 # Braid's retargeting of the GUI renderer (texture and window surfaces) sits on 1.21.11's render internals, and Braid's windows and displays are off already
 legacy mixin io/wispforest/owo/mixin/braid/GuiRendererMixin | hooks on 1.21.11's GuiRenderer internals for Braid's texture and window surfaces, which are off
-legacy noop io/wispforest/owo/mixin/braid/GuiRendererMixin injectSurfaceDimensions * | body reads 1.21.11's cached projection buffer; its hook is left out
 legacy noop io/wispforest/owo/braid/util/BraidGuiRenderer render * | draws Braid's texture and window surfaces through the hooks left out above
 # Braid's in-world displays: the hook draws them after the block entities of 1.21.11's main level pass (a lambda 26.3 does not have, with a render-graph handle among its locals)
 legacy mixin io/wispforest/owo/mixin/braid/LevelRendererMixin | draws automatic Braid displays inside 1.21.11's level pass lambda, which 26.3 does not have; the displays' own mixin is left out above
@@ -123,3 +120,9 @@ legacy mixin com/daqem/jobsplustools/mixin/client/MixinLevelRenderer | draws the
 # and their targets changed shape (the level settings constructor, the word position method).
 legacy mixin io/wispforest/owo/mixin/tweaks/LevelSettingsMixin | only acts with owo's debug flag; the level settings constructor changed shape
 legacy mixin io/wispforest/owo/mixin/tweaks/EditBoxMixin | only acts with owo's debug flag; the word position method changed shape
+
+# --- Terraform Wood API (inside Bountiful Fish): leaf render layer ---
+# The hook answers ItemBlockRenderTypes.getChunkRenderType for Terraform's leaves and small logs with the cutout-mipped layer. 26.3 has no such table: a quad's
+# layer is baked from the transparency of its sprite (see shim.client.BlockRenderLayerMap), so a leaf texture with transparent pixels is drawn cutout without the hook.
+# What is given up: a leaf texture with no transparent pixel is drawn solid where 1.21.11 forced it through the cutout layer (which looks the same for an opaque texture)
+mixin com/terraformersmc/terraform/leaves/impl/mixin/MixinBlockRenderLayers | 26.3 chooses a block's chunk layer from the sprite of each quad; there is no ItemBlockRenderTypes to hook

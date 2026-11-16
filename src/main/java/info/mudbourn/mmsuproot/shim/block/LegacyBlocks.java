@@ -25,7 +25,11 @@ import net.minecraft.world.level.lighting.LightEngine;
  * factory, the grass spreading checks, constants and the bone meal call.
  */
 public final class LegacyBlocks {
-	/** What 26.3's leaf blocks use for "no ambient sound"; its own field is private. */
+	/**
+	 * What 26.3's leaf blocks use for "no ambient sound"; its own field is private. This is exact, not a stand-in: 1.21.11's LeavesBlock
+	 * references no sound event at all (its constructor takes only the particle chance and the properties), and a player with no sound
+	 * makes {@code playAmbientLeavesSounds} do nothing.
+	 */
 	public static final AmbientLeavesBlockSoundPlayer NO_AMBIENT_SOUND = AmbientLeavesBlockSoundPlayer.noAmbientSound();
 
 	/** 26.3 keeps terracotta in a per-colour collection; 1.21.11 had one constant each. */

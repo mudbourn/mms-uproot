@@ -38,6 +38,7 @@ public final class Disabler {
 	private final List<Rule> rules;
 	private final Map<String, List<Rule>> byClass = new HashMap<>();
 	private final Map<String, Rule> skips = new HashMap<>();
+	private final Map<String, Rule> legacySkips = new HashMap<>(); // skip rules marked legacy: only mods remapped from 1.21.11 get the gate that applies them
 	private final Map<String, Rule> mixins = new HashMap<>();
 	private final List<String> failures = new ArrayList<>();
 	private final Map<String, Boolean> seenClasses = new ConcurrentHashMap<>();
@@ -45,7 +46,7 @@ public final class Disabler {
 	private Disabler(List<Rule> rules) {
 		this.rules = rules;
 		for (Rule r : rules) {
-			if (r.kind() == Rule.Kind.SKIP) skips.put(r.owner() + " " + r.name(), r);
+			if (r.kind() == Rule.Kind.SKIP) (r.legacyOnly() ? legacySkips : skips).put(r.owner() + " " + r.name(), r);
 			else if (r.kind() == Rule.Kind.MIXIN) mixins.put(mixinKey(r.owner(), r.legacyOnly()), r);
 			else byClass.computeIfAbsent(r.owner(), k -> new ArrayList<>()).add(r);
 		}
@@ -98,7 +99,9 @@ public final class Disabler {
 	static boolean skips(String registryPath, String id) {
 		Disabler d = instance;
 		if (d == null) return false;
-		Rule r = d.skips.get(registryPath + " " + id);
+		String key = registryPath + " " + id;
+		Rule r = d.skips.get(key);
+		if (r == null) r = d.legacySkips.get(key);
 		if (r == null) return false;
 		r.hits().incrementAndGet();
 		return true;
@@ -124,7 +127,7 @@ public final class Disabler {
 		List<Rule> own = byClass.get(internal);
 		if (own != null && !legacy) own = own.stream().filter(r -> !r.legacyOnly()).toList();
 		if (own != null && own.isEmpty()) own = null;
-		boolean gate = !skips.isEmpty() && mentions(bytes, REGISTRY_BYTES);
+		boolean gate = (!skips.isEmpty() || legacy && !legacySkips.isEmpty()) && mentions(bytes, REGISTRY_BYTES);
 		if (own == null && !gate) return bytes;
 		seenClasses.put(internal, Boolean.TRUE);
 		try {

@@ -184,10 +184,12 @@ public final class ScanTool {
 	private Map<String, Set<String>> ownAdded; // what Uproot's own mixins give the game classes; read when first needed
 	private final Map<String, Set<String>> added = new HashMap<>(); // a game class to the members ("name+desc", "name:desc") a mod's mixin or injected interface gives it
 	private final Map<String, Lossy> lossy = new LinkedHashMap<>();
+	private List<String[]> deadHooks = List.of(); // {mixin class, handler, reason} of each line of dead-hooks.txt
 	private final List<String[]> typesOnlyCalls = new ArrayList<>(); // {mod, user class, 26.3 owner, "method name desc"} of a call of a member of a typesonly class
 	private final Map<String, String> noops = new HashMap<>(); // "shim owner.name desc" -> what its body does, or "" when it does something
 	private final Map<String, ClassNode> shimClasses = new HashMap<>();
 	private final Map<String, Disabler.Applied> skipRules = new HashMap<>(); // the path and the full id of a skip rule -> the rule
+	private final Map<String, String[]> clashes = new TreeMap<>(); // "class kind member" -> {mod, class, kind, member, resolution}: members two of a class share once named
 	private Set<String> datagen = Set.of();
 
 	private ScanTool(GameClasses game, ClassLoader loader) {
@@ -360,13 +362,20 @@ public final class ScanTool {
 			}
 		}
 
+		deadHooks = readDeadHooks();
+		for (String[] h : deadHooks) lossy("dead-hook", h[0].replace('/', '.') + " " + h[1], h[2]);
+
 		// Index every target before any name is mapped, so a class of one target is never renamed for another.
 		ModClasses modClasses = new ModClasses();
 		Map<String, List<Path>> files = new HashMap<>();
+		Map<String, String> classOwner = new HashMap<>(); // a mod class to the id of the mod that has it
 		for (Jar j : targets) {
 			List<Path> classes = classFiles(j.root());
 			files.put(j.id(), classes);
-			for (Path p : classes) modClasses.put(internal(j.root(), p), p);
+			for (Path p : classes) {
+				modClasses.put(internal(j.root(), p), p);
+				classOwner.put(internal(j.root(), p).replace('/', '.'), j.id());
+			}
 		}
 
 		List<Remapped> remapped = new ArrayList<>();
@@ -381,6 +390,7 @@ public final class ScanTool {
 			Set<String> own = new HashSet<>();
 			for (Path p : files.get(j.id())) own.add(internal(j.root(), p));
 			for (Disabler.Applied a : Disabler.applied()) if (a.kind().equals("mixin") && own.contains(a.owner()) && (!a.legacyOnly() || j.kind() == Kind.LEGACY)) lossyUse(lossy("disable-mixin", a.describe(), a.reason()), j.id(), 1);
+			for (String[] h : deadHooks) if (own.contains(h[0])) lossyUse(lossy("dead-hook", h[0].replace('/', '.') + " " + h[1], h[2]), j.id(), 1);
 			for (Path p : files.get(j.id())) {
 				String name = internal(j.root(), p);
 				if (Disabler.mixinReason(name, j.kind() == Kind.LEGACY) != null) continue; // left out of its mixin config, so it never loads and nothing in it runs; the lossy list says so
@@ -409,6 +419,19 @@ public final class ScanTool {
 		}
 
 		namers.forEach((mod, namer) -> namer.drops().forEach((rule, n) -> lossyUse(lossy("calldrop", rule, ""), mod, n)));
+		// a clash is found by whichever namer asked about the class first; it belongs to the mod that has the class
+		namers.values().forEach(namer -> namer.clashes().forEach(c -> clashes.putIfAbsent(c.modClass() + ' ' + c.kind() + ' ' + c.member(),
+				c.unresolved() ? new String[] {classOwner.getOrDefault(c.modClass(), "?"), c.modClass(), c.kind(), c.member(), c.resolution(), "unresolved"}
+					: new String[] {classOwner.getOrDefault(c.modClass(), "?"), c.modClass(), c.kind(), c.member(), c.resolution()})));
+		// a clash the remapper could not resolve leaves a class the JVM refuses to load: a real gap, listed under the class itself
+		for (String[] c : clashes.values()) {
+			if (c.length < 6 || !summaries.containsKey(c[0])) continue;
+			String owner = c[1].replace('.', '/');
+			Gap g = gap(owner, false);
+			String key = c[2] + " " + c[3];
+			record(c[0], owner, g, g.members.computeIfAbsent(key, k -> new Use()), owner + "." + c[3]);
+			g.memberHints.put(key, "member clash left unresolved: " + c[4]);
+		}
 
 		for (Remapped r : remapped) headers.put(r.name(), header(r.bytes()));
 		for (Remapped r : remapped) {
@@ -439,6 +462,29 @@ public final class ScanTool {
 	}
 
 	// ---- lossy mappings
+
+	/**
+	 * The mixin injectors that match nothing in 26.3 and are accepted so ({@code uproot/dead-hooks.txt}, lines {@code CLASS HANDLER | reason}).
+	 * A reason that starts with "real break" is tagged, so it stands apart from the harmless and the covered ones.
+	 */
+	private static List<String[]> readDeadHooks() {
+		List<String[]> out = new ArrayList<>();
+		try (java.io.InputStream in = ScanTool.class.getResourceAsStream("/uproot/dead-hooks.txt")) {
+			if (in == null) return out;
+			for (String line : new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\\R")) {
+				String t = line.strip();
+				int bar = t.indexOf('|');
+				if (t.isEmpty() || t.startsWith("#") || bar < 0) continue;
+				String[] id = t.substring(0, bar).strip().split("\\s+");
+				if (id.length != 2) continue;
+				String reason = t.substring(bar + 1).strip();
+				out.add(new String[] {id[0], id[1], reason.startsWith("real break") ? "[REAL BREAK] " + reason : reason});
+			}
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+		return out;
+	}
 
 	private Lossy lossy(String kind, String rule, String detail) {
 		return lossy.computeIfAbsent(kind + " " + rule, k -> new Lossy(kind, rule, detail));
@@ -995,7 +1041,8 @@ public final class ScanTool {
 		void constant(Object c) {
 			if (c instanceof String str && !skipRules.isEmpty()) {
 				Disabler.Applied a = skipRules.get(str);
-				if (a != null) lossyUse(lossy("disable-skip", a.describe(), a.reason()), mod, 1);
+				Summary owner = summaries.get(mod);
+				if (a != null && (!a.legacyOnly() || owner != null && owner.kind == Kind.LEGACY)) lossyUse(lossy("disable-skip", a.describe(), a.reason()), mod, 1);
 			}
 			if (c instanceof Type t) {
 				if (t.getSort() == Type.METHOD) desc(t.getDescriptor());
@@ -1194,6 +1241,18 @@ public final class ScanTool {
 			jsonLossy.add(o);
 		}
 		root.put("lossy", jsonLossy);
+		List<Object> jsonClashes = new ArrayList<>();
+		for (String[] c : clashes.values()) {
+			Map<String, Object> o = new LinkedHashMap<>();
+			o.put("mod", c[0]);
+			o.put("class", c[1]);
+			o.put("kind", c[2]);
+			o.put("member", c[3]);
+			o.put("resolution", c[4]);
+			o.put("unresolved", c.length > 5);
+			jsonClashes.add(o);
+		}
+		root.put("clashes", jsonClashes);
 		root.put("notes", notes);
 		Files.writeString(out.resolve("gaps.json"), Json.write(root), StandardCharsets.UTF_8);
 
@@ -1232,12 +1291,22 @@ public final class ScanTool {
 		md.append("\n## Lossy mappings (not gaps, not counted above)\n\n");
 		md.append("Rules that drop a call or answer it with a stand-in that does nothing, so a mod's behaviour is lost without an error. Each wants a real\n");
 		md.append("mapping or a written reason. Kinds: `calldrop` (a rule of renames.txt removes the call), `shim-noop` (a call lands on a shim method whose compiled body\n");
-		md.append("is empty or only returns a constant or an argument), `shim-approx` (a call lands on a shim method marked `@Approximate`, with what it gives up), `disable-stub`, `disable-noop`, `disable-skip` and `disable-mixin` (entries of disable.txt).\n");
+		md.append("is empty or only returns a constant or an argument), `shim-approx` (a call lands on a shim method marked `@Approximate`, with what it gives up), `disable-stub`, `disable-noop`, `disable-skip` and `disable-mixin` (entries of disable.txt; a rule marked `legacy` applies only to mods remapped from 1.21.11), and `dead-hook` (a mixin injector of a mod that matches nothing in 26.3, from dead-hooks.txt; the real breaks are tagged).\n");
 		md.append("Sites are call sites for the first two, rule applications for stub and noop, and, for skip and mixin, the strings that name the id and the mixin classes present (a rough count).\n\n");
 		md.append("| kind | rule | sites | mods | what it does or why |\n|---|---|---|---|---|\n");
 		for (Lossy l : lossies) {
 			md.append("| ").append(l.kind).append(" | `").append(l.rule).append("` | ").append(l.total).append(" | ").append(l.byMod.isEmpty() ? "none" : mods(l.byMod)).append(" | ")
 					.append(l.detail.replace("|", "/")).append(" |\n");
+		}
+		md.append("\n## Member clashes (resolved by the remapper, not gaps; the unresolved ones are listed as gaps too)\n\n");
+		md.append("A class that would have two methods or fields with the same name and descriptor once named (the JVM refuses such a class). The mod's own member is\n");
+		md.append("renamed with the suffix `$clash`, with its calls, its whole override family (every mod class that overrides or implements it, or that it does), and the mixin\n");
+		md.append("shadows, invokers, accessors, `method=` strings and lambdas that name it, or a compiler bridge is merged into the method it forwards to; see remap.Clashes.\n");
+		md.append("**Not followed:** a member looked up by name through reflection (`Class.getMethod(\"foo\")`) keeps reaching the member that kept the name.\n\n");
+		if (clashes.isEmpty()) md.append("None.\n");
+		else {
+			md.append("| mod | class | kind | member | resolution |\n|---|---|---|---|---|\n");
+			for (String[] c : clashes.values()) md.append("| ").append(c[0]).append(" | `").append(c[1]).append("` | ").append(c[2]).append(" | `").append(c[3]).append("` | ").append(c[4].replace("|", "/")).append(" |\n");
 		}
 		if (!notes.isEmpty()) {
 			md.append("\n## Notes\n\n");
@@ -1250,6 +1319,7 @@ public final class ScanTool {
 				+ Math.round(seconds) + "s; wrote " + out.resolve("gaps.md") + " and gaps.json");
 		System.out.println("  lossy (not gaps): " + lossies.stream().filter(l -> l.total > 0).count() + " rules hit, " + lossies.stream().mapToInt(l -> l.total).sum() + " sites, "
 				+ lossies.stream().filter(l -> l.total == 0).count() + " rules never hit");
+		System.out.println("  member clashes (resolved by the remapper, " + clashes.values().stream().filter(c -> c.length > 5).count() + " unresolved): " + clashes.size() + " in " + clashes.values().stream().map(c -> c[0]).distinct().count() + " mods");
 		for (Cat c : Cat.values()) {
 			System.out.println("  " + c.label + ": " + summaries.values().stream().mapToInt(s -> s.catSites.getOrDefault(c, 0)).sum() + " call sites, "
 					+ sorted.stream().filter(g -> g.category() == c).count() + " owner classes");

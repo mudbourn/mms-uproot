@@ -80,6 +80,8 @@ public final class ProbeRunner implements ClientModInitializer {
 		probes.addAll(CrawlProbes.all());
 		probes.addAll(DeadHookProbes.all());
 		probes.addAll(GapProbes.all());
+		probes.addAll(ClashProbes.all());
+		probes.addAll(LibraryProbes.all());
 		// -Duproot.probe.only=bwg. runs just the probes whose name starts so (for working on one mod); several prefixes go after commas
 		String only = System.getProperty("uproot.probe.only");
 		if (only != null) probes.removeIf(p -> java.util.Arrays.stream(only.split(",")).noneMatch(prefix -> p.name().startsWith(prefix)));
