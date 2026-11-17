@@ -113,8 +113,9 @@ legacy mixin io/github/steveplays28/noisium/mixin/compat/lithium/LithiumNoiseChu
 # --- Basic Weapons ---
 # The pike's first-person pose hooks the head of the first-person item renderer's arm-and-item method. 26.3 draws the held item from a render state
 # the player was extracted into, in another class with other arguments, so the hook has nothing to read the player, hand or swing from. The pike is
-# still held and swung with the vanilla hand pose in first person; its third-person pose (HumanoidModelMixin) is not affected.
-legacy mixin com/khazoda/basicweapons/mixin/client/ItemInHandRendererMixin | first-person pike pose hooks ItemInHandRenderer's arm-and-item method, which 26.3 split into state extraction and submission
+# still held and swung with the vanilla hand pose in first person; its third-person pose (HumanoidModelMixin) is not affected. The 26.1 build has the same hook
+# on the same method (renderArmWithItem), so the rule is not limited to the 1.21.11 build.
+mixin com/khazoda/basicweapons/mixin/client/ItemInHandRendererMixin | first-person pike pose hooks ItemInHandRenderer's arm-and-item method, which 26.3 split into state extraction and submission
 
 # --- Jobs+ Tools ---
 # The tool mode's highlight of the blocks a multi-block tool will change is drawn by a hook in the level renderer's block outline method, through
@@ -169,3 +170,24 @@ mixin info/mudbourn/mmscompat/mixin/trinkets/TrinketsFullSyncRegistryMixin | wor
 # which 26.3's Fabric API removed; the client entrypoint threw before registering anything else.
 # The call is rerouted in renames.txt (callmove to shim/Skipped), because loading the class alone fails; lossy: junction rails
 # render with their plain block model instead of the switched-track model.
+
+# --- Mixin classes of 1.21.11 builds that failed to apply as a whole because of one member (the dead-hook list of the 26.3 test client) ---
+# Leawind's Third Person: the invoker for GameRenderer.getFov (26.3 has Camera.calculateFov(float) instead); no class of the mod calls invokeGetFov, so the interface is never used
+legacy mixin com/github/leawind/thirdperson/mixin/GameRendererInvoker | unused: its only method invokes GameRenderer.getFov, which 26.3 does not have (the field of view is Camera.calculateFov, hooked in renames.txt); no class of the mod calls it
+# Better Copper Golem: accessor of the items of ItemContainerContents, which are a list of optional item templates in 26.3, not the NonNullList of stacks it names
+legacy mixin ma/shaur/bettercoppergolem/mixin/ItemContainerContentsAccessor | unused: accessor of ItemContainerContents.items, a List<Optional<ItemStackTemplate>> in 26.3, not the NonNullList<ItemStack> it names; no class of the mod uses getItems or setItems
+# Immersive Storms: one wrap in the fog mixin turns the base fog colour (an int in 1.21.11) into a storm tint. AtmosphericFogEnvironment.getBaseColor returns a Vector3fc in 26.3, so Mixin
+# rejects the wrap for its return type, and with it the whole class, including the wrap that thickens the fog in storms (setupFog, same parameters in 26.3).
+drop com/thedeathlycow/immersive/storms/mixin/client/AtmosphericFogEnvironmentMixin modifyBaseFogColor * | lossy: the storm tint of the base fog colour is off (its wrap returns an int, 26.3's getBaseColor a Vector3fc); the fog distance wrap in the same class applies again
+
+# --- Scorchful 26.1 build: breezes in sandstorms ---
+# NaturalSpawnerMixin wraps ChunkGenerator.getMobsAt(biome holder, structures, category, position) inside NaturalSpawner.mobsAt, and when the list it gets back is the
+# biome's own monster list (Biome.getMobSettings().getMobs(category), compared by identity) it swaps in a copy with breezes added while a sandstorm is on. 26.3's
+# getMobsAt takes the level, not a biome holder, and a biome has no mob settings: natural spawns are the NATURAL_MOB_SPAWNS environment attribute, resolved at the
+# position. The handler's biome argument and the identity test have no counterpart a rule can supply (an argument map entry is an index, a default or a no-argument
+# helper, none of which can look the biome up from the level and the position), so the wrap stays off. Lost: breezes no longer join the monster spawns of deserts
+# in a sandstorm; every other part of Scorchful is unaffected (BiomeMixin only holds the cache the wrap would fill).
+mixin com/github/thedeathlycow/scorchful/mixin/NaturalSpawnerMixin | breezes do not join the monster spawns during a sandstorm: the wrap needs the biome holder and the biome's mob settings, which 26.3's getMobsAt and Biome no longer give
+
+mixin com/daqem/knot/api/mixin/AxeItemAccessor | accessor for AxeItem.STRIPPABLES, which 26.3 does not have (stripping is a block transformer); no Knot class calls it
+mixin com/daqem/knot/api/mixin/ShovelItemAccessor | accessor for ShovelItem.FLATTENABLES, likewise gone (flattening is a block transformer); no Knot class calls it

@@ -28,6 +28,7 @@
 		"WanderingTraderTradesMixin"
 	],
 	"client": [
+		"CameraFrustumMixin",
 		"EditBoxFilterMixin",
 		"EndermanCarriedMixin",
 		"CubeMapOutputMixin",
@@ -35,6 +36,7 @@
 		"FlameFeatureRendererFireMixin",
 		"GuiGraphicsTooltipMixin",
 		"GuiScreenMixin",
+		"LevelRendererFrustumMixin",
 		"HumanoidAttackArmMixin",
 		"LegacyTextInputCloseMixin",
 		"LegacyTextInputMixin",

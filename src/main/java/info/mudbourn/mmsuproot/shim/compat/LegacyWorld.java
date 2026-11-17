@@ -242,4 +242,9 @@ public final class LegacyWorld {
 		if (entity != null && level.isClientSide()) entity.setId(-1);
 		return entity;
 	}
+
+	/** {@code ClockManager.getTotalTicks(clock)}: the ticks the clock has run in all, which 26.3 reads from the clock's instance. */
+	public static long clockTotalTicks(net.minecraft.world.clock.ClockManager manager, Holder<net.minecraft.world.clock.WorldClock> clock) {
+		return manager.getInstance(clock).totalTicks();
+	}
 }

@@ -140,6 +140,10 @@
 #                                  which a text of the same shape in another mod's mixin must not be changed by. e.g. the name of a target
 #                                  method that the class's new target (see mixintarget) declares under another name.
 #                                  A mixin that extends the class its mixintarget names gets Object as its superclass, which Mixin demands.
+# mixinalso MIXINCLASS NEWTARGET   adds NEWTARGET (a 26.3 class) to the targets in the @Mixin of MIXINCLASS (its own internal name), for a mixin whose
+#                                  injectors now belong to two classes (one of them moved, the others stayed). Each injector runs where it finds its target;
+#                                  name the owner in the method string (see mixinmethod) so that a method both classes have is only hooked in one.
+#                                  Shadows are not read against the added class, so the mixin should have none the class lacks.
 # super CLASS NEWSUPER             a mod class (its own name, as it is in the mod) extends NEWSUPER, an internal name, where it extended its own
 #                                  superclass; NEWSUPER must extend that superclass and have its constructors. The class's invokespecial calls
 #                                  of the old superclass (constructors, super.m()) go to NEWSUPER. For a mod class whose superclass lost methods
@@ -1251,6 +1255,18 @@ ctor net/minecraft/world/level/block/LeavesBlock (FLnet/minecraft/world/level/bl
 # Valid for types only: nothing can construct or call the old class
 class net/minecraft/client/gui/screens/worldselection/EditGameRulesScreen net/minecraft/client/gui/screens/worldselection/AbstractGameRulesScreen
 typesonly net/minecraft/client/gui/screens/worldselection/EditGameRulesScreen
+# Mojang's authlib 10 moved the user API service and its response records out of the yggdrasil packages; No Telemetry's two mixins target the service and
+# redirect the telemetry privilege of the response (fetchProperties and Privileges.getTelemetry exist under the new names, same shape)
+class com/mojang/authlib/yggdrasil/YggdrasilUserApiService com/mojang/authlib/services/MinecraftServicesUserApiService
+class com/mojang/authlib/yggdrasil/response/UserAttributesResponse com/mojang/authlib/services/response/UserAttributesResponse
+# Roulette Casino's lighting and model calls. LightTexture's packing helpers are LightCoordsUtil's (same bit layout: block light << 4, sky light << 20), LevelRenderer's
+# light lookup is LightCoordsUtil.getLightCoords on the same level and position, and the model and tint calls answer from where 26.3 keeps them (shim.client.LegacyModels)
+class net/minecraft/client/renderer/LightTexture net/minecraft/util/LightCoordsUtil
+callmove net/minecraft/client/renderer/LevelRenderer getLightColor (Lnet/minecraft/client/renderer/block/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;)I net/minecraft/util/LightCoordsUtil getLightCoords (Lnet/minecraft/world/level/BlockAndLightGetter;Lnet/minecraft/core/BlockPos;)I
+callinst net/minecraft/client/resources/model/geometry/BakedQuad tintIndex ()I info/mudbourn/mmsuproot/shim/client/LegacyModels.tintIndex
+callinst net/minecraft/client/renderer/block/dispatch/BlockStateModel particleIcon ()Lnet/minecraft/client/renderer/texture/TextureAtlasSprite; info/mudbourn/mmsuproot/shim/client/LegacyModels.particleIcon
+callinst net/minecraft/client/renderer/item/ItemStackRenderState pickParticleIcon (Lnet/minecraft/util/RandomSource;)Lnet/minecraft/client/renderer/texture/TextureAtlasSprite; info/mudbourn/mmsuproot/shim/client/LegacyModels.pickParticleIcon
+callinst net/minecraft/client/color/block/BlockColors getColor (Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/client/renderer/block/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;I)I info/mudbourn/mmsuproot/shim/client/LegacyModels.blockColor
 # --- end gaps of the 1.21.11 mods ---
 
 # Interaction calls gained the exact hit location (1.21.11 Player.interactOn(Entity, hand) and Entity.interact(Player, hand) became three-argument
@@ -1381,3 +1397,73 @@ retbridge org/ladysnake/cca/api/v3/component/ComponentFactory createComponent (L
 retbridge org/ladysnake/cca/api/v3/scoreboard/TeamComponentFactory createForTeam (Lnet/minecraft/world/scores/PlayerTeam;)Lorg/ladysnake/cca/api/v3/component/Component; Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
 retbridge org/ladysnake/cca/api/v3/scoreboard/TeamComponentFactoryV2 createForTeam (Lnet/minecraft/world/scores/PlayerTeam;Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/server/MinecraftServer;)Lorg/ladysnake/cca/api/v3/component/Component; Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
 retbridge org/ladysnake/cca/api/v3/scoreboard/ScoreboardComponentFactoryV2 createForScoreboard (Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/server/MinecraftServer;)Lorg/ladysnake/cca/api/v3/component/Component; Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+
+# UILib 22 (the 26.x build that Jobs+ 19 runs on) renamed its own render methods the way 26.3 renamed Minecraft's
+method com/daqem/uilib/api/IRenderable render extractRenderState 6
+method com/daqem/uilib/api/IRenderable renderBase extractRenderStateBase 6
+method com/daqem/uilib/api/widget/skilltree/ISkillTreeItemWidget renderTooltips extractTooltips 3
+method com/daqem/uilib/api/widget/skilltree/ISkillTreeWidget renderTooltips extractTooltips 3
+
+# --- 1.21.11 builds of Guard Villagers, Arc, Roulette Casino, MCEF, Perspective API, Third Person, Bura, Immersive Optimization, Immersive Storms and owo-lib:
+# --- hooks whose target moved or changed shape in 26.3 (the dead-hook list of the 26.3 test client, sorted) ---
+
+# Guard Villagers: the villager meet and idle packages lost the profession parameter (getMeetPackage(float), getIdlePackage(float)); the handlers only read the speed
+handler dev/sterner/guardvillagers/mixin/VillagerTaskListProviderMixin createMeetTasks (FLorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V null,0
+handler dev/sterner/guardvillagers/mixin/VillagerTaskListProviderMixin createIdleTasks (FLorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V null,0
+
+# Arc (Jobs+ brewing XP): the brewed-potion trigger takes the potion contents where it took the potion holder; the hook sits just before that call
+injectat net/minecraft/advancements/triggers/BrewedPotionTrigger trigger (Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/core/Holder;)V net/minecraft/advancements/triggers/BrewedPotionTrigger trigger (Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/item/alchemy/PotionContents;)V
+
+# Roulette Casino: ShapedRecipe.assemble lost the registry lookup (the dealer hook never reads it), and 26.3 draws the villager screen's panel in extractBackground
+# and its scrollbar in extractScroller (same parameters, apart from the order of the background's)
+handler fr/minevegas/casino/mixin/DealerRecipeMixin minevegas$dealer (Lnet/minecraft/world/item/crafting/CraftingInput;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V 0,null
+mixinmethod fr/minevegas/casino/mixin/MerchantScreenMixin roulettecasino$customBackground extractBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V
+mixinmethod fr/minevegas/casino/mixin/MerchantScreenMixin roulettecasino$customScroller extractScroller(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIIILnet/minecraft/world/item/trading/MerchantOffers;)V
+
+# MCEF: its refmap pins GameRenderer.render to the 1.21.11 parameters and Minecraft.setScreen to the call rule above, so a bare name is not enough; the hooks name
+# their methods here. setScreen is the one MinecraftScreenMixin gives Minecraft back.
+mixinmethod com/cinemamod/mcef/mixins/MixinGameRenderer head_render_MCEF render()V
+mixinmethod com/cinemamod/mcef/mixins/MixinMinecraft head_setScreen_MCEF setScreen(Lnet/minecraft/client/gui/screens/Screen;)V
+
+# Perspective API and Third Person (the 1.21.11 builds): 26.3 has no GameRenderer.updateCamera, setup or getFov. The camera is updated by GameRenderer.update (called
+# before everything else a frame draws) and positioned by Camera.alignWithEntity, which has the two Camera.move calls the old setup had; the field of view is
+# Camera.calculateFov (its useFovSetting argument is the world's FOV, always on here). The HUD pass is Hud.extractRenderState and its crosshair Hud.extractCrosshair.
+bridge net/minecraft/client/MouseHandler onMove (JDD)V (JDDDD)V
+mixinmethod io/github/leawind/perspectiveapi/internal/bridge/mixin/cameraupdate/GameRendererMixin beforeMainCameraUpdate update(Lnet/minecraft/client/DeltaTracker;)V
+mixinmethod io/github/leawind/perspectiveapi/internal/bridge/mixin/setupcamera/CameraMixin beforeMoveCamera alignWithEntity(F)V
+handler io/github/leawind/perspectiveapi/internal/bridge/mixin/setupcamera/CameraMixin beforeMoveCamera (FLorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,null,false,false,0
+mixintarget io/github/leawind/perspectiveapi/internal/bridge/mixin/fov/GameRendererMixin net/minecraft/client/renderer/GameRenderer net/minecraft/client/Camera
+mixinmethod io/github/leawind/perspectiveapi/internal/bridge/mixin/fov/GameRendererMixin perspective_api$captureFovArgs calculateFov(F)F
+mixinmethod io/github/leawind/perspectiveapi/internal/bridge/mixin/fov/GameRendererMixin modifyFov calculateFov(F)F
+handler io/github/leawind/perspectiveapi/internal/bridge/mixin/fov/GameRendererMixin perspective_api$captureFovArgs (FLorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V null,0,info/mudbourn/mmsuproot/shim/client/LegacyCamera.useFovSetting
+mixintarget io/github/leawind/perspectiveapi/internal/bridge/mixin/gui/GuiMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+mixinmethod io/github/leawind/perspectiveapi/internal/bridge/mixin/gui/GuiMixin perspectiveApi$afterRender extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V
+mixinmethod com/github/leawind/thirdperson/mixin/CameraMixin preMoveCamera alignWithEntity(F)V
+handler com/github/leawind/thirdperson/mixin/CameraMixin preMoveCamera (FLorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,null,false,false,0
+mixintarget com/github/leawind/thirdperson/mixin/GuiMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+mixinmethod com/github/leawind/thirdperson/mixin/GuiMixin isFirstPerson extractCrosshair(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V
+# Third Person's GameRenderer hooks: the render-tick event runs at the head of GameRenderer.update (before the camera is positioned, as the old render ran updateCamera
+# after its head), the bob view takes the camera state first, and the field of view hook belongs to Camera now, so the mixin targets both classes
+mixinalso com/github/leawind/thirdperson/mixin/GameRendererMixin net/minecraft/client/Camera
+mixinmethod com/github/leawind/thirdperson/mixin/GameRendererMixin preRender Lnet/minecraft/client/renderer/GameRenderer;update(Lnet/minecraft/client/DeltaTracker;)V
+handler com/github/leawind/thirdperson/mixin/GameRendererMixin preRender (Lnet/minecraft/client/DeltaTracker;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,false
+handler com/github/leawind/thirdperson/mixin/GameRendererMixin cancelBobView (Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 1,null
+mixinmethod com/github/leawind/thirdperson/mixin/GameRendererMixin modifyFov Lnet/minecraft/client/Camera;calculateFov(F)F
+
+# Bura: the debug screen draws in extractRenderState
+mixinmethod bura/com/mixin/client/BuraDebugOverlayMixin bura$renderLabel extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V
+
+# Immersive Storms: the rain's vertices are filled by WeatherEffectRenderer.prepare, which calls prepareInstances (four setColor calls per column) in one go, so the
+# black rain colour hook and the capture of the render state it reads (which used to bracket render) take prepare and prepareInstances
+mixinmethod com/thedeathlycow/immersive/storms/mixin/client/WeatherEffectRendererMixin captureWeatherRenderState prepare(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/client/renderer/state/level/WeatherRenderState;)V
+mixinmethod com/thedeathlycow/immersive/storms/mixin/client/WeatherEffectRendererMixin clearWeatherRenderState prepare(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/client/renderer/state/level/WeatherRenderState;)V
+mixinmethod com/thedeathlycow/immersive/storms/mixin/client/WeatherEffectRendererMixin setBlackRainColumnColor prepareInstances(Lcom/mojang/blaze3d/vertex/VertexConsumer;Ljava/util/List;Lnet/minecraft/world/phys/Vec3;FIF)V
+handler com/thedeathlycow/immersive/storms/mixin/client/WeatherEffectRendererMixin captureWeatherRenderState (Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/client/renderer/state/level/WeatherRenderState;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,0,1
+handler com/thedeathlycow/immersive/storms/mixin/client/WeatherEffectRendererMixin clearWeatherRenderState (Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/client/renderer/state/level/WeatherRenderState;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,0,1
+
+# owo-lib (the 1.21.11 build): the creative screen draws its panel and scrollbar in extractBackground; the custom tab icon and tab sprite hooks are in dead-hooks.txt
+mixinmethod io/wispforest/owo/mixin/itemgroup/CreativeModeInventoryScreenMixin injectCustomGroupTexture extractBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V
+mixinmethod io/wispforest/owo/mixin/itemgroup/CreativeModeInventoryScreenMixin injectCustomScrollbarTexture extractBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V
+
+# MixinTrace: CrashReport.getDetails has two overloads in 26.3 (getDetails() and getDetails(StringBuilder), the one with the category loop the hook sits in), so the bare name no longer picks the hook's method
+mixinmethod link/infra/mixintrace/mixin/MixinCrashReport mixintrace_addTrace getDetails(Ljava/lang/StringBuilder;)V

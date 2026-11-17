@@ -3,7 +3,6 @@
 # The reason says why nothing is lost, or what is lost and why that is accepted. Nothing from a mod lives in this repo besides these names.
 
 # --- accepted, nothing important is lost ---
-link/infra/mixintrace/mixin/MixinCrashReport mixintrace_addTrace | harmless: only adds mixin trace lines to a crash report (CrashReport.getDetails changed shape); the report is complete without them
 io/wispforest/owo/mixin/MinecraftMixin afterQuiltHook | harmless: a Quilt-loader-only hook, not present on Fabric
 com/notunanancyowen/mait/mixin/SlimeEntityMixin copyOffhandItemIGuess | covered: the target call sits in AbstractCubeMob.remove in 26.3, where a mixin on Slime cannot reach it; mixin.SlimeSplitMixin does the same copy there (probe mait.slime-split-copies-offhand)
 net/potionstudios/biomeswevegone/mixin/SurfaceSystemMixin injectShatteredGlacierExtension | covered: the old surface system is a stand-in with no buildSurface to inject into; the shattered-glacier pillars come from MaterialSystemMixin (renames.txt)
@@ -26,16 +25,18 @@ io/wispforest/owo/mixin/ui/display/GuiMixin injectDisplayCrosshair | harmless to
 
 # --- libraries bundled in mods that have no 26.3 build (Kielson's API in Expanded Weaponry, Immersive Storms in Scorchful, Terraform in Bountiful Fish, MCEF in Computer PC) ---
 # Found by running the four with the dead-hooks probe; the scan's gap lists have nothing on these, since a mixin's method and call targets are not checked there.
-com/kielson/mixin/client/HeldItemRendererMixin KielsonsAPI$getHandRenderType | harmless: the handler answers true only when the item argument of ItemStack.is(...) is one of Kielson's bows, and the calls it wraps pass a vanilla item, so it always hands on to the original call (which is is(Object) in 26.3, a call its @At string does not name)
-com/kielson/mixin/client/HeldItemRendererMixin KielsonsAPI$getUsingItemHandRenderType | harmless: same as getHandRenderType, for the bow-like branch that 26.3 folded into evaluateWhichHandsToRender
-com/kielson/mixin/client/HeldItemRendererMixin KielsonsAPI$isChargedCrossbow | harmless: same as getHandRenderType, for the charged-crossbow test (it tests the item argument for Kielson's crossbow interface)
-com/kielson/mixin/client/HeldItemRendererMixin KielsonsAPI$renderFirstPersonItem | harmless: it tests the item argument of the held-item check for Kielson's crossbow, which a vanilla call never passes; the method itself is FirstPersonHandsAndItemsRenderer.submitArmWithItem on a render state in 26.3, in a class the mixin does not target
-com/kielson/mixin/client/AbstractClientPlayerEntityMixin KielsonsAPI$getFovMultiplier | harmless: the redirect answers true only for the item argument of ItemStack.is(...) being a Kielson bow, which the vanilla call never passes; the call is is(Object) in 26.3, which its @At string does not name
-com/thedeathlycow/immersive/storms/mixin/client/WeatherEffectRendererMixin setBlackRainColumnColor | real break, rarely seen: rain that Immersive Storms calls black rain is drawn in the normal rain colour; the hook wraps a setColor call of WeatherEffectRenderer.renderInstances, which is prepareInstances in 26.3, called from prepare() and not from render(), where the mod's captureWeatherRenderState sets the thread local this hook reads, so retargeting it would read a null state every rainy frame
-com/thedeathlycow/immersive/storms/mixin/client/WeatherEffectRendererMixin setBlackRainParticleColor | real break, rarely seen: the splash particles of black rain keep the normal colour; the hook wraps an addParticle call of WeatherEffectRenderer.tickRainParticles, which matches nothing in 26.3
+# Kielson's API: every handler below wraps a call ItemStack.is(Items.BOW) or is(Items.CROSSBOW) and tests the item ARGUMENT (the constant), not the stack. Its own BowItemMixin and
+# CrossbowItemMixin make the vanilla bow and crossbow items implement BowInterface and CrossbowInterface, so in 1.21.11 each of these answered true for every stack, whatever it held;
+# the custom-bow support they were written for never worked through them. Retargeting them (the call is is(Object) in 26.3) would bring back that quirk, not the support, so they stay off.
+com/kielson/mixin/client/HeldItemRendererMixin KielsonsAPI$getHandRenderType | not ported on purpose: the wrap answered true for any stack (tests the constant Items.BOW, which BowItemMixin makes a BowInterface); in 26.3 the hand logic runs as vanilla
+com/kielson/mixin/client/HeldItemRendererMixin KielsonsAPI$getUsingItemHandRenderType | not ported on purpose: same as getHandRenderType, for the bow-like branch that 26.3 folded into evaluateWhichHandsToRender
+com/kielson/mixin/client/HeldItemRendererMixin KielsonsAPI$isChargedCrossbow | not ported on purpose: same as getHandRenderType, for the charged-crossbow test (tests the constant Items.CROSSBOW against CrossbowInterface, true after CrossbowItemMixin)
+com/kielson/mixin/client/HeldItemRendererMixin KielsonsAPI$renderFirstPersonItem | harmless: it tests the constant argument of the held-item check for Kielson's CustomCrossbow, which vanilla's Items.CROSSBOW is not, so it always handed on to the original call; the method itself is FirstPersonHandsAndItemsRenderer.submitArmWithItem on a render state in 26.3, in a class the mixin does not target
+com/kielson/mixin/client/AbstractClientPlayerEntityMixin KielsonsAPI$getFovMultiplier | not ported on purpose: the redirect answered true for any item in use outside a spyglass scope (tests the constant Items.BOW against BowInterface), which would make an item of any kind in use zoom like a bow; 26.3 keeps vanilla's zoom. The pull-time constant of the same class still applies
+com/thedeathlycow/immersive/storms/mixin/client/WeatherEffectRendererMixin setBlackRainParticleColor | real break, rarely seen: the splash particles of black rain keep the normal colour; 26.3's WeatherEffectRenderer has no tickRainParticles (it has extractRenderState, prepare, render and the instance builders only), so there is no addParticle call there to wrap
 com/terraformersmc/terraform/boat/impl/mixin/MixinSchemas * | harmless for a new world: Terraform's data fixers for old saves (the boat split and the add-boats schema) are not added, as DataFixers was rebuilt in 26.3; a save from before 26.3 that has Terraform boats is not converted
 com/terraformersmc/terraform/leaves/impl/mixin/MixinSchemas * | harmless for a new world: Terraform's data fixer for the extended leaf distance of old saves is not added (DataFixers was rebuilt in 26.3); leaves of a save from before 26.3 keep their old distance state
-com/terraformersmc/terraform/wood/impl/mixin/MixinAxeItem terraform$getStrippedState | covered: the hook gave a stripped small or quarter log every property of the old state; Uproot's StrippableBlockRegistry.register answers with a CopyPropertiesProvider (shim.item.LegacyTools.registerStripping), which does the same through the block transformer
+com/terraformersmc/terraform/wood/impl/mixin/MixinAxeItem terraform$getStrippedState | covered: this hook was never going to land (it targets the static helper AxeItem.getStripped on Uproot's AxeItem stand-in, which has no such method, so the probe always lists it); the stripped state comes from Uproot's StrippableBlockRegistry.register, which answers with a CopyPropertiesProvider (shim.item.LegacyTools.registerStripping) and copies every property of the old state the way the hook did
 
 # --- MMS Worldgen's hooks into the 1.21.11 terrain pipeline (found booting the full pack on a dedicated server) ---
 # 26.3 fuses the noise fill, the carvers and the surface rules into ChunkGenerator.buildTerrain (one step, driven by material rules): NoiseBasedChunkGenerator
@@ -53,3 +54,48 @@ info/mudbourn/mmsworldgen/mixin/RustBiomesMixin * | real break: the native biome
 
 # --- Arc, Item Restrictions, Jobs+ ---
 com/daqem/arc/fabric/mixin/PlayerMixin drop | covered: 26.3 has one player drop, LivingEntity.drop(stack, includeThrowerName, Prediction), which ServerPlayer overrides and Arc's ServerPlayerMixin.dropItem hooks (renames.txt), so every server player's drop reaches Arc's event once; 1.21.11's two-argument Player.drop ran both hooks and fired the event twice for the same drop
+
+com/daqem/knot/fabric/events/mixin/MixinMixin drop | covered: 26.3 has one player drop, LivingEntity.drop(stack, includeThrowerName, Prediction), which ServerPlayer overrides and Knot's ServerPlayerMixin.dropItem hooks (renames-26x.txt), so every server player's drop reaches Knot's event once, as Arc's does
+# --- third-party hooks of the 26.3 test client's dead-hook list, sorted (the 1.21.11 builds of Arc, Third Person, Perspective API, Bura, owo-lib, Scorchful and others) ---
+
+# Perspective API (1.21.11 build): orthographic projection. Its world projection, screen projection and culling projection hooks edit a projection Matrix4f that GameRenderer built; 26.3's Camera owns the
+# projection (getViewRotationProjectionMatrix, createProjectionMatrixForCulling, extractRenderState), and GameRenderer has neither getProjectionMatrix nor getProjectionMatrixForCulling. The 26.2 build of the mod hooks Camera's methods, and is the one to run.
+io/github/leawind/perspectiveapi/internal/bridge/mixin/projection/GameRendererMixin perspective_api$modifyWorldProjection | real break: orthographic perspectives only; GameRenderer.renderLevel takes no projection matrix from getProjectionMatrix in 26.3 (the Camera builds it); the default perspective projection is unaffected
+io/github/leawind/perspectiveapi/internal/bridge/mixin/projection/GameRendererMixin perspective_api$modifyScreenProjection | real break: orthographic perspectives only; GameRenderer.projectPointToScreen no longer calls getProjectionMatrix, so a world point is projected through the normal projection
+io/github/leawind/perspectiveapi/internal/bridge/mixin/projection/GameRendererMixin perspective_api$modifyProjectionForCulling | real break: orthographic perspectives only; GameRenderer has no getProjectionMatrixForCulling in 26.3 (Camera.createProjectionMatrixForCulling is private and builds the frustum), so culling would keep the normal frustum
+
+# Third Person (1.21.11 build): the camera entity's render event and the opacity flush. The hook sits at the add call of GameRenderer's visible-entity loop, which is LevelExtractor.extractVisibleEntities in 26.3,
+# with the entity and its render state captured; the flush after it sits in LevelRenderer.submitEntities. 26.3 split them across two classes, and the mixin keeps the entity it saw for the second in a map of its
+# own, so moving only the first would leave a map that nothing empties (an entity per frame), and Uproot has no rule that gives one mixin a state shared between two targets.
+com/github/leawind/thirdperson/mixin/LevelRendererMixin cancelRenderEntity | real break, not ported: the 1.21.11 build cannot hide the player when the camera is close to it; the 26.2 build (3.x) hooks the 26.3 code and is the one to run
+com/github/leawind/thirdperson/mixin/LevelRendererMixin postRenderEntity | real break, not ported: never ran with cancelRenderEntity off (it only flushes the batch for an entity that hook recorded)
+# Third Person's GameRendererMixin targets GameRenderer and Camera (renames.txt: mixinalso); an injector naming the owner is only looked for in that class, so each of these shows one copy as dead
+com/github/leawind/thirdperson/mixin/GameRendererMixin preRender | harmless: the copy of the other target (Camera) finds no GameRenderer.update; the injector lands in GameRenderer
+com/github/leawind/thirdperson/mixin/GameRendererMixin cancelBobView | harmless: the copy of the other target (Camera) finds no bobView; the injector lands in GameRenderer
+com/github/leawind/thirdperson/mixin/GameRendererMixin modifyFov | harmless: the copy of the other target (GameRenderer) finds no Camera.calculateFov; the injector lands in Camera
+
+# Bura: the chunk upload throttle works on a queue of upload tasks (SectionRenderDispatcher.uploadAllPendingUploads polled and ran them); 26.3 stages chunk meshes in uber buffers and uploads them
+# in one pass (SectionRenderDispatcher.uploadTerrainBuffersToGpu takes no task and has no queue), so there is nothing to meter
+bura/com/mixin/client/ChunkUploadThrottleMixin bura$limitUploads | harmless: the queue of upload tasks it throttles no longer exists (uploadTerrainBuffersToGpu uploads the staged uber buffers in one pass); chunk uploads run as 26.3 does them
+
+# owo-lib (1.21.11 build): the creative screen's custom tab sprite and icon. Both sit in the tab button, which is extractTabButton(GuiGraphicsExtractor, int, int, CreativeModeTab) in 26.3 (the old
+# one took the tab alone); the sprite wrapper takes the tab as an extra argument of the old method, and the icon hook captures locals of the old method, neither of which a rule can fit to the new one
+io/wispforest/owo/mixin/itemgroup/CreativeModeInventoryScreenMixin injectCustomTabTexture | real break: a tab of an owo item group keeps the vanilla tab sprite (26.2 build: hooked in extractTabButton)
+io/wispforest/owo/mixin/itemgroup/CreativeModeInventoryScreenMixin renderOwoIcon | real break: a tab of an owo item group shows its item icon where its textured owo icon would be (26.2 build: hooked in extractTabButton)
+io/wispforest/owo/mixin/extension/json5/LanguageReaderMixin json5$collectDataPackTranslations | real break, rarely used: server-side translations from .json5 files (Nucleoid translations); ResourceManager.listResources takes a Selector in 26.3, same cause as the json5 hooks above
+
+# Scorchful (1.21.11 build): the post effect pass. The hook ran after LevelRenderer.doEntityOutline in GameRenderer.render, with the game's resource pool; 26.3's LevelRenderer has no doEntityOutline (blitEntityOutline and
+# executeOutline are inside the frame graph), GameRenderer.render() takes no arguments and draws from a render state, and the pool field (resourcePool) is not in GameRenderer, so the callback's inputs do not exist
+com/github/thedeathlycow/scorchful/mixin/client/GameRendererMixin hookShaderRender | real break: Scorchful's own post-processing shader effects (heat haze and the like) are not drawn
+
+# --- hooks of mods that are built for 26.3 or have nothing in this pack to hook (not Uproot's to bridge) ---
+# Sodium's block entity replacement and Polytone's particle cap name members that this 26.3 jar does not have (javap evidence in each reason)
+net/caffeinemc/mods/sodium/mixin/core/render/world/LevelExtractorMixin replaceBlockEntityIteration | real break in the mod's own build: it hooks LevelExtractor.iterateVisibleBlockEntities, which 26.3 does not have (it has extractVisibleBlockEntities(Camera, float, LevelRenderState)); block entities are extracted by the game's own loop
+net/mehvahdjukaar/polytone/mixins/ParticleGroupMixin polytone$increaseEvictingQueueSize | real break in the mod's own build: it wraps EvictingQueue.create(int) in ParticleGroup's constructor, which is new ArrayDeque(int) in 26.3; Polytone's particle cap per group stays at the game's own
+me/thosea/badoptimizations/mixin/MixinToastComponent shouldSkipDraw | covered: it skips drawing toasts when the HUD is hidden by reading Options.hideGui; 26.3's ToastManager.extractRenderState asks Gui.hud.isHidden() itself
+org/embeddedt/modernfix/common/mixin/perf/ticking_chunk_alloc/BatMixin useCachedLocalDate | harmless: caches the date the bat's Halloween check reads; 26.3's Bat has no isHalloween and no LocalDate call
+org/embeddedt/modernfix/common/mixin/perf/datapack_reload_exceptions/RecipeManagerMixin silenceException | harmless: only silences recipe parse errors in the log; 26.3's RecipeManager has no apply(Map, ResourceManager, ProfilerFiller) (recipes are parsed elsewhere)
+fudge/notenoughcrashes/fabric/mixins/client/CatchInitMinecraftClientMixin catchQuiltInit | harmless: a Quilt loader hook (names org.quiltmc entrypoint classes), not present on Fabric
+de/kb1000/notelemetry/mixin/OptionsScreenMixin removeTelemetryButtonOld | harmless: written for the 1.19 to 1.20.1 options screen (names its obfuscated RowHelper class); removeTelemetryButton for the current one applies
+de/kb1000/notelemetry/mixin/Post1193ClientTelemetryManagerMixin disableTelemetrySessionPre1203 | harmless: the pre-1.20.3 variant (reads SharedConstants.IS_RUNNING_IN_IDE); disableTelemetrySessionPost1203 on Minecraft.allowsTelemetry applies
+io/github/apace100/apoli/mixin/EntityMixin preventPhasingSuffocation$lithium | harmless: Apoli's MixinSquared compatibility handler for a Lithium mixin; Lithium is not in this pack

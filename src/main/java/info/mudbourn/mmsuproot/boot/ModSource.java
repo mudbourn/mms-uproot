@@ -181,7 +181,15 @@ public final class ModSource {
 	public static Boolean olderByRange(Map<String, Object> fmj) {
 		if (!(fmj.get("depends") instanceof Map<?, ?> deps) || !deps.containsKey("minecraft")) return false;
 		Object range = deps.get("minecraft");
-		if (!Ranges.admits(range, MINECRAFT)) return Ranges.admits(range, new int[] {26, 1, 0}) || Ranges.admits(range, new int[] {26, 2, 0});
+		if (!Ranges.admits(range, MINECRAFT)) {
+			// every patch release of 26.1 and 26.2 counts: a range such as ~26.1.1 admits 26.1.1 but not 26.1.0
+			for (int minor = 1; minor <= 2; minor++) {
+				for (int patch = 0; patch <= 9; patch++) {
+					if (Ranges.admits(range, new int[] {26, minor, patch})) return true;
+				}
+			}
+			return false;
+		}
 		return null;
 	}
 

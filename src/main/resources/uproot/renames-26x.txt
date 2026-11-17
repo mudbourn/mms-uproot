@@ -205,3 +205,275 @@ method com/mojang/renderpearl/api/commands/RenderPass bindTexture setUniform 3
 # 26.3's texture manager no longer holds the empty identifier
 fieldmove net/minecraft/client/renderer/texture/TextureManager INTENTIONAL_MISSING_TEXTURE info/mudbourn/mmsuproot/shim/client/LegacyRender INTENTIONAL_MISSING_TEXTURE
 # --- end client gaps ---
+
+# --- Rules mirrored from renames.txt ---
+# Everything below is copied line for line from renames.txt: names the 26.1 and 26.2 builds still use as 1.21.11 did, because 26.3 is what changed them
+# (26.1 and 26.2 are already Mojang-named, so only the rules whose left-hand side a 26.x mod still calls are kept). A rule that a 26.x mod does not call is not copied.
+class net/minecraft/world/entity/monster/EnderMan net/minecraft/world/entity/monster/Enderman
+fieldowner net/minecraft/world/entity/EntityType net/minecraft/world/entity/EntityTypes
+fieldowner net/minecraft/world/level/block/entity/BlockEntityType net/minecraft/world/level/block/entity/BlockEntityTypes
+method net/minecraft/world/level/ChunkPos asLong pack
+method net/minecraft/world/effect/MobEffect isInstantenous isInstantaneous
+method net/fabricmc/fabric/api/event/registry/FabricRegistryBuilder createSimple create 1
+method net/minecraft/world/Difficulty getKey getSerializedName 0
+class net/minecraft/world/level/levelgen/feature/Feature info/mudbourn/mmsuproot/shim/feature/LegacyFeature
+class net/minecraft/world/level/levelgen/feature/FeaturePlaceContext info/mudbourn/mmsuproot/shim/feature/FeaturePlaceContext
+class net/minecraft/world/level/levelgen/feature/configurations/FeatureConfiguration info/mudbourn/mmsuproot/shim/feature/FeatureConfiguration
+field net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider CODEC DIRECT_CODEC
+callmove net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider simple (Lnet/minecraft/world/level/block/Block;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
+callmove net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider simple (Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
+callmove net/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider simple (Lnet/minecraft/world/level/block/Block;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
+callmove net/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider simple (Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
+fieldowner net/minecraft/util/valueproviders/IntProvider net/minecraft/util/valueproviders/IntProviders
+fieldowner net/minecraft/util/valueproviders/FloatProvider net/minecraft/util/valueproviders/FloatProviders
+fieldmove net/minecraft/core/registries/BuiltInRegistries FEATURE info/mudbourn/mmsuproot/shim/feature/LegacyRegistries FEATURE
+field net/minecraft/world/level/material/PushReaction NORMAL PUSH_PULL
+field net/minecraft/world/level/material/PushReaction DESTROY POPPED
+field net/minecraft/world/level/material/PushReaction BLOCK IMMOVEABLE
+field net/minecraft/world/level/material/PushReaction IGNORE IGNORE_ENTITY
+callmove net/minecraft/world/level/block/state/BlockBehaviour simpleCodec (Ljava/util/function/Function;)Lcom/mojang/serialization/MapCodec; info/mudbourn/mmsuproot/shim/block/LegacyBlocks simpleCodec
+class net/minecraft/world/item/AxeItem info/mudbourn/mmsuproot/shim/item/AxeItem
+class net/minecraft/world/item/ShovelItem info/mudbourn/mmsuproot/shim/item/ShovelItem
+class net/minecraft/world/item/HoeItem info/mudbourn/mmsuproot/shim/item/HoeItem
+class net/minecraft/world/level/block/entity/FuelValues info/mudbourn/mmsuproot/shim/compat/FuelValues
+class net/minecraft/world/level/block/entity/FuelValues$Builder info/mudbourn/mmsuproot/shim/compat/FuelValues$Builder
+callmove net/fabricmc/fabric/api/registry/TillableBlockRegistry register (Lnet/minecraft/world/level/block/Block;Ljava/util/function/Predicate;Ljava/util/function/Consumer;)V info/mudbourn/mmsuproot/shim/item/LegacyTools registerTillable
+method net/minecraft/world/level/storage/loot/LootPool$Builder with add 1
+callinst net/minecraft/world/level/storage/loot/LootPool$Builder apply (Lnet/minecraft/world/level/storage/loot/functions/LootItemFunction$Builder;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot.apply
+callinst net/minecraft/world/entity/EntityType is (Lnet/minecraft/tags/TagKey;)Z info/mudbourn/mmsuproot/shim/entity/LegacyEntities.isTagged
+bridge net/minecraft/world/level/block/BonemealableBlock isValidBonemealTarget (Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z (Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/BonemealSource;)Z
+bridge net/minecraft/world/level/block/BonemealableBlock isBonemealSuccess (Lnet/minecraft/world/level/Level;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z (Lnet/minecraft/world/level/Level;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/BonemealSource;)Z
+bridge net/minecraft/world/level/block/BonemealableBlock performBonemeal (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/BonemealSource;)V
+callinst net/minecraft/world/level/block/BonemealableBlock isValidBonemealTarget (Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z info/mudbourn/mmsuproot/shim/block/LegacyBlocks.isValidBonemealTarget
+callinst net/minecraft/world/level/block/BonemealableBlock isBonemealSuccess (Lnet/minecraft/world/level/Level;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z info/mudbourn/mmsuproot/shim/block/LegacyBlocks.isBonemealSuccess
+callinst net/minecraft/world/level/block/BonemealableBlock performBonemeal (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V info/mudbourn/mmsuproot/shim/block/LegacyBlocks.performBonemeal
+ctoradapt net/minecraft/world/level/ChunkPos (Lnet/minecraft/core/BlockPos;)V (II)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.chunkPos
+field net/minecraft/tags/BlockTags DIRT SUBSTRATE_OVERWORLD
+callmove net/fabricmc/fabric/api/registry/StrippableBlockRegistry register (Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/Block;)V info/mudbourn/mmsuproot/shim/item/LegacyTools registerStripping
+callmove net/fabricmc/fabric/api/registry/FlattenableBlockRegistry register (Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/state/BlockState;)V net/fabricmc/fabric/api/item/v1/BlockTransformerHelper registerFlattening
+calldesc net/minecraft/world/level/block/state/BlockState is (Lnet/minecraft/world/level/block/Block;)Z (Ljava/lang/Object;)Z
+calldesc net/minecraft/world/item/ItemStack is (Lnet/minecraft/world/item/Item;)Z (Ljava/lang/Object;)Z
+calldesc net/minecraft/world/level/material/FluidState is (Lnet/minecraft/world/level/material/Fluid;)Z (Ljava/lang/Object;)Z
+callmove net/minecraft/world/level/block/state/BlockBehaviour propertiesCodec ()Lcom/mojang/serialization/codecs/RecordCodecBuilder; info/mudbourn/mmsuproot/shim/block/LegacyBlocks propertiesCodec
+callinst net/minecraft/world/item/Item getDefaultInstance ()Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/item/LegacyItems.getDefaultInstance
+callmove net/minecraft/world/entity/ai/Brain provider (Ljava/util/Collection;Ljava/util/Collection;)Lnet/minecraft/world/entity/ai/Brain$Provider; info/mudbourn/mmsuproot/shim/entity/LegacyBrains provider
+callinst net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider getState (Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getState
+callinst net/minecraft/core/BlockPos getCenter ()Lnet/minecraft/world/phys/Vec3; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getCenter
+callinst net/minecraft/world/level/levelgen/synth/SimplexNoise getValue (DD)D info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getValue
+callinst net/minecraft/world/level/levelgen/synth/SimplexNoise getValue (DDD)D info/mudbourn/mmsuproot/shim/compat/LegacyWorld.getValue
+callinst net/minecraft/world/level/levelgen/synth/NormalNoise getValue (DDD)D info/mudbourn/mmsuproot/shim/noise/LegacyNoise.getValue
+fieldget net/minecraft/world/entity/player/Inventory items getNonEquipmentItems
+bridge net/minecraft/world/level/block/Block playerDestroy (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/item/ItemStack;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/item/ItemStack;)V
+method net/fabricmc/fabric/api/client/rendering/v1/ClientTooltipComponentCallback getComponent getClientComponent
+callinst net/minecraft/network/FriendlyByteBuf writeCollection (Ljava/util/Collection;Lnet/minecraft/network/codec/StreamEncoder;)V info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.writeCollection
+callinst net/minecraft/network/FriendlyByteBuf readList (Lnet/minecraft/network/codec/StreamDecoder;)Ljava/util/List; info/mudbourn/mmsuproot/shim/compat/LegacyNetwork.readList
+bridge net/fabricmc/fabric/api/loot/v3/LootTableEvents$Modify modifyLootTable (Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/storage/loot/LootTable$Builder;Lnet/fabricmc/fabric/api/loot/v3/LootTableSource;)V (Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/storage/loot/LootTable$Builder;Lnet/fabricmc/fabric/api/loot/v3/LootTableSource;Lnet/minecraft/core/HolderLookup$Provider;)V
+bridge net/minecraft/client/renderer/entity/EntityRenderer shouldRender (Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDD)Z (Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/culling/Frustum;DDDF)Z
+method net/minecraft/world/entity/Entity getTags entityTags 0
+method net/minecraft/client/renderer/rendertype/RenderTypes entityCutout entityCutoutCull 1
+injectat net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModel (Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/renderer/texture/TextureAtlasSprite;ILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModel (Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/renderer/texture/UvMapping;I)V
+field net/minecraft/client/renderer/entity/state/ArmedEntityRenderState attackTime swingAnimation
+class net/minecraft/world/item/crafting/SingleItemRecipe info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe
+callinst net/minecraft/world/item/crafting/SingleItemRecipe result ()Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe.legacyResultOf
+ctoradapt net/minecraft/world/item/crafting/display/SlotDisplay$ItemStackSlotDisplay (Lnet/minecraft/world/item/ItemStack;)V (Lnet/minecraft/world/item/ItemStackTemplate;)V info/mudbourn/mmsuproot/shim/recipe/LegacySingleItemRecipe.slotDisplayArgs
+fieldget net/minecraft/world/entity/LivingEntity swingingArm info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swingingArm
+method net/minecraft/world/entity/LivingEntity getAttackAnim getSwingAnimation 1
+method net/minecraft/world/entity/Entity setInvulnerable setPermanentlyInvulnerable 1
+field net/minecraft/world/entity/Entity hurtMarked syncVelocity
+method net/minecraft/world/item/component/AttackRange minRange minReach 0
+method net/minecraft/world/item/component/AttackRange maxRange maxReach 0
+fieldget net/minecraft/world/entity/LivingEntity swinging isSwinging
+fieldget net/minecraft/world/entity/LivingEntity swingTime info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swingTime
+fieldget net/minecraft/world/entity/LivingEntity attackAnim info/mudbourn/mmsuproot/shim/entity/LegacyEntities.attackAnim
+fieldset net/minecraft/world/entity/LivingEntity attackAnim info/mudbourn/mmsuproot/shim/entity/LegacyEntities.setAttackAnim
+fieldset net/minecraft/world/entity/Entity invulnerableTime setInvulnerableTime
+callinst net/minecraft/world/entity/LivingEntity swing (Lnet/minecraft/world/InteractionHand;Z)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.swing
+callinst net/minecraft/world/entity/Entity calculateViewVector (FF)Lnet/minecraft/world/phys/Vec3; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.calculateViewVector
+calldrop net/minecraft/world/entity/LivingEntity updateSwingTime ()V
+callinst net/minecraft/world/entity/LivingEntity onEquippedItemBroken (Lnet/minecraft/world/item/Item;Lnet/minecraft/world/entity/EquipmentSlot;)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.onEquippedItemBroken
+callmove net/minecraft/world/entity/EntityType loadEntityRecursive (Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/EntityProcessor;)Lnet/minecraft/world/entity/Entity; info/mudbourn/mmsuproot/shim/entity/LegacyEntities loadEntityRecursive
+fieldget net/minecraft/client/renderer/entity/state/EndermanRenderState carriedBlock info/mudbourn/mmsuproot/shim/entity/LegacyRenderStates.carriedBlock
+fieldset net/minecraft/world/entity/npc/villager/Villager updateMerchantTimer info/mudbourn/mmsuproot/shim/entity/LegacyVillagers.updateMerchantTimer
+fieldset net/minecraft/world/entity/npc/villager/Villager increaseProfessionLevelOnUpdate info/mudbourn/mmsuproot/shim/entity/LegacyVillagers.increaseProfessionLevelOnUpdate
+inherited net/minecraft/world/entity/monster/cubemob/Slime registerGoals ()V
+inherited net/minecraft/world/entity/monster/cubemob/Slime push (Lnet/minecraft/world/entity/Entity;)V
+inherited net/minecraft/world/entity/monster/cubemob/Slime remove (Lnet/minecraft/world/entity/Entity$RemovalReason;)V
+inherited net/minecraft/world/entity/monster/cubemob/Slime tick ()V
+callinst net/minecraft/client/Minecraft getOverlay ()Lnet/minecraft/client/gui/screens/Overlay; info/mudbourn/mmsuproot/shim/client/LegacyClient.overlay
+callinst net/minecraft/world/entity/player/Player drop (Lnet/minecraft/world/item/ItemStack;Z)Lnet/minecraft/world/entity/item/ItemEntity; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.drop
+injectat net/minecraft/world/entity/monster/cubemob/Slime convertTo (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob; net/minecraft/world/entity/monster/cubemob/AbstractCubeMob convertTo (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob;
+callinst net/minecraft/server/level/ServerLevel structureManager ()Lnet/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.templateManager
+fieldget net/minecraft/world/level/Level random getRandom
+injectat net/minecraft/client/Minecraft getOverlay ()Lnet/minecraft/client/gui/screens/Overlay; net/minecraft/client/gui/Gui overlay ()Lnet/minecraft/client/gui/screens/Overlay;
+method net/minecraft/core/registries/codec/RegistryCodecs homogeneousList holderSet
+class net/minecraft/world/level/block/state/properties/DripstoneThickness net/minecraft/world/level/block/state/properties/SpeleothemThickness
+field net/minecraft/world/level/block/state/properties/BlockStateProperties DRIPSTONE_THICKNESS SPELEOTHEM_THICKNESS
+callinst net/minecraft/world/level/block/state/BlockBehaviour$Properties isViewBlocking (Lnet/minecraft/world/level/block/state/BlockBehaviour$StatePredicate;)Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties; info/mudbourn/mmsuproot/shim/block/LegacyBlocks.isViewBlocking
+callmove net/minecraft/util/valueproviders/IntProvider codec (II)Lcom/mojang/serialization/Codec; net/minecraft/util/valueproviders/IntProviders codec
+callmove net/minecraft/util/valueproviders/FloatProvider codec (FF)Lcom/mojang/serialization/Codec; net/minecraft/util/valueproviders/FloatProviders codec
+callmove net/minecraft/world/level/storage/loot/functions/EnchantedCountIncreaseFunction lootingMultiplier (Lnet/minecraft/core/HolderLookup$Provider;Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/functions/EnchantedCountIncreaseFunction$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot lootingMultiplier
+class net/minecraft/advancements/criterion/ContextAwarePredicate net/minecraft/core/Holder
+fieldmove net/minecraft/advancements/predicates/entity/EntityPredicate ADVANCEMENT_CODEC net/minecraft/world/level/storage/loot/predicates/LootItemCondition CODEC
+callinst net/minecraft/core/Holder matches (Lnet/minecraft/world/level/storage/loot/LootContext;)Z info/mudbourn/mmsuproot/shim/compat/LegacyAdvancements.matches
+bridge net/fabricmc/fabric/api/event/lifecycle/v1/ServerChunkEvents$Load onChunkLoad (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/LevelChunk;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/LevelChunk;Z)V
+callinst net/minecraft/world/entity/EntityType is (Lnet/minecraft/core/HolderSet;)Z info/mudbourn/mmsuproot/shim/entity/LegacyEntities.isIn
+method net/minecraft/world/level/storage/loot/LootContext getOptionalParameter getOptional
+callinst net/minecraft/world/level/storage/loot/LootContext getParameter (Lnet/minecraft/util/context/ContextKey;)Ljava/lang/Object; info/mudbourn/mmsuproot/shim/compat/LegacyLoot.getParameter
+callinst net/minecraft/core/component/DataComponentPatch get (Lnet/minecraft/core/component/DataComponentType;)Ljava/util/Optional; info/mudbourn/mmsuproot/shim/compat/LegacyComponents.get
+injectat net/minecraft/world/level/storage/PrimaryLevelData parse (Lcom/mojang/serialization/Dynamic;Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lnet/minecraft/world/level/levelgen/WorldOptions;Lcom/mojang/serialization/Lifecycle;)Lnet/minecraft/world/level/storage/PrimaryLevelData; net/minecraft/world/level/storage/PrimaryLevelData parse (Lcom/mojang/serialization/Dynamic;Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lcom/mojang/serialization/Lifecycle;)Lnet/minecraft/world/level/storage/PrimaryLevelData;
+class net/minecraft/client/gui/Gui$HeartType net/minecraft/client/gui/Hud$HeartType
+method net/minecraft/world/level/storage/loot/predicates/LootItemCondition getType codec
+retbridge net/minecraft/world/level/storage/loot/predicates/LootItemCondition codec ()Linfo/mudbourn/mmsuproot/shim/compat/LegacyLootConditionType; Lcom/mojang/serialization/MapCodec;
+callinst info/mudbourn/mmsuproot/shim/compat/LegacyLootConditionType codec ()Lcom/mojang/serialization/MapCodec; info/mudbourn/mmsuproot/shim/compat/LegacyLootConditionType.codecOf
+callinst net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModel (Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/renderer/texture/TextureAtlasSprite;ILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.submitModel
+callinst net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModel (Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.submitModel
+callinst net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModelPart (Lnet/minecraft/client/model/geom/ModelPart;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IILnet/minecraft/client/renderer/texture/TextureAtlasSprite;ZZILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;I)V info/mudbourn/mmsuproot/shim/client/LegacyClient.submitModelPart
+field net/minecraft/client/renderer/entity/state/IllagerRenderState attackAnim swingAnimation
+method net/minecraft/world/entity/projectile/throwableitemprojectile/AbstractThrownPotion onHitAsWater affectEntitiesAround
+injectat net/minecraft/client/renderer/GameRenderer bobView (Lcom/mojang/blaze3d/vertex/PoseStack;F)V net/minecraft/client/renderer/GameRenderer bobView (Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;)V
+method net/minecraft/world/level/block/state/BlockBehaviour$BlockStateBase getLightBlock getLightDampening
+class com/mojang/blaze3d/opengl/GlStateManager com/mojang/renderpearl/backend/opengl/GlStateManager
+class com/mojang/blaze3d/textures/TextureFormat com/mojang/renderpearl/api/GpuFormat
+field com/mojang/renderpearl/api/GpuFormat RGBA8 RGBA8_UNORM
+callinst com/mojang/renderpearl/api/commands/CommandEncoder writeToTexture (Lcom/mojang/renderpearl/api/textures/GpuTexture;Ljava/nio/ByteBuffer;Lcom/mojang/blaze3d/platform/NativeImage$Format;IIIIII)V info/mudbourn/mmsuproot/shim/client/LegacyGpu.writeToTexture
+method net/fabricmc/fabric/api/client/command/v2/FabricClientCommandSource getWorld getLevel
+callinst net/minecraft/server/packs/resources/ResourceManager listResourceStacks (Ljava/lang/String;Ljava/util/function/Predicate;)Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyResources.listResourceStacks
+callinst net/minecraft/commands/arguments/item/ItemInput createItemStack (IZ)Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.createItemStack
+fieldowner net/minecraft/core/cauldron/CauldronInteraction net/minecraft/core/cauldron/CauldronInteractions
+callinst net/minecraft/core/cauldron/CauldronInteraction$Dispatcher map ()Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyCauldron.map
+fieldmove net/fabricmc/fabric/api/item/v1/EnchantmentEvents MODIFY info/mudbourn/mmsuproot/shim/compat/LegacyEnchantments MODIFY
+callinst net/minecraft/world/level/storage/loot/LootPool$Builder setBonusRolls (Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/LootPool$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot.setBonusRolls
+callmove net/minecraft/world/level/storage/loot/functions/SetItemDamageFunction setDamage (Linfo/mudbourn/mmsuproot/shim/compat/LegacyNumberProvider;)Lnet/minecraft/world/level/storage/loot/functions/LootItemConditionalFunction$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot setDamage
+callmove net/minecraft/world/level/storage/loot/entries/NestedLootTable lootTableReference (Lnet/minecraft/resources/ResourceKey;)Lnet/minecraft/world/level/storage/loot/entries/UniformContainerBase$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyLoot lootTableReference
+implbridge net/minecraft/server/packs/repository/Pack$ResourcesSupplier openPrimary (Lnet/minecraft/server/packs/PackLocationInfo;)Lnet/minecraft/server/packs/PackResources; openMetadata (Lnet/minecraft/server/packs/PackLocationInfo;)Lnet/minecraft/server/packs/PackMetadataResources;
+implbridge net/minecraft/server/packs/repository/Pack$ResourcesSupplier openFull (Lnet/minecraft/server/packs/PackLocationInfo;Lnet/minecraft/server/packs/repository/Pack$Metadata;)Lnet/minecraft/server/packs/PackResources; openResources (Lnet/minecraft/server/packs/PackLocationInfo;Lnet/minecraft/server/packs/repository/Pack$Metadata;)Ljava/util/stream/Stream; info/mudbourn/mmsuproot/shim/compat/LegacyPacks.single
+callinst net/minecraft/world/item/crafting/Recipe assemble (Lnet/minecraft/world/item/crafting/RecipeInput;Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/world/item/ItemStack; info/mudbourn/mmsuproot/shim/compat/LegacyRecipes.assemble
+callinst net/minecraft/world/level/dimension/DimensionType infiniburn ()Lnet/minecraft/tags/TagKey; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.infiniburn
+ctoradapt net/minecraft/world/level/biome/MobSpawnSettings$SpawnerData (Lnet/minecraft/world/entity/EntityType;II)V (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/util/valueproviders/IntProvider;)V info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.spawnerData
+implbridge net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider type ()Linfo/mudbourn/mmsuproot/shim/feature/BlockStateProviderType; codec ()Lcom/mojang/serialization/MapCodec; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.providerCodec
+implbridge net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider getState (Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState; getState (Lnet/minecraft/world/level/LevelAccessor;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+fieldmove net/minecraft/world/item/Items WHITE_BANNER info/mudbourn/mmsuproot/shim/item/LegacyItemFields WHITE_BANNER
+callmove net/minecraft/core/BlockPos withinManhattan (Lnet/minecraft/core/BlockPos;III)Ljava/lang/Iterable; net/minecraft/core/BlockPos withinBoxByManhattanDistance
+callinst net/minecraft/world/entity/LivingEntity knockback (DDD)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.knockback
+ctoradapt com/mojang/blaze3d/pipeline/TextureTarget (Ljava/lang/String;IIZ)V (Ljava/lang/String;IILcom/mojang/renderpearl/api/GpuFormat;Lcom/mojang/renderpearl/api/GpuFormat;)V info/mudbourn/mmsuproot/shim/client/LegacyRender.textureTargetNoFormat
+callinst com/mojang/renderpearl/api/commands/CommandEncoder clearColorAndDepthTextures (Lcom/mojang/renderpearl/api/textures/GpuTexture;ILcom/mojang/renderpearl/api/textures/GpuTexture;D)V info/mudbourn/mmsuproot/shim/client/LegacyRender.clearColorAndDepthTextures
+callinst net/minecraft/client/Minecraft getMainRenderTarget ()Lcom/mojang/blaze3d/pipeline/RenderTarget; info/mudbourn/mmsuproot/shim/client/LegacyClient.mainRenderTarget
+method net/fabricmc/fabric/api/serialization/v1/value/FabricValueInput keys keySet
+method net/fabricmc/fabric/api/networking/v1/ServerConfigurationNetworking$Context networkHandler packetListener
+callinst com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder withSampler (Ljava/lang/String;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder; info/mudbourn/mmsuproot/shim/client/LegacyGpu.withSampler
+callinst com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder build ()Lcom/mojang/renderpearl/api/pipeline/RenderPipeline; info/mudbourn/mmsuproot/shim/client/LegacyGpu.build
+callinst com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder withUniform (Ljava/lang/String;Lcom/mojang/renderpearl/api/pipeline/UniformType;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder; info/mudbourn/mmsuproot/shim/client/LegacyGpu.withUniform
+callinst net/minecraft/client/renderer/feature/FeatureRenderDispatcher renderAllFeatures ()V info/mudbourn/mmsuproot/shim/client/LegacyRender.renderAllFeatures
+callinst net/minecraft/client/gui/components/EditBox setFilter (Ljava/util/function/Predicate;)V info/mudbourn/mmsuproot/shim/client/LegacyRender.setFilter
+callmove net/minecraft/client/resources/language/I18n exists (Ljava/lang/String;)Z info/mudbourn/mmsuproot/shim/client/LegacyClient i18nExists
+ctoradapt net/minecraft/world/level/ChunkPos (J)V (II)V info/mudbourn/mmsuproot/shim/compat/LegacyWorld.chunkPos
+callinst net/minecraft/world/level/block/state/BlockState getValues ()Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.stateValues
+injectat net/minecraft/client/renderer/ProjectionMatrixBuffer getBuffer (FF)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice; net/minecraft/client/renderer/ProjectionMatrixBuffer getBuffer (Lnet/minecraft/client/renderer/Projection;)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;
+calldesc com/mojang/blaze3d/vertex/VertexConsumer addVertex (Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lorg/joml/Vector3f;)Lcom/mojang/blaze3d/vertex/VertexConsumer; (Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lorg/joml/Vector3fc;)Lcom/mojang/blaze3d/vertex/VertexConsumer;
+calldesc com/mojang/blaze3d/vertex/VertexConsumer setNormal (Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lorg/joml/Vector3f;)Lcom/mojang/blaze3d/vertex/VertexConsumer; (Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lorg/joml/Vector3fc;)Lcom/mojang/blaze3d/vertex/VertexConsumer;
+injectat net/minecraft/client/Minecraft setScreen (Lnet/minecraft/client/gui/screens/Screen;)V net/minecraft/client/gui/Gui setScreen (Lnet/minecraft/client/gui/screens/Screen;)V
+callinst net/minecraft/world/entity/EntityType create (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/EntitySpawnReason;)Lnet/minecraft/world/entity/Entity; info/mudbourn/mmsuproot/shim/compat/LegacyWorld.createEntity
+callinst net/minecraft/world/item/ItemStack getTags ()Ljava/util/stream/Stream; info/mudbourn/mmsuproot/shim/compat/LegacyStacks.getTags
+callinst net/minecraft/world/item/Item getName ()Lnet/minecraft/network/chat/Component; info/mudbourn/mmsuproot/shim/compat/LegacyStacks.getName
+callinst net/minecraft/ChatFormatting getName ()Ljava/lang/String; info/mudbourn/mmsuproot/shim/compat/LegacyStacks.formattingName
+callinst net/minecraft/ChatFormatting isColor ()Z info/mudbourn/mmsuproot/shim/compat/LegacyStacks.formattingIsColor
+fieldmove net/minecraft/sounds/SoundEvents HOE_TILL info/mudbourn/mmsuproot/shim/compat/LegacySounds HOE_TILL
+callmove net/minecraft/world/item/enchantment/EnchantmentHelper getItemEnchantmentLevel (Lnet/minecraft/core/Holder;Lnet/minecraft/world/item/ItemStack;)I net/minecraft/world/item/enchantment/EnchantmentHelper getItemEnchantmentLevel (Lnet/minecraft/core/Holder;Lnet/minecraft/world/item/ItemInstance;)I
+method net/minecraft/advancements/DisplayInfo getDescription description 0
+method net/minecraft/advancements/DisplayInfo getType type 0
+method net/minecraft/world/item/component/ItemContainerContents stream itemCopies 0
+callinst net/minecraft/world/SimpleContainer addListener (Linfo/mudbourn/mmsuproot/shim/compat/LegacyContainerListener;)V info/mudbourn/mmsuproot/shim/compat/LegacyContainers.addListener
+callinst net/minecraft/world/SimpleContainer removeListener (Linfo/mudbourn/mmsuproot/shim/compat/LegacyContainerListener;)V info/mudbourn/mmsuproot/shim/compat/LegacyContainers.removeListener
+callinst net/minecraft/server/level/ServerLevel setWeatherParameters (IIZZ)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.setWeatherParameters
+callinst net/minecraft/client/Minecraft isSingleplayer ()Z info/mudbourn/mmsuproot/shim/client/LegacyClient.isSingleplayer
+callinst net/minecraft/world/entity/ai/gossip/GossipContainer transferFrom (Lnet/minecraft/world/entity/ai/gossip/GossipContainer;Lnet/minecraft/util/RandomSource;I)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.transferFrom
+callinst net/minecraft/world/entity/npc/villager/Villager assignProfessionWhenSpawned ()Z info/mudbourn/mmsuproot/shim/entity/LegacyVillagers.assignProfessionWhenSpawned
+bridge net/minecraft/world/entity/LivingEntity blockUsingItem (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;FZ)V
+bridge net/minecraft/world/entity/LivingEntity blockedByItem (Lnet/minecraft/world/entity/LivingEntity;)V (Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;FZ)V
+method net/minecraft/world/level/lighting/LightEngine getLightBlockInto getLightDampeningInto 4
+callinst net/minecraft/client/renderer/GameRenderer pick (F)V info/mudbourn/mmsuproot/shim/client/LegacyView.pick
+callinst net/minecraft/world/level/block/state/BlockState isViewBlocking (Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Z info/mudbourn/mmsuproot/shim/client/LegacyView.isViewBlocking
+callmove net/minecraft/client/OptionInstance createBoolean (Ljava/lang/String;Lnet/minecraft/client/OptionInstance$TooltipSupplier;ZLjava/util/function/Consumer;)Lnet/minecraft/client/OptionInstance; info/mudbourn/mmsuproot/shim/client/LegacyView createBoolean
+callmove net/minecraft/client/OptionInstance createBoolean (Ljava/lang/String;ZLjava/util/function/Consumer;)Lnet/minecraft/client/OptionInstance; info/mudbourn/mmsuproot/shim/client/LegacyView createBoolean
+fieldget net/minecraft/client/renderer/entity/state/HumanoidRenderState attackArm mms_uproot$attackArm
+method net/fabricmc/fabric/api/creativetab/v1/FabricCreativeModeTabOutput addAfter insertAfter
+method net/fabricmc/fabric/api/creativetab/v1/FabricCreativeModeTabOutput addBefore insertBefore
+callinst net/minecraft/world/level/Level potionBrewing ()Linfo/mudbourn/mmsuproot/shim/compat/PotionBrewing; info/mudbourn/mmsuproot/shim/compat/PotionBrewing.of
+callinst net/minecraft/world/item/component/ChargedProjectiles getItems ()Ljava/util/List; info/mudbourn/mmsuproot/shim/compat/LegacyStacks.chargedItems
+callmove net/minecraft/world/item/component/ChargedProjectiles of (Ljava/util/List;)Lnet/minecraft/world/item/component/ChargedProjectiles; info/mudbourn/mmsuproot/shim/compat/LegacyStacks chargedProjectilesOf
+bridge net/minecraft/world/entity/Entity interact (Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult; (Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/InteractionResult;
+fieldmove net/minecraft/world/level/block/Blocks COPPER_BLOCK info/mudbourn/mmsuproot/shim/block/LegacyBlocks COPPER_BLOCK
+# Hooks of the mods themselves (Mob AI Tweaks, Thermoo, Frostiful, Kielson's API, Scorchful, MCEF, Item Restrictions, Jobs+ and Jobs+ Tools, Guard Villagers); each
+# handler takes the parameters its 26.2 build passes, which are the 1.21.11 ones
+optional com/notunanancyowen/mait/mixin/SlimeEntityMixin copyOffhandItemIGuess
+mixintarget com/github/thedeathlycow/thermoo/mixin/client/GuiPlayerTemperatureMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+mixintarget com/github/thedeathlycow/thermoo/mixin/client/GuiMountTemperatureMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+handler com/github/thedeathlycow/frostiful/mixins/entity/WaterPotionSoakingMixin soakEntitiesWithWaterbottle (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/item/alchemy/PotionContents;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;Lnet/minecraft/world/phys/AABB;)V 0 if=info/mudbourn/mmsuproot/shim/compat/LegacyPotions.isWater
+method net/minecraft/client/player/FirstPersonHandsAndItems selectionUsingItemWhileHoldingBowLike evaluateWhichHandsToRender
+handler com/github/thedeathlycow/scorchful/mixin/ItemStackMixin modifyDefaultStack (Lnet/minecraft/core/Holder;ILnet/minecraft/core/component/PatchedDataComponentMap;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,1,2
+handler com/cinemamod/mcef/mixins/MixinGameRenderer head_render_MCEF (Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,false
+handler com/daqem/itemrestrictions/mixin/block/MixinBrewingStandBlockEntity doBrew (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/entity/BrewingStandBlockEntity;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,1,2,3
+handler com/daqem/jobsplustools/mixin/MixinArmorStand jobsplustools$interactAt (Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/Vec3;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;Lnet/minecraft/world/item/ItemStack;)V 0,2,1
+handler com/daqem/jobsplustools/mixin/MixinSmithingTransformRecipe jobsplustools$assemble (Lnet/minecraft/world/item/crafting/SmithingRecipeInput;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V 0,null
+handler com/daqem/jobsplus/mixin/PrimaryLevelDataMixin constructorInit (Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lcom/mojang/serialization/Lifecycle;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V -
+handler com/daqem/jobsplus/mixin/PrimaryLevelDataMixin parse (Lcom/mojang/serialization/Dynamic;Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lcom/mojang/serialization/Lifecycle;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V 0,1,2,null,3
+handler com/daqem/jobsplus/mixin/PrimaryLevelDataMixin setTagData (Lnet/minecraft/nbt/CompoundTag;Ljava/util/UUID;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,0,null
+handler dev/sterner/guardvillagers/mixin/VillagerTaskListProviderMixin createMeetTasks (FLorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V null,0
+handler dev/sterner/guardvillagers/mixin/VillagerTaskListProviderMixin createIdleTasks (FLorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V null,0
+mixinmethod com/cinemamod/mcef/mixins/MixinGameRenderer head_render_MCEF render()V
+mixinmethod com/cinemamod/mcef/mixins/MixinMinecraft head_setScreen_MCEF setScreen(Lnet/minecraft/client/gui/screens/Screen;)V
+# --- end rules mirrored from renames.txt ---
+
+# --- gaps of the 26.1 and 26.2 builds of Arc, Basic Weapons, Frostiful, Guard Villagers, Immersive Storms, Item Restrictions, Jobs+ Tools, Kielson's API, Knot,
+# --- MCEF, Mob AI Tweaks, Prometheus, Scorchful and Thermoo ---
+# Fabric API 26.2 called the fuel events FuelValueEvents; same shape as 1.21.11's FuelRegistryEvents (shim.compat.FuelRegistryEvents fires them)
+class net/fabricmc/fabric/api/registry/FuelValueEvents info/mudbourn/mmsuproot/shim/compat/FuelRegistryEvents
+class net/fabricmc/fabric/api/registry/FuelValueEvents$BuildCallback info/mudbourn/mmsuproot/shim/compat/FuelRegistryEvents$BuildCallback
+class net/fabricmc/fabric/api/registry/FuelValueEvents$Context info/mudbourn/mmsuproot/shim/compat/FuelRegistryEvents$Context
+# Constants whose declared type narrowed or widened in 26.3 (shim.compat.LegacyFields holds the game's own values under the old types)
+fieldmove net/minecraft/world/item/alchemy/Potions AWKWARD info/mudbourn/mmsuproot/shim/compat/LegacyFields AWKWARD
+fieldmove net/minecraft/world/item/alchemy/Potions WATER info/mudbourn/mmsuproot/shim/compat/LegacyFields WATER
+fieldmove net/minecraft/world/attribute/modifier/ColorModifier MULTIPLY_RGB info/mudbourn/mmsuproot/shim/compat/LegacyFields MULTIPLY_RGB
+# A data component patch is read as its two halves now (shim.compat.LegacyComponents)
+callinst net/minecraft/core/component/DataComponentPatch entrySet ()Ljava/util/Set; info/mudbourn/mmsuproot/shim/compat/LegacyComponents.entrySet
+# The shield-blocking hooks of a mob gained a flag after the damage (26.2 had (level, attacker, source, damage) and (attacker, source, damage)); false is what 26.3 passes for a plain block
+bridge net/minecraft/world/entity/LivingEntity blockUsingItem (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;F)V (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;FZ)V
+bridge net/minecraft/world/entity/LivingEntity blockedByItem (Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;F)V (Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/damagesource/DamageSource;FZ)V
+# BlockStateProvider.getState takes any level accessor; a world-gen level is one
+calldesc net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider getState (Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState; (Lnet/minecraft/world/level/LevelAccessor;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+# Spelling
+method net/minecraft/world/effect/MobEffect applyInstantenousEffect applyInstantaneousEffect 6
+# The clock manager answers with an instance; its total ticks are the old call's answer
+callinst net/minecraft/world/clock/ClockManager getTotalTicks (Lnet/minecraft/core/Holder;)J info/mudbourn/mmsuproot/shim/compat/LegacyWorld.clockTotalTicks
+# Kielson's API draws its shields as vanilla 26.2 did. The sprite-id overload and the banner patterns lost their crumbling overlay parameter (shim.client.LegacyClient), and the
+# glint of a patterned shield is RenderTypes.patternedShieldGlint, which 26.3's own shield renderer uses for the same layer
+callinst net/minecraft/client/renderer/SubmitNodeCollector submitModel (Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;IIILnet/minecraft/client/resources/model/sprite/SpriteId;Lnet/minecraft/client/resources/model/sprite/SpriteGetter;ILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.submitModel
+callmove net/minecraft/client/renderer/blockentity/BannerRenderer submitPatterns (Lnet/minecraft/client/resources/model/sprite/SpriteGetter;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;IILnet/minecraft/client/model/Model;Ljava/lang/Object;ZLnet/minecraft/world/item/DyeColor;Lnet/minecraft/world/level/block/entity/BannerPatternLayers;Lnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V info/mudbourn/mmsuproot/shim/client/LegacyClient submitPatterns
+method net/minecraft/client/renderer/rendertype/RenderTypes entityGlint patternedShieldGlint 0
+mixintarget com/kielson/mixin/client/ItemInHandRendererMixin net/minecraft/client/renderer/ItemInHandRenderer net/minecraft/client/player/FirstPersonHandsAndItems
+# Stand-in for Mojang's nullness annotation, which the logging library no longer ships (Basic Weapons annotates its packages with it)
+class com/mojang/logging/annotations/MethodsReturnNonnullByDefault info/mudbourn/mmsuproot/shim/compat/MethodsReturnNonnullByDefault
+# The HUD (hearts, armour, camera overlays, vehicle health) moved from Gui to Hud in 26.3; a mixin that hooks it targets Hud. The 26.x builds already name the methods
+# extractHearts, extractHeart, extractArmor, extractVehicleHealth and extractCameraOverlays, as Hud does. Frostiful's and Scorchful's own Gui mixins join Thermoo's (above).
+mixintarget com/github/thedeathlycow/frostiful/client/mixin/gui/GuiMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+mixintarget com/github/thedeathlycow/scorchful/client/mixin/GuiMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+injectat net/minecraft/client/gui/Gui extractHeart (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/gui/Hud$HeartType;IIZZZ)V net/minecraft/client/gui/Hud extractHeart (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/gui/Hud$HeartType;IIZZZ)V
+injectat net/minecraft/client/gui/Gui extractTextureOverlay (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/resources/Identifier;F)V net/minecraft/client/gui/Hud extractTextureOverlay (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/resources/Identifier;F)V
+# Knot's drop hook on the server player: the same shape change as Arc's (see renames.txt): drop(stack, includeThrowerName, Prediction) alone, the throw-randomly flag it never reads false
+handler com/daqem/knot/fabric/events/mixin/ServerPlayerMixin dropItem (Lnet/minecraft/world/item/ItemStack;ZLnet/minecraft/util/Prediction;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V 0,false,1
+# The brewed-potion trigger takes the potion contents where it took the potion holder; Knot's hook sits just before that call
+injectat net/minecraft/advancements/triggers/BrewedPotionTrigger trigger (Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/core/Holder;)V net/minecraft/advancements/triggers/BrewedPotionTrigger trigger (Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/item/alchemy/PotionContents;)V
+# Extra trailing parameters of two targets of Knot's mixins: the debug screen's line drawing takes an int, the tooltip call a flag (false); the handlers never read them
+bridge net/minecraft/client/gui/components/DebugScreenOverlay extractLines (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Ljava/util/List;Z)V (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Ljava/util/List;ZI)V
+bridge net/minecraft/client/gui/GuiGraphicsExtractor tooltip (Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipPositioner;Lnet/minecraft/resources/Identifier;)V (Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipPositioner;Lnet/minecraft/resources/Identifier;Z)V
+annotation tooltip(Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipPositioner;Lnet/minecraft/resources/Identifier;)V tooltip(Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipPositioner;Lnet/minecraft/resources/Identifier;Z)V
+# Frostiful shakes the hand while shivering: the hook sits after bobHurt in GameRenderer.renderItemInHand, which takes the camera state, the player state and a texture view
+# in 26.3 (26.2 took the camera state, a partial tick and a projection). The hook reads none of the old two and captures the pose stack the method makes
+handler com/github/thedeathlycow/frostiful/client/mixin/gui/GameRendererMixin shakeViewWhenShivering (Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lnet/minecraft/client/renderer/state/level/PlayerRenderState;Lcom/mojang/renderpearl/api/textures/GpuTextureView;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;Lcom/mojang/blaze3d/vertex/PoseStack;)V 0,null,null locals=4
+# --- end gaps of the 26.1 and 26.2 builds ---
+
+
+# RegistryFixedCodec and RegistryFileCodec.create return a plain Codec in 26.3, but 26.x mods call fieldOf and the rest on the codec class
+# itself (invokevirtual), which fails verification on a Codec. shim.compat.LegacyRegistryCodec is a Codec class that wraps RegistryCodecs.holder.
+class net/minecraft/resources/RegistryFixedCodec info/mudbourn/mmsuproot/shim/compat/LegacyRegistryCodec
+class net/minecraft/resources/RegistryFileCodec info/mudbourn/mmsuproot/shim/compat/LegacyRegistryCodec

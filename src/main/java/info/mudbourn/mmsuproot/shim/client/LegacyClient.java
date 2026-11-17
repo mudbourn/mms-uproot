@@ -20,6 +20,11 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.model.sprite.SpriteGetter;
+import net.minecraft.client.resources.model.sprite.SpriteId;
+import net.minecraft.client.renderer.blockentity.BannerRenderer;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.block.entity.BannerPatternLayers;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
@@ -105,6 +110,23 @@ public final class LegacyClient {
 			int light, int overlay, int outline, ModelFeatureRenderer.CrumblingOverlay crumbling) {
 		collector.submitModel(model, state, pose, type, light, overlay, -1, null, outline);
 		if (crumbling != null) collector.submitCrumblingOverlay(model, state, pose, type, light, overlay, outline, crumbling);
+	}
+
+	/**
+	 * 26.2's {@code submitModel} with a sprite id and a sprite getter and a crumbling overlay: 26.3's takes no overlay (the overlay is a call of
+	 * its own), and draws the sprite's own render type, which the overlay then repeats.
+	 */
+	public static <S> void submitModel(SubmitNodeCollector collector, Model<S> model, S state, PoseStack pose, int light, int overlay, int tint,
+			SpriteId sprite, SpriteGetter sprites, int outline, ModelFeatureRenderer.CrumblingOverlay crumbling) {
+		collector.submitModel(model, state, pose, light, overlay, tint, sprite, sprites, outline);
+		if (crumbling != null) collector.submitCrumblingOverlay(model, state, pose, sprite.renderType(model.renderType()), light, overlay, outline, crumbling);
+	}
+
+	/** 26.2's {@code BannerRenderer.submitPatterns}, which also took a crumbling overlay: 26.3 draws the overlay with a call of its own, which the patterns do not make. */
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	public static void submitPatterns(SpriteGetter sprites, PoseStack pose, SubmitNodeCollector collector, int light, int overlay, Model model, Object state,
+			boolean glint, DyeColor base, BannerPatternLayers patterns, ModelFeatureRenderer.CrumblingOverlay crumbling) {
+		BannerRenderer.submitPatterns(sprites, pose, collector, light, overlay, model, state, glint, base, patterns);
 	}
 
 	/** 1.21.11's {@code submitModelPart}; the glint flag is not carried over (26.3 asks the render type for it) and the sheet flag only mattered with a sprite. */

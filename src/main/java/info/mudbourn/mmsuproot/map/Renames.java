@@ -82,6 +82,7 @@ public final class Renames {
 	private final List<Inherited> inherited = new ArrayList<>();
 	private final Map<String, Handler> handlers = new HashMap<>(); // "mixin class.handler" -> rule
 	private final Map<String, String> mixinTargets = new HashMap<>(); // "mixin class old target" -> new target (26.3 names)
+	private final Map<String, List<String>> mixinAlso = new HashMap<>(); // mixin class -> classes added to its targets (26.3 names)
 	private final Map<String, String> mixinMethods = new HashMap<>(); // "mixin class.handler" -> the method string its injector names (26.3 names)
 	private final Map<String, List<Ctor>> ctors = new HashMap<>(); // owner (26.3 name) -> adapters
 	private final Map<String, String> classes = new HashMap<>();
@@ -190,6 +191,10 @@ public final class Renames {
 			case "mixintarget" -> {
 				if (p.length != 4) throw new IllegalStateException("Bad mixintarget rule: " + line);
 				r.mixinTargets.put(p[1] + " " + p[2], p[3]);
+			}
+			case "mixinalso" -> {
+				if (p.length != 3) throw new IllegalStateException("Bad mixinalso rule: " + line);
+				r.mixinAlso.computeIfAbsent(p[1], k -> new ArrayList<>()).add(p[2]);
 			}
 			case "inherited" -> {
 				if (p.length != 4 && p.length != 5) throw new IllegalStateException("Bad inherited rule: " + line);
@@ -326,6 +331,11 @@ public final class Renames {
 		String prefix = mixin + " ";
 		for (Map.Entry<String, String> e : mixinTargets.entrySet()) if (e.getKey().startsWith(prefix)) out.put(e.getKey().substring(prefix.length()), e.getValue());
 		return out;
+	}
+
+	/** The classes a {@code mixinalso} rule adds to the targets of a mixin class (26.3 names); empty for most classes. */
+	public List<String> mixinAlsoTargets(String mixin) {
+		return mixinAlso.isEmpty() ? List.of() : mixinAlso.getOrDefault(mixin, List.of());
 	}
 
 	/** The 26.3 class a mixin class targets in place of {@code oldTarget} (see the {@code mixintarget} rule), or null. */

@@ -99,6 +99,11 @@ final class MixinShadows extends ClassNode {
 						targets.set(k, Type.getObjectType(now));
 						namer.note("mixin " + simple() + " targets " + now.substring(now.lastIndexOf('/') + 1) + " now, " + t.getInternalName().substring(t.getInternalName().lastIndexOf('/') + 1) + " no longer holds what it injects into");
 					}
+					// a mixinalso rule: the mixin has injectors for one more class, which then also runs them where it finds their targets
+					for (String extra : namer.renames().mixinAlsoTargets(name)) {
+						if (targets.stream().noneMatch(o -> o instanceof Type t && t.getInternalName().equals(extra))) targets.add(Type.getObjectType(extra));
+						namer.note("mixin " + simple() + " also targets " + extra.substring(extra.lastIndexOf('/') + 1));
+					}
 				}
 			}
 		}
