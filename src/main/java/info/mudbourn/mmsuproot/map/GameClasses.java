@@ -47,22 +47,39 @@ public final class GameClasses {
 
 	private final ClassLoader loader;
 	private final Set<String> names = new HashSet<>();
+	/** The jar each indexed class comes from. Opened once and kept: on a dedicated server the target class loader cannot see the game yet. */
+	private final Map<String, ZipFile> origin = new HashMap<>();
 	private final Map<String, List<String>> bySimpleName = new HashMap<>();
 	private final Map<String, Info> infos = new ConcurrentHashMap<>();
+	/** Answers of the class loader, for when no jar could be indexed: asked once per name, since every lookup walks the class path. */
+	private final Map<String, Boolean> fallback = new ConcurrentHashMap<>();
 
 	public GameClasses(ClassLoader loader, Collection<Path> classPath) {
 		this.loader = loader;
+		Set<Path> seen = new java.util.LinkedHashSet<>();
 		for (Path p : classPath) {
-			if (!Files.isRegularFile(p)) continue;
-			try (ZipFile zip = new ZipFile(p.toFile())) {
-				if (zip.getEntry("net/minecraft/world/level/Level.class") == null) continue;
+			if (!Files.isRegularFile(p) || !seen.add(p.toAbsolutePath().normalize())) continue; // one jar listed twice must not make every name ambiguous
+			ZipFile zip = null;
+			try {
+				zip = new ZipFile(p.toFile());
+				if (zip.getEntry("net/minecraft/world/level/Level.class") == null) {
+					zip.close();
+					continue;
+				}
+				// kept open on purpose: Info reads of the indexed classes come from these files for the life of the game, and the process end closes them
+				final ZipFile open = zip;
+				LOGGER.info("Indexing Minecraft classes from {}", p.getFileName());
 				zip.stream().map(ZipEntry::getName).filter(n -> n.startsWith("net/minecraft/") && n.endsWith(".class")).forEach(n -> {
 					String cls = n.substring(0, n.length() - 6);
-					names.add(cls);
+					if (!names.add(cls)) return; // a second jar holding the same class must neither replace its origin nor make its name ambiguous
+					origin.put(cls, open);
 					if (cls.indexOf('$') < 0) bySimpleName.computeIfAbsent(cls.substring(cls.lastIndexOf('/') + 1), k -> new ArrayList<>()).add(cls);
 				});
 			} catch (IOException e) {
 				LOGGER.warn("Could not index {}", p, e);
+				if (zip != null) {
+					try { zip.close(); } catch (IOException ignored) { }
+				}
 			}
 		}
 		LOGGER.info("Indexed {} Minecraft classes", names.size());
@@ -70,7 +87,7 @@ public final class GameClasses {
 
 	public boolean has(String internalName) {
 		if (names.contains(internalName)) return true;
-		return names.isEmpty() && loader.getResource(internalName + ".class") != null;
+		return names.isEmpty() && fallback.computeIfAbsent(internalName, n -> loader.getResource(n + ".class") != null);
 	}
 
 	/** The one class that kept {@code simpleName} but changed package, or null when unclear. */
@@ -120,8 +137,14 @@ public final class GameClasses {
 		return info == ABSENT ? Optional.empty() : Optional.of(info);
 	}
 
+	private static InputStream zipStream(ZipFile zip, String name) throws IOException {
+		ZipEntry entry = zip.getEntry(name + ".class");
+		return entry == null ? null : zip.getInputStream(entry);
+	}
+
 	private Info read(String name) {
-		try (InputStream in = loader.getResourceAsStream(name + ".class")) {
+		ZipFile zip = origin.get(name);
+		try (InputStream in = zip != null ? zipStream(zip, name) : loader.getResourceAsStream(name + ".class")) {
 			if (in == null) return ABSENT;
 			ClassReader reader = new ClassReader(in);
 			Set<String> fields = new HashSet<>();

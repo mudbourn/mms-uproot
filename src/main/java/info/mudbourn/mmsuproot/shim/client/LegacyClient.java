@@ -59,6 +59,16 @@ public final class LegacyClient {
 		return minecraft.gui.screen();
 	}
 
+	/** 1.21.11's {@code Minecraft.getOverlay()}: the HUD holds the loading overlay now. */
+	public static net.minecraft.client.gui.screens.Overlay overlay(Minecraft minecraft) {
+		return minecraft.gui.overlay();
+	}
+
+	/** 1.21.11's {@code Minecraft.setOverlay(Overlay)}. */
+	public static void setOverlay(Minecraft minecraft, net.minecraft.client.gui.screens.Overlay overlay) {
+		minecraft.gui.setOverlay(overlay);
+	}
+
 	/** 1.21.11's {@code Minecraft.getWaypointStyles()}: the HUD holds the waypoint styles now. */
 	public static WaypointStyleManager waypointStyles(Minecraft minecraft) {
 		return minecraft.gui.hud.getWaypointStyles();
@@ -121,6 +131,11 @@ public final class LegacyClient {
 	/** 26.1 and 26.2's {@code Util.OS.openUri(String)}: the game opens a link through {@code Blaze3D} now, and takes a URI. */
 	public static void openUri(Util.OS os, String uri) {
 		Blaze3D.openUri(URI.create(uri));
+	}
+
+	/** The {@code Util.OS.openUri(URI)} overload: the same, with the URI already made. */
+	public static void openUri(Util.OS os, URI uri) {
+		Blaze3D.openUri(uri);
 	}
 
 	/** {@code new LocalPlayer(...)}: 26.3 also takes the item-activation animation the player shows, a fresh one for a player that is only drawn. */

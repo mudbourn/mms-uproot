@@ -15,6 +15,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.level.levelgen.feature.stateproviders.CopyPropertiesProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +33,16 @@ public final class LegacyTools {
 	/** {@code obj instanceof AxeItem}: 26.3 has no axe class, an axe is an item of the axes tag. */
 	public static boolean isAxe(Object obj) {
 		return obj instanceof Item item && item.builtInRegistryHolder().is(ItemTags.AXES);
+	}
+
+	/**
+	 * Fabric's {@code StrippableBlockRegistry.register(input, stripped)}: stripping is a block transformer now. 1.21.11's axe carried the log's
+	 * axis over to the stripped block, and Terraform's hook went further for its small and quarter logs and gave the stripped block every
+	 * property of the old state (the old state's {@code withPropertiesOf}); {@link CopyPropertiesProvider} does exactly that, from the state at the
+	 * position, so the stripped block keeps its axis, leaves, waterlogging and the like.
+	 */
+	public static void registerStripping(Block input, Block stripped) {
+		BlockTransformerHelper.registerStripping(input, new CopyPropertiesProvider(stripped));
 	}
 
 	/** {@code HoeItem.changeIntoState(BlockState)}: a callback that tills into {@code state}. */

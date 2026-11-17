@@ -9,6 +9,9 @@ base {
 	archivesName = project.archives_base_name
 }
 
+// A probe run plays in a world of its own, made fresh with a fixed seed: reusing one run's save would carry that run's chunks and edits into the next.
+def probeWorld = "uproot_probe_" + new Date().format('yyyyMMdd_HHmmss')
+
 loom {
 	accessWidenerPath = file("src/main/resources/mms_uproot.accesswidener")
 	mods {
@@ -23,8 +26,9 @@ loom {
 			ideConfigGenerated false
 			runDir "run"
 			vmArg "-Duproot.probe=true"
+			vmArg "-Duproot.probe.world=${probeWorld}"
 			programArg "--quickPlaySingleplayer"
-			programArg "uproot_check"
+			programArg probeWorld
 		}
 	}
 }
@@ -75,7 +79,11 @@ tasks.register('uprootScan', JavaExec) {
 	mainClass = 'info.mudbourn.mmsuproot.tool.ScanTool'
 	maxHeapSize = '3g'
 	def extra = providers.gradleProperty('scanMods').getOrElse('').split(',').collect { it.trim() }.findAll { !it.isEmpty() }
-	args = ['--out', file('build/uproot-scan').path, '--cache', file('run/mms-uproot/cache').path, file('run/mods').path] + extra
+	def scanOut = providers.gradleProperty('scanOut').getOrElse('build/uproot-scan')
+	// Two jars with one mod id: the scan judges the native 26.3 build, as the game loads it; -PscanPrefer=legacy keeps the old jar instead.
+	def scanPrefer = providers.gradleProperty('scanPrefer').getOrElse('')
+	if (!scanPrefer.isEmpty()) systemProperty 'uproot.scan.prefer', scanPrefer
+	args = ['--out', file(scanOut).path, '--cache', file('run/mms-uproot/cache').path, file('run/mods').path] + extra
 }
 
 tasks.matching { it.name == 'runClient' }.configureEach {

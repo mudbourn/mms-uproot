@@ -3,6 +3,7 @@ package info.mudbourn.mmsuproot.shim.client;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Predicate;
 
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
@@ -30,10 +31,21 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public final class BlockRenderLayerMap {
 	private static final Map<Block, ChunkSectionLayer> LAYERS = new ConcurrentHashMap<>();
+	/** Rules of Uproot's own for blocks no mod lists one by one (a state test and the layer the matching states are on at least). */
+	private static final List<Map.Entry<Predicate<BlockState>, ChunkSectionLayer>> RULES = new CopyOnWriteArrayList<>();
 
 	static {
 		ModelLoadingPlugin.register(context -> context.modifyBlockModelAfterBake().register((model, bake) -> {
-			ChunkSectionLayer layer = LAYERS.get(bake.state().getBlock());
+			BlockState state = bake.state();
+			ChunkSectionLayer layer = LAYERS.get(state.getBlock());
+			if (layer == null) {
+				for (Map.Entry<Predicate<BlockState>, ChunkSectionLayer> rule : RULES) {
+					if (rule.getKey().test(state)) {
+						layer = rule.getValue();
+						break;
+					}
+				}
+			}
 			return layer == null ? model : new Layered(model, layer);
 		}));
 	}
@@ -42,6 +54,11 @@ public final class BlockRenderLayerMap {
 
 	public static void putBlock(Block block, ChunkSectionLayer layer) {
 		LAYERS.put(block, layer);
+	}
+
+	/** Every state a test accepts has its model raised to at least {@code layer}, as {@link #putBlock} does for a whole block. */
+	public static void putStates(Predicate<BlockState> test, ChunkSectionLayer layer) {
+		RULES.add(Map.entry(test, layer));
 	}
 
 	public static void putBlocks(ChunkSectionLayer layer, Block... blocks) {

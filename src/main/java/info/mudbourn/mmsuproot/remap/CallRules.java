@@ -101,6 +101,19 @@ final class CallRules extends ClassVisitor {
 	}
 
 	/**
+	 * A lambda or method reference whose functional interface method a {@code calldesc} rule covers: the interface method is erased
+	 * differently now, so the lambda is made for the new erased descriptor. The implementation and instantiated type stay as they are;
+	 * the rule only fits when the old erasure is a subtype of the new one, as with a narrower return type.
+	 */
+	private void samDesc(String indyName, String indyDesc, Handle bsm, Object[] args) {
+		if (!bsm.getOwner().equals("java/lang/invoke/LambdaMetafactory") || args.length < 3 || !(args[0] instanceof Type sam)) return;
+		Type itf = Type.getReturnType(indyDesc);
+		if (itf.getSort() != Type.OBJECT) return;
+		String now = callDesc(itf.getInternalName(), indyName, sam.getDescriptor());
+		if (now != null) args[0] = Type.getMethodType(now);
+	}
+
+	/**
 	 * A lambda or method reference for a functional interface a {@code bridge} rule covers: the interface method has added parameters, so
 	 * the lambda is made for the new shape, and its body is a static method of this class that drops the added arguments and calls the
 	 * old implementation. Returns the new bootstrap arguments, or null when no rule applies.
@@ -177,7 +190,7 @@ final class CallRules extends ClassVisitor {
 	 */
 	private int shapeOpcode(int opcode, String owner) {
 		GameClasses game = namer.game();
-		if (opcode == Opcodes.INVOKEVIRTUAL && game.isInterface(owner)) return Opcodes.INVOKEINTERFACE;
+		if (opcode == Opcodes.INVOKEVIRTUAL && (game.isInterface(owner) || renames.isInterface(owner))) return Opcodes.INVOKEINTERFACE;
 		if (opcode == Opcodes.INVOKEINTERFACE && game.isClass(owner)) return Opcodes.INVOKEVIRTUAL;
 		return opcode;
 	}
@@ -185,14 +198,14 @@ final class CallRules extends ClassVisitor {
 	/** The interface flag a call needs: the owner's own shape when it is a game class, else the flag as written. */
 	private boolean shapeFlag(String owner, boolean itf) {
 		GameClasses game = namer.game();
-		if (game.isInterface(owner)) return true;
+		if (game.isInterface(owner) || renames.isInterface(owner)) return true;
 		if (game.isClass(owner)) return false;
 		return itf;
 	}
 
 	private Handle shapeHandle(Handle h) {
 		int tag = h.getTag();
-		if (tag == Opcodes.H_INVOKEVIRTUAL && namer.game().isInterface(h.getOwner())) tag = Opcodes.H_INVOKEINTERFACE;
+		if (tag == Opcodes.H_INVOKEVIRTUAL && (namer.game().isInterface(h.getOwner()) || renames.isInterface(h.getOwner()))) tag = Opcodes.H_INVOKEINTERFACE;
 		else if (tag == Opcodes.H_INVOKEINTERFACE && namer.game().isClass(h.getOwner())) tag = Opcodes.H_INVOKEVIRTUAL;
 		boolean itf = shapeFlag(h.getOwner(), h.isInterface());
 		if (tag == h.getTag() && itf == h.isInterface()) return h;
@@ -214,6 +227,7 @@ final class CallRules extends ClassVisitor {
 			public void visitInvokeDynamicInsn(String indyName, String indyDesc, Handle bsm, Object... bsmArgs) {
 				Object[] mapped = bsmArgs.clone();
 				for (int i = 0; i < mapped.length; i++) mapped[i] = rewritten(mapped[i]);
+				samDesc(indyName, indyDesc, bsm, mapped);
 				Object[] adapted = bridgedLambda(indyName, indyDesc, bsm, mapped);
 				super.visitInvokeDynamicInsn(indyName, indyDesc, bsm, adapted != null ? adapted : mapped);
 			}
@@ -343,13 +357,14 @@ final class CallRules extends ClassVisitor {
 	/** The 26.3 method of an interface whose 1.21.11 abstract method the class implements: the same arguments go to the old one. */
 	private void emitImplBridge(Renames.ImplBridge b) {
 		Type[] args = Type.getArgumentTypes(b.newDesc());
+		int dropped = Math.max(0, args.length - Type.getArgumentTypes(b.oldDesc()).length); // leading parameters the old method never had
 		MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC, b.newName(), b.newDesc(), null, null);
 		mv.visitCode();
 		mv.visitVarInsn(Opcodes.ALOAD, 0);
 		int slot = 1;
-		for (Type a : args) {
-			mv.visitVarInsn(a.getOpcode(Opcodes.ILOAD), slot);
-			slot += a.getSize();
+		for (int i = 0; i < args.length; i++) {
+			if (i >= dropped) mv.visitVarInsn(args[i].getOpcode(Opcodes.ILOAD), slot);
+			slot += args[i].getSize();
 		}
 		mv.visitMethodInsn(isInterface ? Opcodes.INVOKEINTERFACE : Opcodes.INVOKEVIRTUAL, className, b.oldName(), b.oldDesc(), isInterface);
 		if (b.helperOwner() != null) {

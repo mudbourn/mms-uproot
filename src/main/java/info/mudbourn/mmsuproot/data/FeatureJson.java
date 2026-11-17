@@ -327,6 +327,22 @@ public final class FeatureJson {
 		return lootCondition(root);
 	}
 
+	/** An item modifier file: one loot function, or a list of them, in 26.3's shape (run through the loot table conversion as the functions of a table). */
+	@SuppressWarnings("unchecked")
+	public static Object itemModifier(Object value, Stats stats) {
+		List<Object> functions = value instanceof List<?> l ? new ArrayList<>(l) : new ArrayList<>(List.of(value));
+		Map<String, Object> table = new LinkedHashMap<>();
+		table.put("functions", functions);
+		Object converted = ((Map<String, Object>) lootTable(table, stats)).get("modifier");
+		if (!(converted instanceof List<?> out)) return value;
+		return value instanceof List<?> ? out : out.get(0);
+	}
+
+	/** A predicate file that is a list of loot conditions. */
+	public static Object predicateList(List<?> list) {
+		return conditionList(list);
+	}
+
 	/** A list of loot conditions as the one predicate 26.3 reads: several become an {@code all_of}. */
 	@SuppressWarnings("unchecked")
 	private static Object conditionList(List<?> list) {

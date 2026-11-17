@@ -210,6 +210,8 @@ public final class Trades {
 					tags.computeIfAbsent(tag.toString(), k -> new ArrayList<>()).add(id.toString());
 				}
 				if (!v.profession.getNamespace().equals("minecraft")) {
+					// A trade that converts to no entry leaves the set empty; the tag it names must still exist, or the registry cannot freeze.
+					tags.computeIfAbsent(tag.toString(), k -> new ArrayList<>());
 					out.put(Gen.path(tag, "trade_set"), Gen.json(Gen.obj("amount", 2, "random_sequence", Gen.NS + ":trade_set/" + Gen.flat(tag),
 							"trades", "#" + tag)));
 				}
@@ -228,6 +230,7 @@ public final class Trades {
 		synchronized (WANDERING_POOLS) {
 			for (Map.Entry<Identifier, List<Trade>> e : WANDERING_POOLS.entrySet()) {
 				Identifier set = wanderingSetId(e.getKey());
+				tags.computeIfAbsent(set.toString(), k -> new ArrayList<>());
 				for (Trade t : e.getValue()) {
 					for (Map<String, Object> entry : t.entries()) {
 						Identifier id = Identifier.fromNamespaceAndPath(Gen.NS, "trade/" + n++);

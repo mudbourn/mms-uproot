@@ -249,7 +249,8 @@ public final class ClassRemap {
 					targetDesc = args.length == 1 ? args[0].getDescriptor() : Type.getReturnType(memberDesc).getDescriptor();
 				}
 			}
-			Strings strings = new Strings(av, namer, injector, injector || accessor || invoker ? className : null, accessor, null, targetDesc);
+			String forced = injector && onMethod && memberName != null ? namer.renames().mixinMethod(className, memberName) : null;
+			Strings strings = new Strings(av, namer, injector, injector || accessor || invoker ? className : null, accessor, null, targetDesc, forced);
 			if ((accessor || invoker) && onMethod && memberName != null) strings.inferName(memberName);
 			return strings;
 		}
@@ -301,9 +302,11 @@ public final class ClassRemap {
 		private final String targetDesc; // descriptor of the member a bare name with none stands for (an invoker's method, an accessor's field), or null
 		private String inferred; // the target Mixin takes from the name of an accessor or invoker method that names none, or null
 		private boolean named; // the annotation named its target
+		private final String forced; // the method string a mixinmethod rule gives this injector in place of its own, or null
 
-		Strings(AnnotationVisitor next, Namer namer, boolean injector, String owner, boolean field, String element, String targetDesc) {
+		Strings(AnnotationVisitor next, Namer namer, boolean injector, String owner, boolean field, String element, String targetDesc, String forced) {
 			super(API, next);
+			this.forced = forced;
 			this.namer = namer;
 			this.injector = injector;
 			this.owner = owner;
@@ -339,6 +342,10 @@ public final class ClassRemap {
 			String key = name != null ? name : element;
 			boolean member = owner != null && ("method".equals(key) || "target".equals(key) || "value".equals(key) || "field".equals(key));
 			if (member && element == null && "value".equals(key)) named = true;
+			if (forced != null && "method".equals(key) && value instanceof String) {
+				super.visit(name, forced);
+				return;
+			}
 			super.visit(name, value instanceof String s ? namer.rewrite(s, member ? owner : null, field, targetDesc) : value);
 		}
 
@@ -352,13 +359,13 @@ public final class ClassRemap {
 		@Override
 		public AnnotationVisitor visitAnnotation(String name, String descriptor) {
 			AnnotationVisitor av = super.visitAnnotation(name, descriptor);
-			return av == null ? null : new Strings(av, namer, false, owner, false, null, null);
+			return av == null ? null : new Strings(av, namer, false, owner, false, null, null, null);
 		}
 
 		@Override
 		public AnnotationVisitor visitArray(String name) {
 			AnnotationVisitor av = super.visitArray(name);
-			return av == null ? null : new Strings(av, namer, false, owner, field, name, targetDesc);
+			return av == null ? null : new Strings(av, namer, false, owner, field, name, targetDesc, forced);
 		}
 	}
 

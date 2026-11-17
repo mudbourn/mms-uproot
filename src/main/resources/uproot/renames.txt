@@ -26,6 +26,7 @@
 #                                  erased differently). Also matches calls through a subclass of OWNER and method
 #                                  references. If the return type changed to a wider one, a checkcast to the old one
 #                                  follows the call. All 26.3 names.
+#                                  A lambda made for that interface method gets NEWDESC as its erased method type too.
 #                                  e.g. calldesc net/minecraft/world/level/block/state/BlockState is (Lnet/minecraft/world/level/block/Block;)Z (Ljava/lang/Object;)Z
 # callinst OWNER NAME DESC HELPER.method
 #                                  an instance call (invokevirtual or invokeinterface) of OWNER.NAME with DESC becomes
@@ -62,6 +63,8 @@
 #                                  injected method itself, whose handler arguments and locals must still fit.
 # typesonly CLASS                 the class rule for CLASS (1.21.11 name) holds for types and signatures only: the 26.3 class is not the old
 #                                  class's stand-in for calls. The offline scan reports every call of a member of CLASS as a real gap.
+# interface CLASS                 CLASS (an internal name of another mod's library, not the game's: those are read from the game) was a class in
+#                                  1.21.11 and is an interface now, so calls of its methods use invokeinterface. e.g. interface eu/pb4/placeholders/api/PlaceholderContext
 # ctoradapt OWNER OLDDESC NEWDESC HELPER.method
 #                                  a constructor whose arguments change in more ways than ctor can say. Calls
 #                                  (invokespecial, so both new X(...) and super(...)) and X::new references pass the
@@ -97,6 +100,10 @@
 #                                  named with its old descriptor in the annotation is rewritten to the target's new parameters.
 #                                  Choose entries after reading which old parameters the handler body uses; an unused one may default.
 #                                  e.g. handler net/conczin/immersive_optimization/mixin/client/LevelRendererMixin immersiveOptimization$render (Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;ZLnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lorg/joml/Vector4f;ZZLorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,null,1,2,null,3,4,5
+#                                  An optional field locals=I,J,... (null for a default) says where each local variable that the old handler
+#                                  captured after its callback comes from, as the index of the new parameter; NEWDESC then lists the
+#                                  captured locals of the 26.3 target in order, as Mixin wants them. Without it a captured local is found again by
+#                                  type, the last unused parameter of that type, which only fits when the types are all different.
 #                                  An optional sixth field if=pkg/Helper.method names a static boolean method of Uproot's own that gets the target's
 #                                  parameters (those before the callback) and says whether the handler runs; for a hook whose old target was a
 #                                  case of the new one. The handler must return nothing.
@@ -110,18 +117,29 @@
 #                                  a class that extends or implements OWNER and declares OLDNAME OLDDESC (what 1.21.11 called an abstract method of
 #                                  OWNER, as the class has it after renaming) also gets NEWNAME NEWDESC, the abstract method of 26.3, with the same
 #                                  arguments, calling it. HELPER.method (static, takes the old return type and returns the new one) converts the result.
+#                                  NEWDESC may have more parameters than OLDDESC when the extra ones come first (a level the old method never took); the
+#                                  bridge drops them.
 #                                  e.g. implbridge net/minecraft/server/packs/repository/Pack$ResourcesSupplier openPrimary (Lnet/minecraft/server/packs/PackLocationInfo;)Lnet/minecraft/server/packs/PackResources; openMetadata (Lnet/minecraft/server/packs/PackLocationInfo;)Lnet/minecraft/server/packs/PackMetadataResources;
 # invokerparam MIXINCLASS NAME OLDDESC EXTRA
 #                                  the @Invoker method NAME (descriptor OLDDESC) of the mod's mixin interface MIXINCLASS targets a method that gained
 #                                  trailing parameters, EXTRA (parameter types in descriptor syntax). The interface method takes them too, and every
 #                                  call of it in the mod passes the zero value of each (false, 0, null).
 #                                  e.g. invokerparam io/wispforest/owo/mixin/ui/access/GuiGraphicsExtractorAccessor owo$tooltip (Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecraft/client/gui/screens/inventory/tooltip/ClientTooltipPositioner;Lnet/minecraft/resources/Identifier;)V Z
+# mixinmethod MIXINCLASS HANDLER METHOD
+#                                  the injector HANDLER of the mod's mixin class MIXINCLASS (its own internal name) names its target method by an intermediary name,
+#                                  which two overloads of 26.3 now share, so the @Inject can no longer tell them apart: METHOD (name and descriptor, 26.3
+#                                  names) replaces what its method= says. e.g. mixinmethod io/wispforest/owo/mixin/ext/ItemStackMixin deriveComponents4 applyComponents(Lnet/minecraft/core/component/DataComponentMap;)V
 # mixintarget MIXINCLASS OLDTARGET NEWTARGET
 #                                  the mixin class MIXINCLASS (its own internal name) names OLDTARGET in its @Mixin, and what it injects
 #                                  into lives in NEWTARGET now (a class that took over part of the old one). Both are 26.3 names. Its
 #                                  shadows and handlers are then read against NEWTARGET; pair it with method and handler rules where the
 #                                  members changed too.
 #                                  e.g. mixintarget dev/liqw/locatorborder/mixin/GuiMixin net/minecraft/client/gui/Gui net/minecraft/client/gui/Hud
+# mixinannotation MIXINCLASS OLD NEW
+#                                  as annotation, for the annotation strings of the one mixin class MIXINCLASS only (its own internal name),
+#                                  which a text of the same shape in another mod's mixin must not be changed by. e.g. the name of a target
+#                                  method that the class's new target (see mixintarget) declares under another name.
+#                                  A mixin that extends the class its mixintarget names gets Object as its superclass, which Mixin demands.
 # super CLASS NEWSUPER             a mod class (its own name, as it is in the mod) extends NEWSUPER, an internal name, where it extended its own
 #                                  superclass; NEWSUPER must extend that superclass and have its constructors. The class's invokespecial calls
 #                                  of the old superclass (constructors, super.m()) go to NEWSUPER. For a mod class whose superclass lost methods
@@ -197,6 +215,8 @@ callmove net/minecraft/world/level/levelgen/feature/stateproviders/BlockStatePro
 callmove net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider simple (Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
 callmove net/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider simple (Lnet/minecraft/world/level/block/Block;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
 callmove net/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider simple (Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/levelgen/feature/stateproviders/SimpleStateProvider; net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider of
+# TYG 26.3 dropped TREE_FROM_NBT_V1 and BWG crashes at boot without this rule. BWG only reads the field into a datagen-only factory map (ConfiguredFeaturesUtil.CONFIGURED_FEATURES_FACTORIES), so the getstatic only has to link; its trees come from JSON that Uproot rewrites to tree_from_nbt_v2
+field dev/corgitaco/ohthetreesyoullgrow/world/level/levelgen/feature/TYGFeatures TREE_FROM_NBT_V1 TREE_FROM_NBT_V2
 fieldowner net/minecraft/util/valueproviders/IntProvider net/minecraft/util/valueproviders/IntProviders
 fieldowner net/minecraft/util/valueproviders/FloatProvider net/minecraft/util/valueproviders/FloatProviders
 fieldmove net/minecraft/core/registries/BuiltInRegistries FEATURE info/mudbourn/mmsuproot/shim/feature/LegacyRegistries FEATURE
@@ -351,7 +371,8 @@ ctor net/minecraft/world/entity/ai/goal/TryFindLiquidGoal (Lnet/minecraft/world/
 ctor net/minecraft/world/level/block/AttachedStemBlock (Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/tags/TagKey;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V 3=net/minecraft/tags/BlockTags.SUPPORTS_PUMPKIN_STEM:Lnet/minecraft/tags/TagKey;
 
 # Fabric's strippable and flattenable registries are block transformers now
-callmove net/fabricmc/fabric/api/registry/StrippableBlockRegistry register (Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/Block;)V net/fabricmc/fabric/api/item/v1/BlockTransformerHelper registerStripping
+# (a stripped block takes the old state's properties, as 1.21.11's axe did for the axis and Terraform's hook did for all of them: shim.item.LegacyTools.registerStripping)
+callmove net/fabricmc/fabric/api/registry/StrippableBlockRegistry register (Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/Block;)V info/mudbourn/mmsuproot/shim/item/LegacyTools registerStripping
 callmove net/fabricmc/fabric/api/registry/FlattenableBlockRegistry register (Lnet/minecraft/world/level/block/Block;Lnet/minecraft/world/level/block/state/BlockState;)V net/fabricmc/fabric/api/item/v1/BlockTransformerHelper registerFlattening
 
 # is(Block), is(Item) and is(Fluid) all erase to is(Object) on 26.3's TypedInstance
@@ -609,6 +630,8 @@ method net/minecraft/client/gui/GuiGraphicsExtractor renderItem item (Lnet/minec
 method net/minecraft/client/gui/screens/Screen renderBackground extractBackground 4
 method net/minecraft/client/gui/screens/Screen renderTransparentBackground extractTransparentBackground 1
 callinst net/minecraft/client/Minecraft setScreen (Lnet/minecraft/client/gui/screens/Screen;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.setScreen
+callinst net/minecraft/client/Minecraft getOverlay ()Lnet/minecraft/client/gui/screens/Overlay; info/mudbourn/mmsuproot/shim/client/LegacyClient.overlay
+callinst net/minecraft/client/Minecraft setOverlay (Lnet/minecraft/client/gui/screens/Overlay;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.setOverlay
 callinst net/minecraft/world/entity/player/Player drop (Lnet/minecraft/world/item/ItemStack;Z)Lnet/minecraft/world/entity/item/ItemEntity; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.drop
 injectat net/minecraft/world/entity/monster/cubemob/Slime convertTo (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob; net/minecraft/world/entity/monster/cubemob/AbstractCubeMob convertTo (Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob;
 # optional MIXINCLASS HANDLER      the injector may find no target, also in strict mode (-Duproot.strictMixins): its target call is inside
@@ -927,6 +950,14 @@ callinst net/minecraft/world/level/biome/MobSpawnSettings$Builder addSpawn (Lnet
 
 # Providers that rules and decorators hold are held through a holder now, and the noise provider takes the made noise
 ctoradapt net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider (JLinfo/mudbourn/mmsuproot/shim/noise/NoiseParameters;F)V (JLnet/minecraft/world/level/levelgen/synth/NormalNoise;F)V info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.noiseBasedStateProvider
+# The rest of a noise state provider a 1.21.11 mod subclasses (Biomes We've Gone' between-noise provider): its `noise` is the made Noise now, so a read of it is a
+# read of the description, which LegacyNoise samples as the provider's own noise; getNoiseValue answers a float; noiseCodec is built over NoiseParameters; and a
+# provider names its type() and takes no level where 26.3 asks for a codec() and a level
+field net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider noise parameters
+callinst net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider getNoiseValue (Lnet/minecraft/core/BlockPos;D)D info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.noiseValue
+callmove net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider noiseCodec (Lcom/mojang/serialization/codecs/RecordCodecBuilder$Instance;)Lcom/mojang/datafixers/Products$P3; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen noiseCodec
+implbridge net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider type ()Linfo/mudbourn/mmsuproot/shim/feature/BlockStateProviderType; codec ()Lcom/mojang/serialization/MapCodec; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.providerCodec
+implbridge net/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider getState (Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState; getState (Lnet/minecraft/world/level/LevelAccessor;Lnet/minecraft/util/RandomSource;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
 ctoradapt net/minecraft/world/level/levelgen/feature/stateproviders/RuleBasedStateProvider (Lnet/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider;Ljava/util/List;)V (Lnet/minecraft/core/Holder;Ljava/util/List;)V info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.ruleBasedStateProvider
 ctoradapt net/minecraft/world/level/levelgen/feature/stateproviders/RuleBasedStateProvider$Rule (Lnet/minecraft/world/level/levelgen/blockpredicates/BlockPredicate;Lnet/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider;)V (Lnet/minecraft/world/level/levelgen/blockpredicates/BlockPredicate;Lnet/minecraft/core/Holder;)V info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.ruleBasedStateProviderRule
 ctoradapt net/minecraft/world/level/levelgen/feature/treedecorators/AttachedToLogsDecorator (FLnet/minecraft/world/level/levelgen/feature/stateproviders/BlockStateProvider;Ljava/util/List;)V (FLnet/minecraft/core/Holder;Ljava/util/List;)V info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.attachedToLogsDecorator
@@ -1061,6 +1092,7 @@ method net/minecraft/client/gui/components/AbstractTextAreaWidget renderDecorati
 callinst net/minecraft/client/gui/components/EditBox setFilter (Ljava/util/function/Predicate;)V info/mudbourn/mmsuproot/shim/client/LegacyRender.setFilter
 callmove net/minecraft/client/resources/language/I18n exists (Ljava/lang/String;)Z info/mudbourn/mmsuproot/shim/client/LegacyClient i18nExists
 callinst net/minecraft/util/Util$OS openUri (Ljava/lang/String;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.openUri
+callinst net/minecraft/util/Util$OS openUri (Ljava/net/URI;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.openUri
 ctoradapt net/minecraft/client/gui/screens/ConfirmLinkScreen (Lit/unimi/dsi/fastutil/booleans/BooleanConsumer;Ljava/lang/String;Z)V (Lit/unimi/dsi/fastutil/booleans/BooleanConsumer;Ljava/net/URI;Z)V info/mudbourn/mmsuproot/shim/client/LegacyClient.confirmLinkScreen
 ctoradapt net/minecraft/client/player/LocalPlayer (Lnet/minecraft/client/Minecraft;Lnet/minecraft/client/multiplayer/ClientLevel;Lnet/minecraft/client/multiplayer/ClientPacketListener;Lnet/minecraft/stats/StatsCounter;Lnet/minecraft/client/ClientRecipeBook;Lnet/minecraft/world/entity/player/Input;Z)V (Lnet/minecraft/client/Minecraft;Lnet/minecraft/client/multiplayer/ClientLevel;Lnet/minecraft/client/multiplayer/ClientPacketListener;Lnet/minecraft/stats/StatsCounter;Lnet/minecraft/client/ClientRecipeBook;Lnet/minecraft/world/entity/player/Input;ZLnet/minecraft/client/multiplayer/chat/ChatAbilities;Lnet/minecraft/client/player/ItemActivation;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.localPlayerNoChat
 ctoradapt net/minecraft/client/telemetry/WorldSessionTelemetryManager (Lnet/minecraft/client/telemetry/TelemetryEventSender;ZLjava/time/Duration;Ljava/lang/String;)V (Lnet/minecraft/client/telemetry/TelemetryEventSender;ZLjava/time/Duration;Ljava/lang/String;Ljava/util/UUID;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.worldSessionTelemetryManager
@@ -1220,3 +1252,132 @@ ctor net/minecraft/world/level/block/LeavesBlock (FLnet/minecraft/world/level/bl
 class net/minecraft/client/gui/screens/worldselection/EditGameRulesScreen net/minecraft/client/gui/screens/worldselection/AbstractGameRulesScreen
 typesonly net/minecraft/client/gui/screens/worldselection/EditGameRulesScreen
 # --- end gaps of the 1.21.11 mods ---
+
+# Interaction calls gained the exact hit location (1.21.11 Player.interactOn(Entity, hand) and Entity.interact(Player, hand) became three-argument
+# methods). Leashable Players injects into both; the handlers keep the old arguments and the rule adds the Vec3 (remap.MixinParams).
+bridge net/minecraft/world/entity/player/Player interactOn (Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult; (Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/InteractionResult;
+bridge net/minecraft/world/entity/Entity interact (Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult; (Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/InteractionResult;
+
+# EnchantmentHelper.getItemEnchantmentLevel asks any ItemInstance now, not an ItemStack. MMS Origins' level hook wants a stack, so it runs for stacks only
+# (an item template, the one other kind, has no enchantment powers to raise).
+handler info/mudbourn/mmsorigins/mixin/EnchantmentHelperMixin mmsOrigins$modifyLevel (Lnet/minecraft/core/Holder;Lnet/minecraft/world/item/ItemInstance;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V 0,1 if=info/mudbourn/mmsuproot/shim/item/LegacyItems.isItemStack
+
+# 26.3's private ItemStack constructor that the factory methods end in takes the item as a Holder, not an ItemLike. Scorchful's default-stack event fires
+# at its tail and only needs the stack itself (the mixin's own `this`), so the item argument it never reads is passed as null.
+handler com/github/thedeathlycow/scorchful/mixin/ItemStackMixin modifyDefaultStack (Lnet/minecraft/core/Holder;ILnet/minecraft/core/component/PatchedDataComponentMap;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,1,2
+
+# Copper blocks moved into a collection by weathering state (Blocks.COPPER_BLOCK is the collection now); the old per-state constants read from LegacyBlocks
+fieldmove net/minecraft/world/level/block/Blocks COPPER_BLOCK info/mudbourn/mmsuproot/shim/block/LegacyBlocks COPPER_BLOCK
+fieldmove net/minecraft/world/level/block/Blocks EXPOSED_COPPER info/mudbourn/mmsuproot/shim/block/LegacyBlocks EXPOSED_COPPER
+fieldmove net/minecraft/world/level/block/Blocks WEATHERED_COPPER info/mudbourn/mmsuproot/shim/block/LegacyBlocks WEATHERED_COPPER
+fieldmove net/minecraft/world/level/block/Blocks OXIDIZED_COPPER info/mudbourn/mmsuproot/shim/block/LegacyBlocks OXIDIZED_COPPER
+fieldmove net/minecraft/world/level/block/Blocks WAXED_COPPER_BLOCK info/mudbourn/mmsuproot/shim/block/LegacyBlocks WAXED_COPPER_BLOCK
+fieldmove net/minecraft/world/level/block/Blocks WAXED_EXPOSED_COPPER info/mudbourn/mmsuproot/shim/block/LegacyBlocks WAXED_EXPOSED_COPPER
+fieldmove net/minecraft/world/level/block/Blocks WAXED_WEATHERED_COPPER info/mudbourn/mmsuproot/shim/block/LegacyBlocks WAXED_WEATHERED_COPPER
+fieldmove net/minecraft/world/level/block/Blocks WAXED_OXIDIZED_COPPER info/mudbourn/mmsuproot/shim/block/LegacyBlocks WAXED_OXIDIZED_COPPER
+
+# Bountiful Fish's pearl necklace extends Trinkets' TrinketItem, which Trinkets 4.2.1 (package eu.pb4.trinkets) does not have. It is a plain item here,
+# so the item and the tags that list it still exist; the trinket slot behaviour is lost.
+super smallnickel/bountiful_fish/item/custom/PearlNecklaceItem net/minecraft/world/item/Item
+
+# LivingEntity.getVisibilityPercent takes the level first now. MMS Jobs' sneaking-visibility hook is a return value modifier: the value and the looker it
+# had before are passed on, the level is not used.
+handler info/mudbourn/mmsjobs/mixin/MobAwarenessMixin mmsJobs$sneakUnseen (DLnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/Entity;)D 0,2
+
+# YAML Config 22.x dropped YamlConfigExpectPlatform; Arc, Item Restrictions and Jobs+ 1.21.11 builds only call it for the config directory
+callmove com/daqem/yamlconfig/YamlConfigExpectPlatform getConfigDirectory ()Ljava/nio/file/Path; info/mudbourn/mmsuproot/shim/compat/LegacyYamlConfig getConfigDirectory
+
+# Trinkets 4.2 (eu.pb4.trinkets) rewrote the dev.emi.trinkets API. Stand-ins of Uproot's own answer the old calls
+# Cosmetic Armor and Bountiful Fish make, through the new API (shim/compat/trinkets)
+class dev/emi/trinkets/api/TrinketsApi info/mudbourn/mmsuproot/shim/compat/trinkets/LegacyTrinketsApi
+class dev/emi/trinkets/api/TrinketComponent info/mudbourn/mmsuproot/shim/compat/trinkets/LegacyTrinketComponent
+class dev/emi/trinkets/api/SlotReference info/mudbourn/mmsuproot/shim/compat/trinkets/LegacySlotReference
+class dev/emi/trinkets/api/TrinketInventory info/mudbourn/mmsuproot/shim/compat/trinkets/LegacyTrinketInventory
+class dev/emi/trinkets/api/SlotType info/mudbourn/mmsuproot/shim/compat/trinkets/LegacySlotType
+
+# GameRenderer.render takes no arguments in 26.3. MCEF's hook at the head of it runs the browser's message loop and reads neither argument
+handler com/cinemamod/mcef/mixins/MixinGameRenderer head_render_MCEF (Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,false
+
+# owo's hooks on ItemStack.applyComponents name the two overloads by intermediary names that 26.3 gives one name; each is told which one it hooks
+mixinmethod io/wispforest/owo/mixin/ext/ItemStackMixin deriveComponents3 applyComponents(Lnet/minecraft/core/component/DataComponentPatch;)V
+mixinmethod io/wispforest/owo/mixin/ext/ItemStackMixin deriveComponents4 applyComponents(Lnet/minecraft/core/component/DataComponentMap;)V
+
+# Placeholder API 3.x dropped PlaceholderHandler for Placeholder.Handler, made PlaceholderContext an interface whose player() answers a Player, and renamed
+# the default parser constant. Peek (1.21.11) registers its placeholders through lambdas for the old handler: they are made for Uproot's own handler
+# interface, whose erased method takes objects, and registered through registerCommon by reflection (shim/compat/LegacyPlaceholders).
+class eu/pb4/placeholders/api/PlaceholderHandler info/mudbourn/mmsuproot/shim/compat/LegacyPlaceholderHandler
+calldesc info/mudbourn/mmsuproot/shim/compat/LegacyPlaceholderHandler onPlaceholderRequest (Leu/pb4/placeholders/api/PlaceholderContext;Ljava/lang/String;)Leu/pb4/placeholders/api/PlaceholderResult; (Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+callmove eu/pb4/placeholders/api/Placeholders register (Lnet/minecraft/resources/Identifier;Linfo/mudbourn/mmsuproot/shim/compat/LegacyPlaceholderHandler;)V info/mudbourn/mmsuproot/shim/compat/LegacyPlaceholders register
+field eu/pb4/placeholders/api/Placeholders DEFAULT_PLACEHOLDER_PARSER COMMON_PLACEHOLDER_PARSER
+interface eu/pb4/placeholders/api/PlaceholderContext
+calldesc eu/pb4/placeholders/api/PlaceholderContext player ()Lnet/minecraft/server/level/ServerPlayer; ()Lnet/minecraft/world/entity/player/Player;
+
+# --- Arc, Item Restrictions, Jobs+ and Jobs+ Tools: hooks whose 1.21.11 targets changed shape ---
+# A player's drop is LivingEntity.drop(stack, includeThrowerName, Prediction) alone now (the throw-randomly flag is gone, always false), and ServerPlayer
+# overrides it. Arc's drop hook on ServerPlayer keeps its stack and thrower flag; the throw-randomly flag it never reads is passed as false.
+handler com/daqem/arc/fabric/mixin/ServerPlayerMixin dropItem (Lnet/minecraft/world/item/ItemStack;ZLnet/minecraft/util/Prediction;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V 0,false,1
+# Brewing stand ticks take the server level, and Item Restrictions' hook (which runs at the head of the tick) only needs it as a Level
+handler com/daqem/itemrestrictions/mixin/block/MixinBrewingStandBlockEntity doBrew (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/entity/BrewingStandBlockEntity;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,1,2,3
+# The bucket use method keeps its shape, but its locals changed: 26.3 keeps the block state and position of the fill branch next to the ones of the
+# empty branch. Arc's fill-bucket hook reads the held stack, the hit block's position and state, the pickup result; they are found by place
+handler com/daqem/arc/mixin/MixinBucketItem arc$onFillBucket (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/phys/BlockHitResult;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/BucketPickup;Lnet/minecraft/world/item/ItemStack;)V 0,1,2 locals=4,5,6,7,8,9,12,13
+# Entity.interactAt and Entity.interact are one method in 26.3, interact(player, hand, hit); the armor stand's logic is the old interactAt. Only the full
+# name and descriptor are replaced, so a mixin that names interactAt bare (another mod's, written for the old shape) is not pointed at the new one
+annotation interactAt(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult; interact(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/InteractionResult;
+handler com/daqem/jobsplustools/mixin/MixinArmorStand jobsplustools$interactAt (Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/Vec3;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;Lnet/minecraft/world/item/ItemStack;)V 0,2,1
+# Smithing recipes assemble from the input alone (no registry lookup); the hook that copies a tool's components onto the upgraded one never read it
+handler com/daqem/jobsplustools/mixin/MixinSmithingTransformRecipe jobsplustools$assemble (Lnet/minecraft/world/item/crafting/SmithingRecipeInput;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V 0,null
+# Jobs+ keeps its leaderboard in the level data: made with it, read by parse, written by setTagData. 26.3's public constructor, parse and
+# setTagData lost the world options, and the registry access and player tag, none of which the hooks read
+handler com/daqem/jobsplus/mixin/PrimaryLevelDataMixin constructorInit (Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lcom/mojang/serialization/Lifecycle;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V -
+handler com/daqem/jobsplus/mixin/PrimaryLevelDataMixin parse (Lcom/mojang/serialization/Dynamic;Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/world/level/storage/PrimaryLevelData$SpecialWorldProperty;Lcom/mojang/serialization/Lifecycle;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V 0,1,2,null,3
+handler com/daqem/jobsplus/mixin/PrimaryLevelDataMixin setTagData (Lnet/minecraft/nbt/CompoundTag;Ljava/util/UUID;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,0,null
+# Arc's strip-log and till-soil events. 26.3 has no axe or hoe class: a log is stripped and soil tilled by BlockTransformer.transformBlock, shared by every
+# item that carries the component. The two Arc mixins hook the old AxeItem and HoeItem methods and use the held item as `this`, so they take Item as
+# their target (mixintarget), and Uproot's ItemToolEventsMixin adds the two methods they inject into, which info.mudbourn.mmsuproot.mixin.BlockTransformerMixin
+# calls when a strip or a till is about to happen. The till hook names useOn, which Item already has; Arc's hook is pointed at the added method only.
+mixintarget com/daqem/arc/fabric/mixin/MixinAxeItem info/mudbourn/mmsuproot/shim/item/AxeItem net/minecraft/world/item/Item
+mixintarget com/daqem/arc/fabric/mixin/MixinHoeItem info/mudbourn/mmsuproot/shim/item/HoeItem net/minecraft/world/item/Item
+mixinannotation com/daqem/arc/fabric/mixin/MixinHoeItem useOn(Lnet/minecraft/world/item/context/UseOnContext;)Lnet/minecraft/world/InteractionResult; uprootTillSoil(Lnet/minecraft/world/item/context/UseOnContext;)Lnet/minecraft/world/InteractionResult;
+# the strip hook injects before the axe's strip sound; the sound is the block transformer's now, so it is pointed at the call that stands in its place
+mixinannotation com/daqem/arc/fabric/mixin/MixinAxeItem Lnet/minecraft/world/level/Level;playSound(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/core/BlockPos;Lnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FF)V Linfo/mudbourn/mmsuproot/shim/item/ToolEventPoint;stripLog(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)V
+
+# Cardinal Components 8 erases ComponentFactory.createComponent to the new CardinalComponent, which 7.x's Component now extends.
+# 1.21.11 mods' factory lambdas were made for the old erasure, so creating a component threw AbstractMethodError (Frostiful,
+# Scorchful, Thermoo, MMS Economy; Scorchful and MMS Economy on every player)
+calldesc org/ladysnake/cca/api/v3/component/ComponentFactory createComponent (Ljava/lang/Object;)Lorg/ladysnake/cca/api/v3/component/Component; (Ljava/lang/Object;)Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+
+# Fabric's world render events moved to the level extraction/render split in 26.3's Fabric API. Stand-ins keep a 1.21.11 mod's
+# registration working; they never fire, so what it drew there is not drawn (MMS Arsenal's gun world effects)
+class net/fabricmc/fabric/api/client/rendering/v1/world/WorldRenderEvents info/mudbourn/mmsuproot/shim/client/LegacyWorldRenderEvents
+class net/fabricmc/fabric/api/client/rendering/v1/world/WorldRenderContext info/mudbourn/mmsuproot/shim/client/LegacyWorldRenderContext
+class net/fabricmc/fabric/api/client/rendering/v1/world/WorldTerrainRenderContext info/mudbourn/mmsuproot/shim/client/LegacyWorldTerrainRenderContext
+
+# MMS Metro: JunctionRailModels cannot load on 26.3 (Fabric's model loading and mesh APIs are gone), so its one call is dropped;
+# lossy, see disable.txt
+callmove info/mudbourn/mmsmetro/client/render/JunctionRailModels register ()V info/mudbourn/mmsuproot/shim/Skipped call
+
+# Cardinal Components 8 bounds every component type by v8 CardinalComponent instead of v3 Component, so each API member
+# erased to the bound has a new descriptor: calls and lambdas get it, implementers get the new override that calls theirs
+calldesc org/ladysnake/cca/api/v3/component/ComponentKey get (Ljava/lang/Object;)Lorg/ladysnake/cca/api/v3/component/Component; (Ljava/lang/Object;)Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+calldesc org/ladysnake/cca/api/v3/component/ComponentKey getNullable (Ljava/lang/Object;)Lorg/ladysnake/cca/api/v3/component/Component; (Ljava/lang/Object;)Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+calldesc org/ladysnake/cca/api/v3/component/ComponentKey getInternal (Lorg/ladysnake/cca/api/v3/component/ComponentContainer;)Lorg/ladysnake/cca/api/v3/component/Component; (Lorg/ladysnake/cca/api/v3/component/ComponentContainer;)Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+calldesc org/ladysnake/cca/api/v3/component/ComponentKey getFromContainer (Lorg/ladysnake/cca/api/v3/component/ComponentContainer;)Lorg/ladysnake/cca/api/v3/component/Component; (Lorg/ladysnake/cca/api/v3/component/ComponentContainer;)Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+calldesc org/ladysnake/cca/api/v3/component/ComponentAccess getComponent (Lorg/ladysnake/cca/api/v3/component/ComponentKey;)Lorg/ladysnake/cca/api/v3/component/Component; (Lorg/ladysnake/cca/api/v3/component/ComponentKey;)Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+calldesc org/ladysnake/cca/api/v3/component/ComponentContainer getKey (Lorg/ladysnake/cca/api/v3/component/Component;)Lorg/ladysnake/cca/api/v3/component/ComponentKey; (Lorg/ladysnake/cca/api/v8/component/CardinalComponent;)Lorg/ladysnake/cca/api/v3/component/ComponentKey;
+calldesc org/ladysnake/cca/api/v3/component/CopyableComponent copyFrom (Lorg/ladysnake/cca/api/v3/component/Component;Lnet/minecraft/core/HolderLookup$Provider;)V (Lorg/ladysnake/cca/api/v8/component/CardinalComponent;Lnet/minecraft/core/HolderLookup$Provider;)V
+calldesc org/ladysnake/cca/api/v3/entity/RespawnableComponent copyFrom (Lorg/ladysnake/cca/api/v3/component/Component;Lnet/minecraft/core/HolderLookup$Provider;)V (Lorg/ladysnake/cca/api/v8/component/CardinalComponent;Lnet/minecraft/core/HolderLookup$Provider;)V
+calldesc org/ladysnake/cca/api/v3/entity/RespawnableComponent copyForRespawn (Lorg/ladysnake/cca/api/v3/component/Component;Lnet/minecraft/core/HolderLookup$Provider;ZZZ)V (Lorg/ladysnake/cca/api/v8/component/CardinalComponent;Lnet/minecraft/core/HolderLookup$Provider;ZZZ)V
+calldesc org/ladysnake/cca/api/v3/entity/RespawnCopyStrategy copyForRespawn (Lorg/ladysnake/cca/api/v3/component/Component;Lorg/ladysnake/cca/api/v3/component/Component;Lnet/minecraft/core/HolderLookup$Provider;ZZZ)V (Lorg/ladysnake/cca/api/v8/component/CardinalComponent;Lorg/ladysnake/cca/api/v8/component/CardinalComponent;Lnet/minecraft/core/HolderLookup$Provider;ZZZ)V
+calldesc org/ladysnake/cca/api/v3/scoreboard/TeamComponentFactory createForTeam (Lnet/minecraft/world/scores/PlayerTeam;)Lorg/ladysnake/cca/api/v3/component/Component; (Lnet/minecraft/world/scores/PlayerTeam;)Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+calldesc org/ladysnake/cca/api/v3/scoreboard/TeamComponentFactory createForTeam (Lnet/minecraft/world/scores/PlayerTeam;Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/server/MinecraftServer;)Lorg/ladysnake/cca/api/v3/component/Component; (Lnet/minecraft/world/scores/PlayerTeam;Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/server/MinecraftServer;)Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+calldesc org/ladysnake/cca/api/v3/scoreboard/TeamComponentFactoryV2 createForTeam (Lnet/minecraft/world/scores/PlayerTeam;Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/server/MinecraftServer;)Lorg/ladysnake/cca/api/v3/component/Component; (Lnet/minecraft/world/scores/PlayerTeam;Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/server/MinecraftServer;)Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+calldesc org/ladysnake/cca/api/v3/scoreboard/ScoreboardComponentFactoryV2 createForScoreboard (Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/server/MinecraftServer;)Lorg/ladysnake/cca/api/v3/component/Component; (Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/server/MinecraftServer;)Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+bridge org/ladysnake/cca/api/v3/component/CopyableComponent copyFrom (Lorg/ladysnake/cca/api/v3/component/Component;Lnet/minecraft/core/HolderLookup$Provider;)V (Lorg/ladysnake/cca/api/v8/component/CardinalComponent;Lnet/minecraft/core/HolderLookup$Provider;)V
+bridge org/ladysnake/cca/api/v3/entity/RespawnableComponent copyFrom (Lorg/ladysnake/cca/api/v3/component/Component;Lnet/minecraft/core/HolderLookup$Provider;)V (Lorg/ladysnake/cca/api/v8/component/CardinalComponent;Lnet/minecraft/core/HolderLookup$Provider;)V
+bridge org/ladysnake/cca/api/v3/entity/RespawnableComponent copyForRespawn (Lorg/ladysnake/cca/api/v3/component/Component;Lnet/minecraft/core/HolderLookup$Provider;ZZZ)V (Lorg/ladysnake/cca/api/v8/component/CardinalComponent;Lnet/minecraft/core/HolderLookup$Provider;ZZZ)V
+bridge org/ladysnake/cca/api/v3/entity/RespawnCopyStrategy copyForRespawn (Lorg/ladysnake/cca/api/v3/component/Component;Lorg/ladysnake/cca/api/v3/component/Component;Lnet/minecraft/core/HolderLookup$Provider;ZZZ)V (Lorg/ladysnake/cca/api/v8/component/CardinalComponent;Lorg/ladysnake/cca/api/v8/component/CardinalComponent;Lnet/minecraft/core/HolderLookup$Provider;ZZZ)V
+retbridge org/ladysnake/cca/api/v3/component/ComponentFactory createComponent (Ljava/lang/Object;)Lorg/ladysnake/cca/api/v3/component/Component; Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+retbridge org/ladysnake/cca/api/v3/scoreboard/TeamComponentFactory createForTeam (Lnet/minecraft/world/scores/PlayerTeam;)Lorg/ladysnake/cca/api/v3/component/Component; Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+retbridge org/ladysnake/cca/api/v3/scoreboard/TeamComponentFactoryV2 createForTeam (Lnet/minecraft/world/scores/PlayerTeam;Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/server/MinecraftServer;)Lorg/ladysnake/cca/api/v3/component/Component; Lorg/ladysnake/cca/api/v8/component/CardinalComponent;
+retbridge org/ladysnake/cca/api/v3/scoreboard/ScoreboardComponentFactoryV2 createForScoreboard (Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/server/MinecraftServer;)Lorg/ladysnake/cca/api/v3/component/Component; Lorg/ladysnake/cca/api/v8/component/CardinalComponent;

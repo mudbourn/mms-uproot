@@ -25,6 +25,7 @@ final class MixinParams extends ClassVisitor {
 	private static final int API = Opcodes.ASM9;
 	private static final String INJECT = "Lorg/spongepowered/asm/mixin/injection/Inject;";
 	private static final String MIXIN = "Lorg/spongepowered/asm/mixin/Mixin;";
+	private static final String MODIFY_RETURN_VALUE = "Lcom/llamalad7/mixinextras/injector/ModifyReturnValue;";
 	private static final String OPERATION = "com/llamalad7/mixinextras/injector/wrapoperation/Operation";
 	private static final String CALLBACK = "org/spongepowered/asm/mixin/injection/callback/CallbackInfo";
 	private static final String CALLBACK_RETURNABLE = "org/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable";
@@ -188,7 +189,13 @@ final class MixinParams extends ClassVisitor {
 		if (rule == null) return null;
 
 		Type[] now = Type.getArgumentTypes(rule.newDesc());
-		for (int i = 0; i < callback; i++) now[i] = args[i]; // a handler may name a narrower type than the rule does
+		for (int i = 0; i < callback; i++) {
+			// the handler keeps its own type; the target's replaces it only when provably narrower (Level in the handler where the target takes
+			// ServerLevel: the rule type's ancestors contain the handler's). A hierarchy that cannot be resolved keeps the handler's type.
+			boolean ruleNarrower = args[i].getSort() == Type.OBJECT && now[i].getSort() == Type.OBJECT && !args[i].equals(now[i])
+					&& namer.ancestorsOf(now[i].getInternalName()).contains(args[i].getInternalName());
+			if (!ruleNarrower) now[i] = args[i];
+		}
 		int extra = now.length - callback;
 		Type[] widened = new Type[args.length + extra];
 		System.arraycopy(now, 0, widened, 0, now.length);
@@ -213,9 +220,14 @@ final class MixinParams extends ClassVisitor {
 		Type[] widened = Type.getArgumentTypes(rule.newDesc());
 		int callback = callbackIndex(args);
 		int newCallback = callbackIndex(widened);
+		if (callback < 0 && newCallback < 0 && inject.desc.equals(MODIFY_RETURN_VALUE)) {
+			// a return value modifier has no callback: the value, then the target's parameters, make up the handler; the rule maps each of them
+			callback = args.length;
+			newCallback = widened.length;
+		}
 		String where = className.substring(className.lastIndexOf('/') + 1) + "." + m.name;
 		// a wrap operation handler has its captured values after the Operation; they keep their order and sit after the new one
-		boolean wrap = callback >= 0 && args[callback].getInternalName().equals(OPERATION);
+		boolean wrap = callback >= 0 && callback < args.length && args[callback].getInternalName().equals(OPERATION);
 		int suffix = args.length - 1 - callback;
 		if (callback < 0 || newCallback < 0 || rule.args().size() != callback) {
 			namer.note("handler rule for " + where + " does not fit the handler: it takes " + args.length + " parameters, the callback at " + callback + ", and the rule maps " + rule.args().size());
@@ -233,10 +245,25 @@ final class MixinParams extends ClassVisitor {
 				return null;
 			}
 		}
-		sources[callback] = Renames.Arg.param(newCallback);
+		if (callback < args.length) sources[callback] = Renames.Arg.param(newCallback);
 		// the values a wrap handler takes after the Operation are the enclosing method's parameters: each old one is found again, by type, among the new ones
 		boolean[] used = new boolean[widened.length];
+		int[] localMap = wrap ? null : rule.locals();
+		if (localMap != null && localMap.length != args.length - callback - 1) {
+			namer.note("handler rule for " + where + " maps " + localMap.length + " captured locals, the handler takes " + (args.length - callback - 1));
+			return null;
+		}
 		for (int i = callback + 1; i < args.length; i++) {
+			if (localMap != null) {
+				// the rule says which of the target's captured locals each old one is
+				int at = localMap[i - callback - 1];
+				if (at >= 0 && (at >= widened.length || at <= newCallback || !compatible(widened[at], args[i]))) {
+					namer.note("handler rule for " + where + " maps captured local " + (i - callback - 1) + " (" + args[i].getClassName() + ") to a parameter that does not fit");
+					return null;
+				}
+				sources[i] = at >= 0 ? Renames.Arg.param(at) : new Renames.Arg(-1, null, null);
+				continue;
+			}
 			int found = -1;
 			for (int k = widened.length - 1; k > newCallback && found < 0; k--) if (!used[k] && widened[k].equals(args[i])) found = k;
 			if (found < 0) {

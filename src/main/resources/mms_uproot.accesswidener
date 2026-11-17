@@ -30,3 +30,18 @@ accessible field com/mojang/renderpearl/api/pipeline/RenderPipeline$Builder acti
 # 1.21.11 left these public and 26.3 made them private: the item registration helper that mods call with a resource key, and the time a villager last gossiped
 accessible method net/minecraft/world/item/Items registerItem (Lnet/minecraft/resources/ResourceKey;Ljava/util/function/Function;Lnet/minecraft/world/item/Item$Properties;)Lnet/minecraft/world/item/Item;
 accessible field net/minecraft/world/entity/npc/villager/Villager lastGossipTime J
+
+# 1.21.11 left these open and 26.3 made them private; the access scan found 1.21.11 mods reaching them
+accessible field net/minecraft/client/renderer/blockentity/state/BlockEntityRenderState blockState Lnet/minecraft/world/level/block/state/BlockState;
+accessible field net/minecraft/util/Util timeSource Lnet/minecraft/util/TimeSource$NanoTimeSource;
+accessible field net/minecraft/world/entity/Entity invulnerableTime I
+accessible method net/minecraft/client/resources/model/ModelManager$ResolvedModels <init> (Lnet/minecraft/client/resources/model/ResolvedModel;Ljava/util/Map;)V
+accessible method net/minecraft/world/item/Items registerItem (Lnet/minecraft/resources/ResourceKey;Ljava/util/function/Function;)Lnet/minecraft/world/item/Item;
+accessible method net/minecraft/world/level/block/FireBlock setFlammable (Lnet/minecraft/world/level/block/Block;II)V
+accessible method net/minecraft/world/level/chunk/PalettedContainer$Data <init> (Lnet/minecraft/world/level/chunk/Configuration;Lnet/minecraft/util/BitStorage;Lnet/minecraft/world/level/chunk/Palette;)V
+
+# the fields and the noise call of a noise state provider, which a provider of a 1.21.11 mod reads as its own (shim.feature.LegacyWorldgen)
+accessible field net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider seed J
+accessible field net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider parameters Lnet/minecraft/world/level/levelgen/synth/NormalNoise;
+accessible field net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider scale F
+accessible method net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider getNoiseValue (Lnet/minecraft/core/BlockPos;D)F

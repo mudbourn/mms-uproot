@@ -1,15 +1,21 @@
 package info.mudbourn.mmsuproot.data;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.lang.ref.WeakReference;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import info.mudbourn.mmsuproot.boot.Report;
+import info.mudbourn.mmsuproot.util.Json;
+import info.mudbourn.mmsuproot.util.PackFormat;
 import net.fabricmc.fabric.api.resource.v1.pack.ModPackResources;
 import net.minecraft.server.packs.PackResources;
 
@@ -23,7 +29,39 @@ public final class DataShim {
 	/** Weak on both sides: the view's handler holds its pack, so a strong value would keep a closed pack alive across reloads. */
 	private static final Map<PackResources, WeakReference<PackResources>> WRAPPED = Collections.synchronizedMap(new WeakHashMap<>());
 
+	/** The report entry that world data packs (ids "file/...") are converted under; null until the boot sets it. */
+	private static volatile Report.Entry worldReport;
+
 	private DataShim() { }
+
+	/** Called once at boot: the data packs a world carries are converted like a mod's when they were written for an older data format. */
+	public static void worldPacks(Report.Entry report) {
+		worldReport = report;
+	}
+
+	/** Ids of the world data packs that were converted, for {@link #converted}. */
+	private static final Set<String> CONVERTED_WORLD_PACKS = ConcurrentHashMap.newKeySet();
+
+	/** Whether the pack with this id is one Uproot converts: a pack of a target mod, or a world data pack written for an older data format. */
+	public static boolean converted(String packId) {
+		return TARGETS.containsKey(modOf(packId)) || CONVERTED_WORLD_PACKS.contains(packId);
+	}
+
+	/** Whether a data pack of a world declares a data format older than 26.3's (the lowest of min_format, supported_formats and pack_format). */
+	private static boolean legacyWorldPack(PackResources pack) {
+		if (worldReport == null || !pack.packId().startsWith("file/")) return false;
+		try {
+			var supplier = pack.getRootResource("pack.mcmeta");
+			if (supplier == null) return false;
+			try (InputStream in = supplier.get()) {
+				Map<String, Object> mcmeta = Json.parseObject(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+				// a file with no pack object, or none of the format keys, says nothing and is not taken for an older pack
+				return PackFormat.lowestFormat(mcmeta).orElse(PackFormat.DATA_FORMAT) < PackFormat.DATA_FORMAT;
+			}
+		} catch (IOException | RuntimeException e) {
+			return false;
+		}
+	}
 
 	/** Called once at boot with the report entry of each mod Uproot rewrites. */
 	public static void target(String modId, Report.Entry report) {
@@ -33,7 +71,10 @@ public final class DataShim {
 	/** The id of the mod a pack belongs to: its own for a pack Fabric API made, else the first part of a "mod/id:name" pack id. */
 	private static String modOf(PackResources pack) {
 		if (pack instanceof ModPackResources mod) return mod.getFabricModMetadata().getId();
-		String id = pack.packId();
+		return modOf(pack.packId());
+	}
+
+	private static String modOf(String id) {
 		if (id.startsWith("mod/")) id = id.substring("mod/".length());
 		int colon = id.indexOf(':');
 		return colon < 0 ? id : id.substring(0, colon);
@@ -42,6 +83,10 @@ public final class DataShim {
 	/** The pack itself, or a view of it when it belongs to a target mod. */
 	public static PackResources wrap(PackResources pack) {
 		Report.Entry report = TARGETS.get(modOf(pack));
+		if (report == null && !isWrapped(pack) && legacyWorldPack(pack)) {
+			report = worldReport;
+			CONVERTED_WORLD_PACKS.add(pack.packId());
+		}
 		if (report == null || isWrapped(pack)) return pack;
 		synchronized (WRAPPED) {
 			WeakReference<PackResources> known = WRAPPED.get(pack);

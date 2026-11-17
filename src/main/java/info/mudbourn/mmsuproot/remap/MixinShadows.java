@@ -128,6 +128,10 @@ final class MixinShadows extends ClassNode {
 		GameClasses game = namer.game();
 		// a stand-in of Uproot's own for a game class counts as one: it extends what the original extended
 		if (superName == null || superName.equals("java/lang/Object") || !(game.has(superName) || superName.startsWith("info/mudbourn/mmsuproot/"))) return;
+		if (superName.equals(target)) {
+			extendsItsTarget();
+			return;
+		}
 		if (namer.ancestorsOf(target).contains(superName)) return;
 		var above = namer.ancestorsOf(superName);
 		String found = null;
@@ -145,6 +149,34 @@ final class MixinShadows extends ClassNode {
 			}
 		}
 		namer.note("mixin " + simple() + " extends " + found.substring(found.lastIndexOf('/') + 1) + " now, " + old.substring(old.lastIndexOf('/') + 1) + " is not in the hierarchy of " + target.substring(target.lastIndexOf('/') + 1));
+	}
+
+	/**
+	 * The mixin extends the class it targets (a {@code mixintarget} rule moved its target up to its old superclass). Mixin refuses a mixin
+	 * whose superclass is its own target, and the merged code runs as the target's own, so the superclass goes and the constructor calls of
+	 * it become Object's; a constructor of a mixin is never run. Left alone when the mixin calls a method of its superclass.
+	 */
+	private void extendsItsTarget() {
+		for (MethodNode m : methods) {
+			for (var insn = m.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+				if (insn instanceof MethodInsnNode mi && mi.getOpcode() == Opcodes.INVOKESPECIAL && mi.owner.equals(superName) && !mi.name.equals("<init>")) return;
+			}
+		}
+		for (MethodNode m : methods) {
+			for (var insn = m.instructions.getFirst(); insn != null; ) {
+				var next = insn.getNext();
+				if (insn instanceof MethodInsnNode mi && mi.getOpcode() == Opcodes.INVOKESPECIAL && mi.owner.equals(superName)) {
+					Type[] args = Type.getArgumentTypes(mi.desc);
+					for (int i = args.length - 1; i >= 0; i--) m.instructions.insertBefore(mi, new org.objectweb.asm.tree.InsnNode(args[i].getSize() == 2 ? Opcodes.POP2 : Opcodes.POP));
+					mi.owner = "java/lang/Object";
+					mi.desc = "()V";
+				}
+				insn = next;
+			}
+		}
+		namer.note("mixin " + simple() + " extends Object now, Mixin refuses a mixin that extends the class it targets");
+		superName = "java/lang/Object";
+		signature = null;
 	}
 
 	private void fixMethods(String target) {

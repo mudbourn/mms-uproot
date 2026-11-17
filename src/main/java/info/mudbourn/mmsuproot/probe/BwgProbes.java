@@ -24,6 +24,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -505,7 +506,11 @@ final class BwgProbes {
 		});
 	}
 
-	/** Spawns every BWG entity type on a platform, ticks them for 3 seconds and checks that they are alive and ticking. */
+	/**
+	 * Spawns every BWG entity type on a platform, ticks them for 3 seconds and checks that they are alive and ticking. The player stands on the platform
+	 * meanwhile (and goes back after): the platform is at y 250, and a mob that removes itself when far away (the man o' war does, always) is discarded
+	 * on its first tick when the nearest player is more than 128 blocks off, which a player on the surface of a new world is.
+	 */
 	private static String entities(Probe.Ctx c, int tick) {
 		List<EntityType<?>> types = BuiltInRegistries.ENTITY_TYPE.stream().filter(t -> BuiltInRegistries.ENTITY_TYPE.getKey(t).getNamespace().equals(NS)).toList();
 		if (types.isEmpty()) throw new Probe.Fail("no BWG entity type is registered");
@@ -514,6 +519,9 @@ final class BwgProbes {
 			c.onServer(() -> {
 				ServerLevel level = c.server().overworld();
 				platform(c, level, center, Blocks.GRASS_BLOCK);
+				ServerPlayer player = c.server().getPlayerList().getPlayers().get(0);
+				c.state.put("entityPlayerBack", player.position());
+				player.teleportTo(center.getX() + 0.5, center.getY() + 1, center.getZ() + 0.5);
 				int n = 0;
 				List<Integer> ids = new ArrayList<>();
 				List<String> names = new ArrayList<>();
@@ -553,6 +561,8 @@ final class BwgProbes {
 			ServerLevel level = c.server().overworld();
 			List<String> bad = new ArrayList<>();
 			List<String> names = new ArrayList<>();
+			net.minecraft.world.phys.Vec3 back = (net.minecraft.world.phys.Vec3) c.state.get("entityPlayerBack");
+			if (back != null) c.server().getPlayerList().getPlayers().get(0).teleportTo(back.x, back.y, back.z);
 			for (int n = 0; n < ids.size(); n++) {
 				Entity e = level.getEntity(ids.get(n));
 				String name = spawned.get(n);

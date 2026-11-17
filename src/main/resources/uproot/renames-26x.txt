@@ -27,6 +27,11 @@ class com/mojang/blaze3d/buffers/GpuBufferSlice com/mojang/renderpearl/api/buffe
 # MouseHandler.onMove also reports the movement since the last event now; a mixin handler that takes the old parameters gets them dropped
 bridge net/minecraft/client/MouseHandler onMove (JDD)V (JDDDD)V
 
+# GameRenderer.render takes no arguments and renderLevel no tick counter in 26.3. owo-lib's Braid display hook runs before the level call and uses
+# neither argument
+injectat net/minecraft/client/renderer/GameRenderer renderLevel (Lnet/minecraft/client/DeltaTracker;)V net/minecraft/client/renderer/GameRenderer renderLevel ()V
+handler io/wispforest/owo/mixin/ui/display/GameRendererMixin beforeWorldRender (Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,false
+
 # The render pipeline classes moved with the GPU abstraction
 class com/mojang/blaze3d/pipeline/RenderPipeline com/mojang/renderpearl/api/pipeline/RenderPipeline
 
@@ -36,6 +41,7 @@ method net/minecraft/client/renderer/GameRenderer getMainCamera mainCamera 0
 # Resource listing takes a Selector now (shim.compat.LegacyResources), and opening a link is Blaze3D's job (shim.client.LegacyClient)
 callinst net/minecraft/server/packs/resources/ResourceManager listResources (Ljava/lang/String;Ljava/util/function/Predicate;)Ljava/util/Map; info/mudbourn/mmsuproot/shim/compat/LegacyResources.listResources
 callinst net/minecraft/util/Util$OS openUri (Ljava/lang/String;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.openUri
+callinst net/minecraft/util/Util$OS openUri (Ljava/net/URI;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.openUri
 
 # The locator bar is a contextual bar like the others; same constructor and render methods
 class net/minecraft/client/gui/contextualbar/LocatorBarRenderer net/minecraft/client/gui/contextualbar/LocatorBar

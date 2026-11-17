@@ -140,12 +140,25 @@ final class ConvertedView {
 		Set<String> hiddenRecipes = new HashSet<>();
 		List<String> timelines = new ArrayList<>();
 		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
-			for (String folder : List.of("recipe", "timeline", "advancement", "loot_table", "enchantment", "predicate")) {
+			for (String folder : List.of("recipe", "timeline", "advancement", "loot_table", "enchantment", "predicate", "item_modifier")) {
 				pack.listResources(PackType.SERVER_DATA, ns, folder, (id, supplier) -> {
 					if (!id.getPath().endsWith(".json")) return;
 					String key = ns + ":" + id.getPath();
 					try (InputStream in = supplier.get()) {
-						Map<String, Object> root = Json.parseObject(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+						String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+						if (folder.equals("predicate") && Json.parse(text) instanceof List<?> list) {
+							// 1.21.11 read a predicate file that is a list of conditions; 26.3 wants one condition, so the list becomes an all_of
+							served.put(key, Json.write(FeatureJson.predicateList(list)).getBytes(StandardCharsets.UTF_8));
+							report.dataConvertedFiles.incrementAndGet();
+							return;
+						}
+						if (folder.equals("item_modifier")) {
+							// a function, or a list of them: 1.21.11 keyed each by "function" and listed its conditions; 26.3 keys it by "type"
+							served.put(key, Json.write(FeatureJson.itemModifier(Json.parse(text), stats)).getBytes(StandardCharsets.UTF_8));
+							report.dataConvertedFiles.incrementAndGet();
+							return;
+						}
+						Map<String, Object> root = Json.parseObject(text);
 						if (folder.equals("recipe")) {
 							// a recipe of a type whose serializer a mod could not register would fail the whole recipe registry
 							if (root.get("type") instanceof String type && Identifier.tryParse(type) instanceof Identifier serializer

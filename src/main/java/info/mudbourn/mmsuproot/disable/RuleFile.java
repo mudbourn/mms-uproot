@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <pre>
  * stub  CLASS                 | reason
  * noop  CLASS METHOD DESC     | reason      (DESC may be * for every overload)
+ * drop  CLASS METHOD DESC     | reason      (the method is removed from the class; for an override of a method that 26.3 made final)
  * skip  REGISTRY ID           | reason      (REGISTRY is the path, e.g. entity_type)
  * mixin CLASS                 | reason      (a mixin class of a mod, left out of its mixin config)
  * </pre>
@@ -62,6 +63,9 @@ final class RuleFile {
 				break;
 			case "noop":
 				if (p.length == 4 && (!p[2].startsWith("<") || p[2].equals("<clinit>"))) return new Rule(Rule.Kind.NOOP, internal(p[1]), p[2], p[3], reason, line, hits, legacyOnly);
+				break;
+			case "drop":
+				if (p.length == 4 && !p[2].startsWith("<")) return new Rule(Rule.Kind.DROP, internal(p[1]), p[2], p[3], reason, line, hits, legacyOnly);
 				break;
 			case "skip":
 				if (p.length == 3) return new Rule(Rule.Kind.SKIP, p[1], p[2], "", reason, line, hits, legacyOnly);

@@ -37,6 +37,16 @@ public final class LegacyBlocks {
 	public static final Block WHITE_TERRACOTTA = Blocks.DYED_TERRACOTTA.white();
 	public static final Block LIGHT_GRAY_TERRACOTTA = Blocks.DYED_TERRACOTTA.lightGray();
 
+	/** Copper blocks: 26.3 keeps each family in a collection by weathering state, waxed or not. */
+	public static final Block COPPER_BLOCK = Blocks.COPPER_BLOCK.weathering().unaffected();
+	public static final Block EXPOSED_COPPER = Blocks.COPPER_BLOCK.weathering().exposed();
+	public static final Block WEATHERED_COPPER = Blocks.COPPER_BLOCK.weathering().weathered();
+	public static final Block OXIDIZED_COPPER = Blocks.COPPER_BLOCK.weathering().oxidized();
+	public static final Block WAXED_COPPER_BLOCK = Blocks.COPPER_BLOCK.waxed().unaffected();
+	public static final Block WAXED_EXPOSED_COPPER = Blocks.COPPER_BLOCK.waxed().exposed();
+	public static final Block WAXED_WEATHERED_COPPER = Blocks.COPPER_BLOCK.waxed().weathered();
+	public static final Block WAXED_OXIDIZED_COPPER = Blocks.COPPER_BLOCK.waxed().oxidized();
+
 	/** Likewise wool: 26.3 keeps it in a per-colour collection. */
 	public static final Block WHITE_WOOL = Blocks.WOOL.white();
 	public static final Block ORANGE_WOOL = Blocks.WOOL.orange();

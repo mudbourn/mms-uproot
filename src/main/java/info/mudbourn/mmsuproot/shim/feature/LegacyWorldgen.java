@@ -2,12 +2,18 @@ package info.mudbourn.mmsuproot.shim.feature;
 
 import java.util.List;
 
+import com.mojang.datafixers.Products;
+import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import info.mudbourn.mmsuproot.shim.noise.LegacyNoise;
 import info.mudbourn.mmsuproot.shim.noise.NoiseParameters;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderOwner;
 import net.minecraft.data.worldgen.placement.PlacementUtils;
+import net.minecraft.util.ExtraCodecs;
 import net.minecraft.util.valueproviders.ConstantInt;
 import net.minecraft.util.valueproviders.UniformInt;
 import net.minecraft.world.clock.WorldClock;
@@ -18,7 +24,11 @@ import net.minecraft.world.level.biome.MobSpawnSettings;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.levelgen.blockpredicates.BlockPredicate;
 import net.minecraft.world.level.levelgen.feature.Feature;
+import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvider;
+import net.minecraft.world.level.levelgen.feature.stateproviders.NoiseBasedStateProvider;
+import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import net.minecraft.world.level.levelgen.placement.BlockPredicateFilter;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
@@ -100,9 +110,33 @@ public final class LegacyWorldgen {
 
 	// State providers and tree decorators: a provider that was held directly is held through a holder now
 
-	/** {@code NoiseBasedStateProvider(seed, parameters, scale)}: the provider takes the made noise. */
+	/**
+	 * {@code NoiseBasedStateProvider(seed, parameters, scale)}: the provider takes the made noise. A subclass that samples the provider's own noise
+	 * (the field {@code noise}, which is the made noise in 1.21.11) reads it as the description now (a field rule), so the description also
+	 * answers {@code getValue} through {@link LegacyNoise}, with the noise 26.3's constructor makes from the same seed.
+	 */
 	public static Object[] noiseBasedStateProvider(long seed, NoiseParameters parameters, float scale) {
-		return new Object[] {seed, parameters.toNoise(), scale};
+		NormalNoise description = parameters.toNoise();
+		LegacyNoise.share(description, description.create(new WorldgenRandom(new LegacyRandomSource(seed))));
+		return new Object[] {seed, description, scale};
+	}
+
+	/** {@code NoiseBasedStateProvider.noiseCodec}: the same fields, with the noise as the {@link NoiseParameters} a 1.21.11 provider's constructor takes. */
+	public static <P extends NoiseBasedStateProvider> Products.P3<RecordCodecBuilder.Mu<P>, Long, NoiseParameters, Float> noiseCodec(RecordCodecBuilder.Instance<P> instance) {
+		return instance.group(
+				Codec.LONG.fieldOf("seed").forGetter(provider -> provider.seed),
+				NormalNoise.DIRECT_CODEC.xmap(NoiseParameters::cast, NoiseParameters::toNoise).fieldOf("noise").forGetter(provider -> NoiseParameters.cast(provider.parameters)),
+				ExtraCodecs.POSITIVE_FLOAT.fieldOf("scale").forGetter(provider -> provider.scale));
+	}
+
+	/** {@code NoiseBasedStateProvider.getNoiseValue(pos, scale)}, which answered a double. */
+	public static double noiseValue(NoiseBasedStateProvider provider, BlockPos pos, double scale) {
+		return provider.getNoiseValue(pos, scale);
+	}
+
+	/** What a provider that names its {@code type()} answers 26.3's {@code codec()} with: the codec the type holds. */
+	public static MapCodec<?> providerCodec(BlockStateProviderType<?> type) {
+		return type.codec();
 	}
 
 	/** {@code RuleBasedBlockStateProvider(fallback, rules)}. */

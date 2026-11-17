@@ -8,17 +8,23 @@ import java.util.concurrent.atomic.AtomicInteger;
  * mods remapped from 1.21.11 (a mod built for 26.1 or 26.2 may hold a class of the same name that needs no switching off).
  */
 record Rule(Kind kind, String owner, String name, String desc, String reason, int line, AtomicInteger hits, boolean legacyOnly) {
-	enum Kind { STUB, NOOP, SKIP, MIXIN }
+	enum Kind { STUB, NOOP, SKIP, MIXIN, DROP }
 
 	/** For MIXIN rules {@code owner} is the mixin class. For SKIP rules {@code owner} is the registry path and {@code name} the full id. */
 	String describe() {
 		String what = switch (kind) {
 			case STUB -> "stub " + owner;
 			case NOOP -> "noop " + owner + "." + name + desc;
+			case DROP -> "drop " + owner + "." + name + desc;
 			case SKIP -> "skip " + owner + " " + name;
 			case MIXIN -> "mixin " + owner;
 		};
 		return legacyOnly ? "legacy " + what : what;
+	}
+
+	/** A DROP rule removes the method from the class, for an override that 26.3 made final in the superclass. */
+	boolean dropsMethod(String methodName, String methodDesc) {
+		return kind == Kind.DROP && name.equals(methodName) && (desc.equals("*") || desc.equals(methodDesc));
 	}
 
 	boolean matchesMethod(String methodName, String methodDesc) {

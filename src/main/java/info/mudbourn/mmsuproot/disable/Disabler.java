@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Cleanly switches off parts of a mod that cannot be bridged, as the rules in
  * {@code uproot/disable.txt} say. Four tools: {@code stub} loads a class with every body emptied,
- * {@code noop} empties single methods, and {@code skip} makes the mod's registry calls for one id
+ * {@code noop} empties single methods, {@code drop} removes one, and {@code skip} makes the mod's registry calls for one id
  * do nothing (the value is handed back unregistered, so the mod's own fields still fill), and
  * {@code mixin} leaves one mixin class out of its mod's mixin config.
  *
@@ -189,6 +189,14 @@ public final class Disabler {
 
 		@Override
 		public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+			if (own != null) {
+				for (Rule r : own) {
+					if (r.dropsMethod(name, descriptor)) {
+						r.hits().incrementAndGet();
+						return null;
+					}
+				}
+			}
 			MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
 			if ((access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) return mv;
 			if (stub) return new BodyReplacer(mv, name, descriptor, superCalls.get(name + descriptor), false);

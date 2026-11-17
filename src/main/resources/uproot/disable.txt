@@ -22,12 +22,6 @@
 
 # Map decoration tint (R32) needs no rule: the remapper's constructor rule drops the colour argument.
 
-# --- Biomes We've Gone: noise state provider ---
-# Its base class now takes a NormalNoise instead of the parameter record and the record went package-private.
-# It appears in no BWG data file, only in Java, so nothing loses a feature; a stand-in base class would be a new subsystem.
-stub net/potionstudios/biomeswevegone/world/level/levelgen/feature/stateproviders/BetweenNoiseThresholdProvider | noise state provider on an API that was rebuilt; no BWG data uses it
-skip legacy_state_provider_type biomeswevegone:between_noise_threshold_provider | its provider class is disabled, so its type is not registered
-
 # --- Biomes We've Gone: surface rules ---
 # 26.3 replaced SurfaceRules with material rules; Uproot's shim/surface stands in for the old API and converts what a
 # mod builds, so the rule sources and the TerraBlender call run (see renames.txt). What does not carry over is below.
@@ -39,8 +33,11 @@ skip legacy_state_provider_type biomeswevegone:between_noise_threshold_provider 
 # --- Biomes We've Gone: client model access (first client run) ---
 # The extra block-state models (BlockStateModel baked from a ResolvedModel through SingleVariant) have no 26.3 form.
 noop net/potionstudios/biomeswevegone/fabric/client/BiomesWeveGoneClientFabric lambda$blockStateModel$4 * | unreachable: its only user, blockStateModel, is sent to the shim by a callmove in renames.txt, and it builds the removed SimpleModelWrapper
-# Sign sprites: 26.3 has no Sheets material tables; sign bodies are ordinary block models, which data.ConvertedAssets rebuilds from the wood's entity sheet.
-noop net/potionstudios/biomeswevegone/client/BiomesWeveGoneClient registerWoodTypes * | fills the Sheets sign material tables, which 26.3 does not have
+# Sign sprites: the method puts a sign and a hanging sign material for the wood into Sheets.SIGN_MATERIALS and Sheets.HANGING_SIGN_MATERIALS. 26.3's Sheets has
+# neither table (and no sign member at all), and its sign renderers (AbstractSignRenderer, StandingSignRenderer, HangingSignRenderer) draw only the text: they read
+# no WoodType and no material. A sign's body is an ordinary block model (blockstate and model files of the mod's assets), which data.ConvertedAssets rebuilds
+# from the wood's 1.21.11 entity sheet (signs()), so BWG's signs render through the model and nothing is left to register.
+noop net/potionstudios/biomeswevegone/client/BiomesWeveGoneClient registerWoodTypes * | fills the Sheets sign material tables, which 26.3 does not have; its signs render as block models (ConvertedAssets), so nothing is lost
 # The wreath draws its block model through SubmitNodeCollector.submitBlockModel with the removed BlockStateModel
 
 # --- Furnish: furniture workbench recipe ---
@@ -50,35 +47,44 @@ noop io/github/wouink/furnish/recipe/FurnitureRecipe <clinit> * | the recipe cla
 
 # --- owo-lib: copium ore hook ---
 # Copenhagen captures the locals of OreFeature.doPlace; 26.3 walks BlockReplacement there where 26.2 walked OreConfiguration.TargetBlockState, so
-# the capture is invalid, and a failed local capture is a critical error that require=0 does not soften. The hook only records ore positions for
-# blocks a mod registered through owo's Maldenhagen.injectCopium, an opt-in nobody needs; no vanilla or owo behaviour depends on it.
-mixin io/wispforest/owo/mixin/Copenhagen | ore-position hook on locals that 26.3 reshaped; opt-in niche feature
+# the capture is invalid, and a failed local capture is a critical error that require=0 does not soften. The hook is rebuilt for 26.3 as
+# Uproot's OreFeatureCopiumMixin (it notes the block and position at the one LevelChunkSection.setBlockState call of doPlace and writes them through the level
+# at the return, as Copenhagen did for the blocks owo's Maldenhagen.injectCopium lists), so only owo's own class is left out.
+mixin io/wispforest/owo/mixin/Copenhagen | replaced by Uproot's OreFeatureCopiumMixin, because its local capture does not fit 26.3's doPlace
 
 # --- owo-lib: blur surface ---
-# owo's blur draws through its own uniform ring (net.minecraft.client.renderer.DynamicUniformStorage, which 26.3 replaced by DynamicGpuData) and
-# a GLSL shader written for the 26.2 layout (no explicit locations, a different DynamicTransforms order). Porting it would be a renderer of
-# Uproot's own. Without it Surface.blur draws nothing, so a blurred panel keeps the plain background behind it; nothing else depends on it.
-noop io/wispforest/owo/ui/renderstate/BlurQuadElementRenderState initialize * | blur input target and uniform ring use 26.2's renderer internals
-noop io/wispforest/owo/ui/core/Surface lambda$blur$0 * | blur surface draws a quad through the removed uniform ring; the surface paints nothing instead
+# The 26.2 build's blur runs on 26.3: DynamicUniformStorage is shim.client.LegacyUniformStorage, the blur shader goes through LegacyShaders (explicit
+# locations, minecraft:dynamictransforms.glsl), and the render target takes the GpuFormat last (a rule of renames-26x.txt), so the build's
+# BlurQuadElementRenderState.initialize and Surface.blur lambda are not switched off. The 1.21.11 build's blur hooks (below) are, because
+# the GuiRenderer hooks it draws through sit on 1.21.11's internals.
+legacy noop io/wispforest/owo/ui/renderstate/BlurQuadElementRenderState initialize * | the 1.21.11 build's blur input target and uniform ring use 1.21.11's renderer internals, which its left-out GuiRenderer hooks serve
 # The invoker for SetComponentsFunction's constructor is not applied: 26.3's constructor takes a condition holder and is private. Its one caller,
 # the lambda of owo's LootOps.injectItemStack, is moved to shim.compat.LegacyLoot.setComponents by a rule of renames-26x.txt.
 mixin io/wispforest/owo/mixin/SetComponentsFunctionAccessor | constructor invoker for a constructor that changed shape; its caller is rerouted to a shim
 # Recipe remainders: owo reads an "owo:remainders" entry of a recipe JSON as the recipe is parsed, through a call inside
-# SimpleJsonResourceReloadListener.scanDirectory and a lister field of RecipeManager that 26.3 no longer has. Only data packs that use
-# owo:remainders lose the entry's effect (their recipes still load).
-mixin io/wispforest/owo/mixin/extension/SimpleJsonResourceReloadListenerMixin | recipe parsing moved out of scanDirectory
-mixin io/wispforest/owo/mixin/extension/recipe/RecipeManagerAccessor | its only reader is the disabled recipe remainders hook
+# SimpleJsonResourceReloadListener.scanDirectory and a lister field of RecipeManager that 26.3 no longer has (recipes are a data registry now, read
+# by RegistryLoadTask$PendingRegistration.loadFromResource). Uproot's OwoRecipeRemaindersMixin reads the same entry there and hands it to owo's
+# RecipeRemainderStorage (shim/compat/OwoRemainders), so the entry takes effect as before; owo's two classes are left out.
+mixin io/wispforest/owo/mixin/extension/SimpleJsonResourceReloadListenerMixin | replaced by Uproot's OwoRecipeRemaindersMixin: recipe parsing moved out of scanDirectory
+mixin io/wispforest/owo/mixin/extension/recipe/RecipeManagerAccessor | its only reader is the remainders hook above, which Uproot's OwoRecipeRemaindersMixin replaces
 # Accessors for renderer internals (CommandEncoder.backend, GlProgram.uniformsByName) that owo never reads and 26.3's renderer lacks
 mixin io/wispforest/owo/mixin/ui/CommandEncoderAccessor | field no longer exists; no owo class reads it
 mixin io/wispforest/owo/mixin/shader/GlProgramAccessor | field no longer exists; no owo class reads it
-# Braid, owo's second UI toolkit: its extra OS window shares the GL context of the main one (GLFW), and in-world displays draw before the level
-# render call, which 26.3 moved. Neither is used by owo's own config screens or by the mods that depend on owo.
-mixin io/wispforest/owo/mixin/braid/WindowMixin | secondary Braid windows need GLFW window creation, which 26.3 has not
-mixin io/wispforest/owo/mixin/ui/display/GameRendererMixin | Braid displays draw before GameRenderer.render's level call, which no longer exists
-# The cube map component renders into a texture the component names, through a render pass call whose clear-colour argument changed type
-mixin io/wispforest/owo/mixin/ui/CubeMapMixin | CommandEncoder.createRenderPass changed its arguments
-# owo's own link opener for macOS and Linux (Util.OS.openUri(URI)); 26.3 opens links in Blaze3D
-mixin io/wispforest/owo/mixin/tweaks/OperatingSystemMixin | Util$OS has no openUri(URI) to overwrite in 26.3
+# Braid, owo's second UI toolkit: its extra OS windows are GLFW windows (BraidWindow calls glfwCreateWindow's family and a GLFWwindow callback set; the hook
+# below passes the main window's handle as the context to share). 26.3's Window is an SDL window (Window.createWindow and handle() are SDL_Window ones,
+# no glfw call is left in it) and the game pumps SDL events only, so a GLFW window would never be serviced and the handle is no GLFWwindow to share.
+mixin io/wispforest/owo/mixin/braid/WindowMixin | secondary Braid windows are GLFW windows; 26.3's Window is an SDL window and the game pumps no GLFW events
+# In-world Braid displays draw before the level render call. 26.3's GameRenderer.render() still calls renderLevel(), now with no tick counter, so
+# the 26.2 build's hook runs (renames-26x.txt: injectat and handler); the 1.21.11 build's variant, which also hooks GameRenderer.pick (a method 26.3 has
+# not), stays off with the rest of its Braid display hooks.
+legacy mixin io/wispforest/owo/mixin/ui/display/GameRendererMixin | the 1.21.11 build's display hooks include two on GameRenderer.pick and LocalPlayer's raycast, which 26.3 moved; its Braid displays stay off
+# The cube map component renders into a texture the component names, through a render pass call whose clear-colour argument is a vector now
+# (CommandEncoder.createRenderPass takes an Optional<Vector4fc> where it took an OptionalInt). Uproot's CubeMapOutputMixin does the same job for 26.3.
+mixin io/wispforest/owo/mixin/ui/CubeMapMixin | replaced by Uproot's CubeMapOutputMixin: CommandEncoder.createRenderPass takes a vector clear colour in 26.3
+# owo's own link opener for macOS and Linux (Util.OS.openUri(URI) overwrite). 26.3's link opening is Blaze3D.openUri(URI), which calls SDL_OpenURL and
+# so opens a link with the platform's own handler on every system; Util$OS has no openUri at all, and a call of the old method goes to Blaze3D
+# (callinst of renames.txt). The tweak existed to run xdg-open and open by hand, which SDL does, so nothing is lost.
+mixin io/wispforest/owo/mixin/tweaks/OperatingSystemMixin | superseded: 26.3's Blaze3D.openUri calls SDL_OpenURL, which opens the link with the platform's handler; Util$OS has no openUri to overwrite
 
 # --- owo-lib built for 1.21.11 (the rules below are limited to that build; the 26.2 build has its own versions of these classes) ---
 # The GUI renderer hooks: fixNonQuadIndexing swaps in a shared index buffer for owo's triangle fan and strip pipelines, and 26.3's GuiRenderer builds
@@ -122,7 +128,44 @@ legacy mixin io/wispforest/owo/mixin/tweaks/LevelSettingsMixin | only acts with 
 legacy mixin io/wispforest/owo/mixin/tweaks/EditBoxMixin | only acts with owo's debug flag; the word position method changed shape
 
 # --- Terraform Wood API (inside Bountiful Fish): leaf render layer ---
-# The hook answers ItemBlockRenderTypes.getChunkRenderType for Terraform's leaves and small logs with the cutout-mipped layer. 26.3 has no such table: a quad's
-# layer is baked from the transparency of its sprite (see shim.client.BlockRenderLayerMap), so a leaf texture with transparent pixels is drawn cutout without the hook.
-# What is given up: a leaf texture with no transparent pixel is drawn solid where 1.21.11 forced it through the cutout layer (which looks the same for an opaque texture)
-mixin com/terraformersmc/terraform/leaves/impl/mixin/MixinBlockRenderLayers | 26.3 chooses a block's chunk layer from the sprite of each quad; there is no ItemBlockRenderTypes to hook
+# The hook answers ItemBlockRenderTypes.getChunkRenderType for Terraform's leaves and small logs (with leaves) with the cutout-mipped layer. 26.3 has no such
+# table (a quad's layer is baked from the transparency of its sprite), so Uproot's LegacyLeafLayers raises the same states to the cutout layer through
+# shim.client.BlockRenderLayerMap, which wraps their baked models; only Terraform's mixin class is left out.
+mixin com/terraformersmc/terraform/leaves/impl/mixin/MixinBlockRenderLayers | replaced by Uproot's LegacyLeafLayers: 26.3 has no ItemBlockRenderTypes to hook
+
+# --- Found booting the whole pack on a dedicated server (all tentative: not yet confirmed in play) ---
+# 1.21.11's Entity.getInterpolation() is overridable and returns an InterpolationHandler class; 26.3's is final and InterpolationHandler is an interface
+# built by createInterpolationHandler(). Both of these entities override the method and build the handler with `new InterpolationHandler(this)`, which a
+# class that is an interface now cannot do. Nothing in Uproot makes a handler from that constructor yet, so the two entities are inert stand-ins (the
+# override goes, the bodies are emptied) and the rest of their mods run.
+drop info/mudbourn/mmscombat/killstreak/KillstreakCrateEntity getInterpolation * | tentative, lossy: the override of a method that is final in 26.3 stops the class from loading
+stub info/mudbourn/mmscombat/killstreak/KillstreakCrateEntity | tentative, lossy: its constructor builds an InterpolationHandler with new, which is an interface in 26.3; the crate is inert
+drop info/mudbourn/mmsmetro/entity/MetroCarEntity getInterpolation * | tentative, lossy: the override of a method that is final in 26.3 stops the class from loading
+stub info/mudbourn/mmsmetro/entity/MetroCarEntity | tentative, lossy: its constructor builds a PositionInterpolator with new, which 26.3 replaced; the metro car is inert
+
+# The libraries these 1.21.11 mods call have 26.3 builds in the pack whose API dropped what the mods use; the class a mod's entrypoint needs is missing.
+# Bountiful Fish: its pearl necklace extends Trinkets' TrinketItem, which 4.2.1 dropped (renames.txt gives it Item as superclass, so the item exists and is
+# registered, which the vanilla item tags that list Bountiful Fish items need). Its other Trinkets calls run through Uproot's Trinkets stand-ins.
+# placeholder-api 3.2.0 has no eu.pb4.placeholders.api.PlaceholderHandler: Peek's placeholders register through Uproot's stand-in (see the Placeholder API
+# rules of renames.txt and shim/compat/LegacyPlaceholders), so nothing is switched off here.
+
+# MMS Compat keeps Alex's Caves' sherd-to-pattern map writable after the mod rebuilds it. 26.3 has no such map: decorated pot patterns are a data registry
+# (DecoratedPotPatterns.ITEM_TO_POT_TEXTURE is gone), so there is nothing to unfreeze and the hook has nothing to do; its accessor cannot find the field.
+noop info/mudbourn/mmscompat/mixin/alexscaves/AcPotPatternMutableMixin mms$unfreeze * | the map it makes writable no longer exists in 26.3
+mixin info/mudbourn/mmscompat/mixin/alexscaves/DecoratedPotPatternsAccessor | accessor of DecoratedPotPatterns.ITEM_TO_POT_TEXTURE, which 26.3 removed; its only user is the hook above
+
+# MMS Compat's glue for Combat Amenities and Trinkets names classes of those mods' 1.21.11 builds (dev.emi.trinkets.api..., net.hollowed.combatamenities
+# .networking.slots.SlotCreativeClientPacketPayload) that their 26.3 builds do not have; the lifecycle lambda it registers throws when the server starts.
+noop info/mudbourn/mmscompat/ca/CaCreativeSlotLock register * | tentative, lossy: Combat Amenities' 26.3 build has no SlotCreativeClientPacketPayload, which the server-start hook loads; the creative slot lock is off
+noop info/mudbourn/mmscompat/ca/LanternHolster register * | tentative, lossy: built on the Trinkets 3 slot API (dev.emi.trinkets.api), which Trinkets 4.2.1 does not have; the lantern holster is off
+mixin info/mudbourn/mmscompat/mixin/ca/EquipmentOwnerInitMixin | lossy: Combat Amenities 3.2.3 (26.3) has no EquipmentInterface, which this hook in every LivingEntity constructor loads, so creating any living entity threw; the equipment owner stamp is off
+mixin info/mudbourn/mmscompat/mixin/ca/EntityEquipmentTrinketsMixin | lossy: maps Combat Amenities 1.21.11 ExtraSlots onto Trinkets 3 inventories; neither API exists in the 26.3 builds, so the back slot is not mirrored into Trinkets
+mixin info/mudbourn/mmscompat/mixin/ca/InventoryMenuSlotOrderMixin | lossy: reorders Trinkets 3 slots after Combat Amenities' in the player inventory menu (dev.emi.trinkets.TrinketPlayerScreenHandler, gone in Trinkets 4.2.1), so building any player threw; slot order is Trinkets' own
+
+# --- MMS Compat: Trinkets full-sync workaround ---
+mixin info/mudbourn/mmscompat/mixin/trinkets/TrinketsFullSyncRegistryMixin | worked around a registry-access gap in dev.emi.trinkets' LivingEntityTrinketComponent sync; Trinkets 4.2 (eu.pb4.trinkets) replaced that class and syncs through its own attachment, so the target is gone and nothing is lost
+
+# MMS Metro's junction rail models are built on Fabric's model loading and renderer APIs (FabricBakedModelManager, mesh QuadEmitter),
+# which 26.3's Fabric API removed; the client entrypoint threw before registering anything else.
+# The call is rerouted in renames.txt (callmove to shim/Skipped), because loading the class alone fails; lossy: junction rails
+# render with their plain block model instead of the switched-track model.

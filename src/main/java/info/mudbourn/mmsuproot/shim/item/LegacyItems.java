@@ -14,6 +14,15 @@ import net.minecraft.world.item.ItemStack;
 
 /** Item calls whose result needs state that 26.3 only has later than a mod's init. */
 public final class LegacyItems {
+
+	/**
+	 * Whether the item an enchantment level is asked of is a real stack: 1.21.11's {@code EnchantmentHelper.getItemEnchantmentLevel} took an
+	 * ItemStack and 26.3's takes any ItemInstance (an item template too), which a handler written for stacks cannot be given.
+	 */
+	public static boolean isItemStack(Holder<net.minecraft.world.item.enchantment.Enchantment> enchantment, net.minecraft.world.item.ItemInstance item) {
+		return item instanceof ItemStack;
+	}
+
 	private static Constructor<ItemStack> unbound;
 
 	private LegacyItems() { }

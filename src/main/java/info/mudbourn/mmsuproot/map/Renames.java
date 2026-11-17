@@ -70,7 +70,7 @@ public final class Renames {
 	}
 
 	/** A mixin handler (by its mixin class and name) that takes the target's {@code newDesc} parameters, a callback last, and calls the old handler with {@code args}, one per old parameter before its callback. */
-	public record Handler(String mixin, String name, String newDesc, List<Arg> args, String[] guard, int[] opSpec) { }
+	public record Handler(String mixin, String name, String newDesc, List<Arg> args, String[] guard, int[] opSpec, int[] locals) { }
 
 	/** A mixin target (26.3 name) that inherits {@code name} where 1.21.11 declared it as {@code desc}; the superclass declares it as {@code superDesc}. */
 	public record Inherited(String target, String name, String desc, String superDesc) { }
@@ -82,6 +82,7 @@ public final class Renames {
 	private final List<Inherited> inherited = new ArrayList<>();
 	private final Map<String, Handler> handlers = new HashMap<>(); // "mixin class.handler" -> rule
 	private final Map<String, String> mixinTargets = new HashMap<>(); // "mixin class old target" -> new target (26.3 names)
+	private final Map<String, String> mixinMethods = new HashMap<>(); // "mixin class.handler" -> the method string its injector names (26.3 names)
 	private final Map<String, List<Ctor>> ctors = new HashMap<>(); // owner (26.3 name) -> adapters
 	private final Map<String, String> classes = new HashMap<>();
 	private final List<String[]> packages = new ArrayList<>();
@@ -94,12 +95,14 @@ public final class Renames {
 	private final Map<String, String[]> callMoves = new HashMap<>(); // "owner.name desc" (26.3 names) -> {new owner, new name[, new desc]}
 	private final Map<String, String> fieldGets = new HashMap<>(); // "owner.name" (26.3 names) -> getter name
 	private final Map<String, String> annotationStrings = new HashMap<>(); // text inside a mixin annotation string -> what it becomes
+	private final Map<String, Map<String, String>> mixinAnnotationStrings = new HashMap<>(); // mixin class -> text inside its annotation strings -> what it becomes
 	private final Map<String, String> injectAts = new HashMap<>(); // mixin target string of a call -> the string it becomes
 	private final Map<String, String[]> fieldMoves = new HashMap<>(); // "owner.name" (26.3 names) -> {new owner, new name}
 	private final Map<String, String[]> fieldSets = new HashMap<>(); // "owner.name" (26.3 names) -> {helper owner or null, helper or setter name}
 	private final Set<String> callDrops = new HashSet<>(); // "owner.name desc" (26.3 names)
 	private final Set<String> optionals = new HashSet<>(); // "mixin class.handler"
 	private final Set<String> typesOnly = new HashSet<>(); // 1.21.11 classes whose class rule is valid for type uses only
+	private final Set<String> interfaces = new HashSet<>(); // classes of other mods' libraries that are interfaces now (the game's own are read from the game)
 	private final Map<String, String> superSwaps = new HashMap<>(); // mod class -> the class it extends in place of its own superclass
 
 	public static Renames load() {
@@ -149,6 +152,7 @@ public final class Renames {
 			}
 			case "optional" -> r.optionals.add(p[1] + "." + p[2]);
 			case "typesonly" -> r.typesOnly.add(p[1]);
+			case "interface" -> r.interfaces.add(p[1]);
 			case "super" -> r.superSwaps.put(p[1], p[2]);
 			case "calldrop" -> r.callDrops.add(p[1] + "." + p[2] + " " + p[3]);
 			case "retbridge" -> {
@@ -164,6 +168,10 @@ public final class Renames {
 				if (p.length != 3) throw new IllegalStateException("Bad annotation rule: " + line);
 				r.annotationStrings.put(p[1], p[2]);
 			}
+			case "mixinannotation" -> {
+				if (p.length != 4) throw new IllegalStateException("Bad mixinannotation rule: " + line);
+				r.mixinAnnotationStrings.computeIfAbsent(p[1], k -> new HashMap<>()).put(p[2], p[3]);
+			}
 			case "injectat" -> {
 				if (p.length != 7) throw new IllegalStateException("Bad injectat rule: " + line);
 				r.injectAts.put("L" + p[1] + ";" + p[2] + p[3], "L" + p[4] + ";" + p[5] + p[6]);
@@ -174,6 +182,10 @@ public final class Renames {
 			case "handler" -> {
 				Handler h = handler(p, line);
 				r.handlers.put(h.mixin() + "." + h.name(), h);
+			}
+			case "mixinmethod" -> {
+				if (p.length != 4) throw new IllegalStateException("Bad mixinmethod rule: " + line);
+				r.mixinMethods.put(p[1] + "." + p[2], p[3]);
 			}
 			case "mixintarget" -> {
 				if (p.length != 4) throw new IllegalStateException("Bad mixintarget rule: " + line);
@@ -265,11 +277,18 @@ public final class Renames {
 	 */
 	private static Handler handler(String[] p, String line) {
 		// an optional sixth field, if=pkg/Helper.method: a static boolean method of the target's parameters that says whether the handler runs
-		if (p.length < 5 || p.length > 7 || !p[3].startsWith("(")) throw new IllegalStateException("Bad handler rule: " + line);
+		if (p.length < 5 || p.length > 8 || !p[3].startsWith("(")) throw new IllegalStateException("Bad handler rule: " + line);
 		String[] guard = null;
 		int[] opSpec = null;
+		int[] locals = null;
 		for (int i = 5; i < p.length; i++) {
 			if (p[i].startsWith("if=")) guard = helper(p[i].substring(3), line);
+			else if (p[i].startsWith("locals=")) {
+				// one entry per local variable the old handler captured after its callback: the index of the new parameter, or null
+				String[] parts = p[i].substring(7).split(",");
+				locals = new int[parts.length];
+				for (int k = 0; k < parts.length; k++) locals[k] = parts[k].equals("null") ? -1 : Integer.parseInt(parts[k]);
+			}
 			else if (p[i].startsWith("op=")) {
 				String[] parts = p[i].substring(3).split(",");
 				opSpec = new int[parts.length];
@@ -287,12 +306,17 @@ public final class Renames {
 				}
 			}
 		}
-		return new Handler(p[1], p[2], p[3], args, guard, opSpec);
+		return new Handler(p[1], p[2], p[3], args, guard, opSpec, locals);
 	}
 
 	/** The {@code handler} rule for the handler method {@code name} of the mixin class {@code mixin}, or null. */
 	public Handler handler(String mixin, String name) {
 		return handlers.isEmpty() ? null : handlers.get(mixin + "." + name);
+	}
+
+	/** The method string (name and descriptor, 26.3 names) the {@code mixinmethod} rule gives the injector {@code handler} of {@code mixin}, or null. */
+	public String mixinMethod(String mixin, String handler) {
+		return mixinMethods.isEmpty() ? null : mixinMethods.get(mixin + "." + handler);
 	}
 
 	/** The classes a mixin class's {@code mixintarget} rules replace, old to new (26.3 names); empty for most classes. */
@@ -445,6 +469,11 @@ public final class Renames {
 		return !typesOnly.isEmpty();
 	}
 
+	/** Whether an {@code interface} rule says the class, a library class that was a class in 1.21.11, is an interface now. */
+	public boolean isInterface(String name) {
+		return !interfaces.isEmpty() && interfaces.contains(name);
+	}
+
 	/** Whether the class rule for the 1.21.11 class {@code mojangName} holds for types and signatures only (see the {@code typesonly} rule). */
 	public boolean typesOnly(String mojangName) {
 		return !typesOnly.isEmpty() && typesOnly.contains(mojangName);
@@ -474,6 +503,11 @@ public final class Renames {
 	public boolean hasCallDrop(String name) {
 		for (String key : callDrops) if (key.substring(key.indexOf('.') + 1).startsWith(name + " ")) return true;
 		return false;
+	}
+
+	/** The {@code mixinannotation} rules of one mixin class: text inside its annotation strings, and what it becomes there. Empty for most classes. */
+	public Map<String, String> mixinAnnotationStrings(String mixin) {
+		return mixinAnnotationStrings.getOrDefault(mixin, Map.of());
 	}
 
 	/** The mixin {@code @At} target strings that are retargeted, from the 26.3 form of the 1.21.11 target to the new one. */

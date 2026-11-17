@@ -51,6 +51,7 @@ public final class UprootBoot implements LanguageAdapter {
 		Path dir = FabricLoader.getInstance().getGameDir().resolve("mms-uproot");
 		report = new Report(dir.resolve("report.txt"));
 		Disabler.init(report);
+		DataShim.worldPacks(report.mod("world data packs"));
 		LOGGER.info("Uproot boot hook running, runtime namespace {}", runtimeNs);
 
 		List<ModContainerImpl> targets = new ArrayList<>();
@@ -86,10 +87,18 @@ public final class UprootBoot implements LanguageAdapter {
 			}
 		}
 
-		GameClasses game = new GameClasses(launcher.getTargetClassLoader(), launcher.getClassPath());
+		// On a dedicated server the class path holds only the bundler; the real game jar is the origin of the built-in minecraft mod.
+		List<Path> gamePaths = new ArrayList<>(launcher.getClassPath());
+		FabricLoader.getInstance().getModContainer("minecraft").ifPresent(mc -> mc.getOrigin().getPaths().forEach(gamePaths::add));
+		GameClasses game = new GameClasses(launcher.getTargetClassLoader(), gamePaths);
 		Renames renames = targets.isEmpty() ? null : Renames.load();
 		Renames renames26 = modern.isEmpty() ? null : Renames.load("/uproot/renames-26x.txt");
 		report.note("Minecraft classes indexed: " + game.size());
+		if (!game.indexed()) {
+			// Without the index, classes that moved package (Slime, Villager...) and every shadow/hierarchy fix are silently skipped.
+			LOGGER.error("Uproot could not find the Minecraft jar on {}; class moves and mixin fixes will be wrong", gamePaths);
+			report.note("ERROR: no Minecraft jar found among " + gamePaths + "; name moves and mixin fixes were skipped.");
+		}
 
 		// Index every target before any name is mapped, so a class of one target is never renamed for another.
 		ModClasses modClasses = new ModClasses();

@@ -61,6 +61,11 @@ import org.objectweb.asm.signature.SignatureVisitor;
  * is remapped with {@code renames.txt}, one built for 26.1 or 26.2 with {@code renames-26x.txt}. Each class goes through
  * {@link ClassRemap} and {@link Disabler}, then its instructions, descriptors, signatures, supertypes and annotations are checked
  * against the game classes on the class path (the 26.3 jar and Fabric API). Writes {@code gaps.json} and {@code gaps.md}.
+ *
+ * <p>A reference whose target exists can still fail, when 26.3 made the member private, package-private or protected, or the class
+ * package-private. Each call, field access, method handle and class named by an instruction is also resolved up the hierarchy to its
+ * declaring class and judged by {@link AccessCheck} against the access flags in the 26.3 jar and every access widener the game applies
+ * (Uproot's, Fabric API's and the mods'). Those are listed as {@code access}, beside the gaps and not among them.
  */
 public final class ScanTool {
 	/** Owners the game and Fabric API provide; anything else (other mods, libraries, the JDK) is not judged. */
@@ -148,6 +153,8 @@ public final class ScanTool {
 		final Set<String> refs = new TreeSet<>();
 		final Map<Cat, Integer> catSites = new EnumMap<>(Cat.class);
 		final Map<Cat, Set<String>> catRefs = new EnumMap<>(Cat.class);
+		int accessSites; // references to members and classes that exist in 26.3 but that the JVM would refuse this mod
+		final Set<String> accessRefs = new TreeSet<>();
 	}
 
 	/**
@@ -191,6 +198,11 @@ public final class ScanTool {
 	private final Map<String, Disabler.Applied> skipRules = new HashMap<>(); // the path and the full id of a skip rule -> the rule
 	private final Map<String, String[]> clashes = new TreeMap<>(); // "class kind member" -> {mod, class, kind, member, resolution}: members two of a class share once named
 	private Set<String> datagen = Set.of();
+	private final AccessCheck access = new AccessCheck(this::subclass);
+	private final Map<String, Gap> accessGaps = new TreeMap<>(); // the declaring class of a member the JVM would refuse a mod, or the class itself
+	private final Map<String, Integer> classFlags = new HashMap<>(); // a game class to its class file access flags, or -1
+	private final Set<String> blindMixins = new HashSet<>(); // "mod\tclass" of each mixin judged as an outsider, since none of its targets is visible
+	private int datagenAccess; // call sites of the access violations that only datagen classes make; not counted
 
 	private ScanTool(GameClasses game, ClassLoader loader) {
 		this.game = game;
@@ -248,7 +260,7 @@ public final class ScanTool {
 		}
 		files.sort(Comparator.comparing(Path::toString));
 		List<Jar> found = new ArrayList<>();
-		Set<String> ids = new HashSet<>();
+		Map<String, Integer> ids = new HashMap<>();
 		for (Path f : files) {
 			try {
 				open(f, f.getFileName().toString(), false, nestedDir, open, found, ids, notes);
@@ -260,7 +272,7 @@ public final class ScanTool {
 	}
 
 	@SuppressWarnings("unchecked")
-	private static void open(Path file, String label, boolean inSkipped, Path nestedDir, List<FileSystem> open, List<Jar> found, Set<String> ids,
+	private static void open(Path file, String label, boolean inSkipped, Path nestedDir, List<FileSystem> open, List<Jar> found, Map<String, Integer> ids,
 			List<String> notes) throws IOException {
 		FileSystem fs = FileSystems.newFileSystem(file);
 		open.add(fs);
@@ -288,11 +300,29 @@ public final class ScanTool {
 			}
 		}
 		if (skip) return;
-		if (!ids.add(id)) {
-			notes.add(label + ": mod id " + id + " already scanned from another jar, skipped");
+		Jar jar = new Jar(label, id, classify(root, fmj), root);
+		Integer at = ids.get(id);
+		if (at == null) {
+			ids.put(id, found.size());
+			found.add(jar);
 			return;
 		}
-		found.add(new Jar(label, id, classify(root, fmj), root));
+		// Two jars with one mod id: Fabric loads only one, and a pack that has a native 26.3 build next to an old one runs the
+		// native one, so that is the jar to judge other mods against. -Duproot.scan.prefer=legacy keeps the oldest build instead,
+		// for work on the old jar itself.
+		Jar kept = found.get(at);
+		if (rank(jar.kind()) < rank(kept.kind())) {
+			found.set(at, jar);
+			notes.add(kept.label() + ": mod id " + id + " also in " + label + ", which the scan prefers, skipped");
+		} else {
+			notes.add(label + ": mod id " + id + " already scanned from " + kept.label() + ", skipped");
+		}
+	}
+
+	/** Lower is preferred when two jars share a mod id: the build the game would rather load, unless the old one is asked for. */
+	private static int rank(Kind kind) {
+		int newest = switch (kind) { case NONE -> 0; case MODERN -> 1; case LEGACY -> 2; };
+		return "legacy".equals(System.getProperty("uproot.scan.prefer")) ? -newest : newest;
 	}
 
 	/** The boot hook's tests, in its order: intermediary names, then a 26.1 or 26.2 build. */
@@ -434,6 +464,7 @@ public final class ScanTool {
 		}
 
 		for (Remapped r : remapped) headers.put(r.name(), header(r.bytes()));
+		loadWideners(targets, namers, notes);
 		for (Remapped r : remapped) {
 			try {
 				new ClassReader(r.bytes()).accept(new Walker(r.mod(), r.name()), ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
@@ -459,6 +490,198 @@ public final class ScanTool {
 		}
 		datagen = datagenClasses(remapped, entrypoints);
 		categorize();
+		categorizeAccess();
+	}
+
+	// ---- access
+
+	/**
+	 * Every access widener the running game has applied: the ones on the class path (Uproot's own, Fabric API's) and those of the mods.
+	 * Fabric loader merges them all, so a mod may rely on a line another mod ships. The wideners of the 1.21.11 mods are moved to 26.3
+	 * names the way the boot hook does it.
+	 */
+	@SuppressWarnings("unchecked")
+	private void loadWideners(List<Jar> targets, Map<String, Namer> namers, List<String> notes) {
+		Set<Path> targetRoots = new HashSet<>();
+		for (Jar j : targets) targetRoots.add(j.root());
+		try {
+			for (java.util.Enumeration<java.net.URL> e = loader.getResources("fabric.mod.json"); e.hasMoreElements(); ) {
+				java.net.URL url = e.nextElement();
+				Map<String, Object> fmj = Json.parseObject(new String(url.openStream().readAllBytes(), StandardCharsets.UTF_8));
+				if (!(fmj.get("accessWidener") instanceof String aw)) continue;
+				String base = url.toString();
+				try (java.io.InputStream in = java.net.URI.create(base.substring(0, base.length() - "fabric.mod.json".length()) + aw).toURL().openStream()) {
+					addWidener(new String(in.readAllBytes(), StandardCharsets.UTF_8), null, notes, aw);
+				}
+			}
+		} catch (IOException | RuntimeException e) {
+			notes.add("the access wideners on the class path could not be read, so access violations may be overreported: " + e);
+		}
+		for (Path root : LIBRARIES) {
+			try {
+				Path fmjPath = root.resolve("fabric.mod.json");
+				if (!Files.isRegularFile(fmjPath) || targetRoots.contains(root)) continue;
+				Map<String, Object> fmj = Json.parseObject(Files.readString(fmjPath, StandardCharsets.UTF_8));
+				if (fmj.get("accessWidener") instanceof String aw && Files.isRegularFile(root.resolve(aw))) addWidener(Files.readString(root.resolve(aw)), null, notes, aw);
+			} catch (IOException | RuntimeException e) {
+				notes.add("an access widener of a library jar could not be read: " + e);
+			}
+		}
+		for (Jar j : targets) {
+			try {
+				Map<String, Object> fmj = Json.parseObject(Files.readString(j.root().resolve("fabric.mod.json"), StandardCharsets.UTF_8));
+				if (!(fmj.get("accessWidener") instanceof String aw) || !Files.isRegularFile(j.root().resolve(aw))) continue;
+				Namer namer = namers.get(j.id());
+				addWidener(Files.readString(j.root().resolve(aw)), new AccessCheck.Mapper() {
+					@Override
+					public String cls(String name) {
+						return namer.cls(name);
+					}
+
+					@Override
+					public String method(String owner, String name, String desc) {
+						return namer.method(owner, name, desc);
+					}
+
+					@Override
+					public String field(String owner, String name, String desc) {
+						return namer.field(owner, name);
+					}
+
+					@Override
+					public String desc(String desc) {
+						return namer.desc(desc);
+					}
+				}, notes, j.id() + ":" + aw);
+			} catch (IOException | RuntimeException e) {
+				notes.add(j.id() + ": its access widener could not be read: " + e);
+			}
+		}
+	}
+
+	private void addWidener(String text, AccessCheck.Mapper mapper, List<String> notes, String file) {
+		String ns = AccessWideners.namespace(text);
+		if (mapper == null && "intermediary".equals(ns)) {
+			notes.add(file + ": an intermediary access widener of a jar that is not remapped, not applied to the access check");
+			return;
+		}
+		access.widen(text, mapper);
+	}
+
+	/** The superclasses and interfaces of a class of a mod, a library or the game. */
+	private List<String> parents(String cls) {
+		Header h = headers.get(cls);
+		if (h == null && !game(cls)) h = library(cls);
+		if (h != null) {
+			List<String> up = new ArrayList<>(h.interfaces());
+			if (h.superName() != null) up.add(0, h.superName());
+			return up;
+		}
+		GameClasses.Info info = game.info(cls).orElse(null);
+		if (info == null) return List.of();
+		List<String> up = new ArrayList<>(info.interfaces());
+		if (info.superName() != null) up.add(0, info.superName());
+		return up;
+	}
+
+	private boolean subclass(String cls, String ancestor) {
+		return subclass(cls, ancestor, new HashSet<>());
+	}
+
+	private boolean subclass(String cls, String ancestor, Set<String> seen) {
+		if (cls == null || cls.charAt(0) == '[' || !seen.add(cls)) return false;
+		if (cls.equals(ancestor)) return true;
+		for (String up : parents(cls)) if (subclass(up, ancestor, seen)) return true;
+		return false;
+	}
+
+	/** A member of a game class and the flags it has there. */
+	private record Decl(String cls, int flags) { }
+
+	/**
+	 * The game class that declares the member a reference to {@code owner} resolves to, as the JVM resolves it (the class, its superclasses,
+	 * then the interfaces), or null when a mod class declares it first or nothing of the game does. A member Uproot's own mixins add is not
+	 * in the 26.3 jar, so it is never judged here.
+	 */
+	private Decl declaration(String owner, String name, String desc, boolean field) {
+		List<String> chain = new ArrayList<>();
+		for (String c = owner; c != null && chain.size() < 64; ) {
+			chain.add(c);
+			Header h = headers.get(c);
+			if (h == null && !game(c)) h = library(c); // a library class between a mod class and the game one still passes the game's members on
+			if (h != null) {
+				if ((field ? h.fields() : h.methods()).contains(field ? name + ":" + desc : name + desc)) return null;
+				c = h.superName();
+				continue;
+			}
+			GameClasses.Info info = game.info(c).orElse(null);
+			if (info == null) return null;
+			if (field ? info.hasField(name, desc) : info.hasMethod(name, desc)) return game(c) ? new Decl(c, field ? info.fieldFlags(name, desc) : info.methodFlags(name, desc)) : null;
+			c = info.superName();
+		}
+		Set<String> seen = new HashSet<>();
+		for (String c : chain) {
+			Decl d = declaredByInterface(c, name, desc, field, seen);
+			if (d != null) return d;
+		}
+		return null;
+	}
+
+	private Decl declaredByInterface(String cls, String name, String desc, boolean field, Set<String> seen) {
+		Header h = headers.get(cls);
+		if (h == null && !game(cls)) h = library(cls);
+		List<String> itfs = h != null ? h.interfaces() : game.info(cls).map(GameClasses.Info::interfaces).orElse(List.of());
+		for (String itf : itfs) {
+			if (!seen.add(itf)) continue;
+			Header ih = headers.get(itf);
+			if (ih == null && !game(itf)) ih = library(itf);
+			if (ih != null) {
+				if ((field ? ih.fields() : ih.methods()).contains(field ? name + ":" + desc : name + desc)) return null;
+			} else {
+				GameClasses.Info info = game.info(itf).orElse(null);
+				if (info != null && (field ? info.hasField(name, desc) : info.hasMethod(name, desc))) {
+					return game(itf) ? new Decl(itf, field ? info.fieldFlags(name, desc) : info.methodFlags(name, desc)) : null;
+				}
+			}
+			Decl d = declaredByInterface(itf, name, desc, field, seen);
+			if (d != null) return d;
+		}
+		return null;
+	}
+
+	/** The class file access flags of a game class, or -1. */
+	private int classFlags(String cls) {
+		return classFlags.computeIfAbsent(cls, c -> {
+			try (java.io.InputStream in = loader.getResourceAsStream(c + ".class")) {
+				return in == null ? -1 : new ClassReader(in).getAccess();
+			} catch (IOException e) {
+				return -1;
+			}
+		});
+	}
+
+	private void accessUse(String mod, String user, String owner, String key, AccessCheck.Violation v) {
+		Gap g = accessGaps.computeIfAbsent(owner, Gap::new);
+		g.members.computeIfAbsent(key, k -> new Use()).add(mod, user);
+		g.memberHints.putIfAbsent(key, v.reason() + (v.fix() == null ? "" : "; fix: " + v.fix()));
+	}
+
+	private void categorizeAccess() {
+		for (Gap g : accessGaps.values()) {
+			g.members.forEach((key, use) -> use.bySite.forEach((site, n) -> {
+				String mod = site.substring(0, site.indexOf('\t'));
+				String user = site.substring(site.indexOf('\t') + 1);
+				Cat c = datagen.contains(user) ? Cat.DATAGEN : Cat.REAL;
+				use.cats.merge(c, n, Integer::sum);
+				if (c == Cat.DATAGEN) {
+					datagenAccess += n;
+					return;
+				}
+				Summary s = summaries.get(mod);
+				s.accessSites += n;
+				s.accessRefs.add(g.owner + "." + key);
+			}));
+		}
 	}
 
 	// ---- lossy mappings
@@ -962,6 +1185,11 @@ public final class ScanTool {
 	private final class Walker extends ClassVisitor {
 		private final String mod;
 		private final String user;
+		private final List<String> mixinTargets = new ArrayList<>(); // the classes a mixin is merged into, which run its code as their own
+		private boolean mixin;
+		private List<String> callers; // callers() once the annotation has been read
+		private boolean blind; // a mixin none of whose targets the scan can see
+		private List<String> supers = List.of();
 
 		Walker(String mod, String user) {
 			super(Opcodes.ASM9);
@@ -1023,11 +1251,59 @@ public final class ScanTool {
 			else new SignatureReader(sig).accept(v);
 		}
 
-		void member(String owner, String name, String desc, boolean field, boolean statik) {
+		/** The classes whose access rights the code of this class has: itself, or for a mixin the classes it is merged into (none when unknown). */
+		private List<String> callers() {
+			if (!mixin) return List.of(user);
+			if (callers == null) {
+				// a target the scan cannot see (a class of a mod that is not scanned, or of a library) has no hierarchy to judge by
+				callers = mixinTargets.stream().filter(t -> headers.containsKey(t) || game.info(t).isPresent()).toList();
+				if (callers.isEmpty()) {
+					// with none visible the body is judged as an outsider with public access only, so no private, package or protected game member passes
+					callers = List.of(user);
+					blind = true;
+					blindMixins.add(mod + "\t" + user);
+				}
+			}
+			return callers;
+		}
+
+		/** A class a mod's instruction links to by name must be reachable from the mod: public, or in the caller's package. */
+		void typeAccess(String name) {
+			if (name == null || callers().isEmpty()) return;
+			if (name.charAt(0) == '[') {
+				Type t = Type.getType(name);
+				if (t.getSort() == Type.ARRAY) t = t.getElementType();
+				if (t.getSort() != Type.OBJECT) return;
+				name = t.getInternalName();
+			}
+			if (!game(name) || headers.containsKey(name)) return;
+			int flags = classFlags(name);
+			if (flags < 0) return;
+			AccessCheck.Violation v = access.type(callers(), name, flags);
+			if (v != null) accessUse(mod, user, name, "class", v);
+		}
+
+		/** Whether the member the JVM resolves the reference to is open to this class, after the access wideners; {@code tag} is the method handle kind of the instruction. */
+		void memberAccess(String owner, String name, String desc, boolean field, int tag) {
+			if (callers().isEmpty() || owner.charAt(0) == '[') return;
+			Decl d = declaration(owner, name, desc, field);
+			if (d == null || d.flags() < 0) return;
+			boolean statik = tag == Opcodes.H_GETSTATIC || tag == Opcodes.H_PUTSTATIC || tag == Opcodes.H_INVOKESTATIC;
+			boolean write = tag == Opcodes.H_PUTFIELD || tag == Opcodes.H_PUTSTATIC;
+			boolean special = tag == Opcodes.H_INVOKESPECIAL || tag == Opcodes.H_NEWINVOKESPECIAL;
+			AccessCheck.Violation v = access.member(callers(), mixin && !blind, owner, d.cls(), name, desc, field, d.flags(), statik, write, name.equals("<init>"), special);
+			if (v != null) accessUse(mod, user, d.cls(), (field ? "field " + name + ":" : "method " + name) + desc, v);
+		}
+
+		void member(String owner, String name, String desc, boolean field, boolean statik, int tag) {
 			desc(desc);
 			if (!field && owner.startsWith(SHIM)) shimCall(mod, owner, name, desc);
 			if (headers.containsKey(owner)) users.computeIfAbsent(owner, k -> new HashSet<>()).add(user);
 			Res r = resolve(owner, name, desc, field, statik, new HashSet<>());
+			if (r == FOUND) {
+				typeAccess(owner);
+				memberAccess(owner, name, desc, field, tag);
+			}
 			if (r == FOUND || r == NONE) return;
 			Gap g = gap(r.owner(), r.classGone());
 			String key = (field ? "field " + name + ":" : "method " + name) + desc;
@@ -1035,7 +1311,7 @@ public final class ScanTool {
 		}
 
 		void handle(Handle h) {
-			member(h.getOwner(), h.getName(), h.getDesc(), h.getTag() <= Opcodes.H_PUTSTATIC, h.getTag() == Opcodes.H_INVOKESTATIC);
+			member(h.getOwner(), h.getName(), h.getDesc(), h.getTag() <= Opcodes.H_PUTSTATIC, h.getTag() == Opcodes.H_INVOKESTATIC, h.getTag());
 		}
 
 		void constant(Object c) {
@@ -1089,12 +1365,36 @@ public final class ScanTool {
 		public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
 			type(superName);
 			if (interfaces != null) for (String i : interfaces) type(i);
+			supers = new ArrayList<>();
+			if (superName != null) supers.add(superName);
+			if (interfaces != null) supers.addAll(List.of(interfaces));
 			signature(signature, false);
+		}
+
+		/** The supertypes are linked when the class loads; a mixin's are not, since only its body is merged. */
+		@Override
+		public void visitEnd() {
+			if (!mixin) for (String s : supers) typeAccess(s);
 		}
 
 		@Override
 		public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-			return annotation(desc);
+			if (!desc.equals("Lorg/spongepowered/asm/mixin/Mixin;")) return annotation(desc);
+			mixin = true;
+			typeDesc(desc);
+			return new AnnotationVisitor(Opcodes.ASM9) {
+				@Override
+				public AnnotationVisitor visitArray(String key) {
+					return new AnnotationVisitor(Opcodes.ASM9, annotationValues()) {
+						@Override
+						public void visit(String k, Object value) {
+							if (value instanceof Type t && t.getSort() == Type.OBJECT) mixinTargets.add(t.getInternalName());
+							else if (value instanceof String str && "targets".equals(key)) mixinTargets.add(str.replace('.', '/'));
+							super.visit(k, value);
+						}
+					};
+				}
+			};
 		}
 
 		@Override
@@ -1128,16 +1428,27 @@ public final class ScanTool {
 				@Override
 				public void visitTypeInsn(int opcode, String t) {
 					type(t);
+					typeAccess(t);
 				}
 
 				@Override
 				public void visitFieldInsn(int opcode, String owner, String n, String d) {
-					member(owner, n, d, true, false);
+					member(owner, n, d, true, false, switch (opcode) {
+						case Opcodes.GETFIELD -> Opcodes.H_GETFIELD;
+						case Opcodes.GETSTATIC -> Opcodes.H_GETSTATIC;
+						case Opcodes.PUTFIELD -> Opcodes.H_PUTFIELD;
+						default -> Opcodes.H_PUTSTATIC;
+					});
 				}
 
 				@Override
 				public void visitMethodInsn(int opcode, String owner, String n, String d, boolean itf) {
-					member(owner, n, d, false, opcode == Opcodes.INVOKESTATIC);
+					member(owner, n, d, false, opcode == Opcodes.INVOKESTATIC, switch (opcode) {
+						case Opcodes.INVOKESTATIC -> Opcodes.H_INVOKESTATIC;
+						case Opcodes.INVOKESPECIAL -> Opcodes.H_INVOKESPECIAL;
+						case Opcodes.INVOKEINTERFACE -> Opcodes.H_INVOKEINTERFACE;
+						default -> Opcodes.H_INVOKEVIRTUAL;
+					});
 				}
 
 				@Override
@@ -1150,6 +1461,7 @@ public final class ScanTool {
 				@Override
 				public void visitLdcInsn(Object value) {
 					constant(value);
+					if (value instanceof Type t && t.getSort() != Type.METHOD) typeAccess(t.getSort() == Type.ARRAY ? t.getDescriptor() : t.getInternalName());
 				}
 
 				@Override
@@ -1160,6 +1472,7 @@ public final class ScanTool {
 				@Override
 				public void visitTryCatchBlock(org.objectweb.asm.Label s, org.objectweb.asm.Label e, org.objectweb.asm.Label h, String t) {
 					type(t);
+					typeAccess(t);
 				}
 			};
 		}
@@ -1211,6 +1524,10 @@ public final class ScanTool {
 				byCat.put(c.label, counts);
 			}
 			m.put("categories", byCat);
+			Map<String, Object> acc = new LinkedHashMap<>();
+			acc.put("callSites", (long) s.accessSites);
+			acc.put("refs", (long) s.accessRefs.size());
+			m.put("access", acc);
 			jsonMods.add(m);
 		}
 		Map<String, Object> root = new LinkedHashMap<>();
@@ -1224,6 +1541,34 @@ public final class ScanTool {
 			totals.put(c.label, counts);
 		}
 		root.put("categoryTotals", totals);
+		List<Gap> accessSorted = accessGaps.values().stream().filter(g -> g.category() == Cat.REAL).sorted(Comparator.comparingInt(Gap::total).reversed()
+				.thenComparing(g -> g.owner)).toList();
+		int accessSites = summaries.values().stream().mapToInt(s -> s.accessSites).sum();
+		Map<String, Object> accessTotals = new LinkedHashMap<>();
+		accessTotals.put("callSites", (long) accessSites);
+		accessTotals.put("ownerClasses", (long) accessSorted.size());
+		accessTotals.put("datagenCallSites", (long) datagenAccess);
+		accessTotals.put("wideningEntries", (long) access.entries());
+		root.put("accessTotals", accessTotals);
+		List<Object> jsonAccess = new ArrayList<>();
+		for (Gap g : accessSorted) {
+			Map<String, Object> o = new LinkedHashMap<>();
+			o.put("owner", g.owner);
+			int counted = 0;
+			List<Object> members = new ArrayList<>();
+			for (Map.Entry<String, Use> e : accessMembers(g)) {
+				Map<String, Object> m = new LinkedHashMap<>();
+				m.put("member", e.getKey());
+				m.putAll(use(e.getValue()));
+				m.put("reason", g.memberHints.get(e.getKey()));
+				members.add(m);
+				counted += e.getValue().cats.getOrDefault(Cat.REAL, 0);
+			}
+			o.put("uses", (long) counted);
+			o.put("members", members);
+			jsonAccess.add(o);
+		}
+		root.put("accessGaps", jsonAccess);
 		root.put("mods", jsonMods);
 		root.put("gaps", jsonGaps);
 		List<Lossy> lossies = new ArrayList<>(lossy.values());
@@ -1261,13 +1606,17 @@ public final class ScanTool {
 		md.append("Counts are call sites. Mixin targets and string-based references are not checked.\n\n");
 		md.append("Each use is `real` (a reference to fix), `mixin-added` (a mixin of a scanned mod, or an interface its fabric.mod.json injects, gives the owner that member) or\n");
 		md.append("`datagen` (made only by datagen classes: entrypoints, subclasses of Fabric datagen types, and classes only those mention). A gap lists under its strongest category.\n\n");
+		md.append("A separate `access` count (not part of `real`) lists references whose target exists in 26.3 but that the JVM would refuse the mod: private, package-private\n");
+		md.append("or protected there, or a final field written from outside its class, after `mms_uproot.accesswidener` and the other wideners of the game have opened what they open.\n");
+		md.append("It is kept apart because the fix is a widener line, not a rule or a shim, and `real` stays comparable with earlier scans. See the access section below.\n\n");
 		md.append("## Mods\n\n");
-		md.append("| mod | rules | classes | failed | real | mixin-added | datagen | missing refs | call sites |\n|---|---|---|---|---|---|---|---|---|\n");
+		md.append("| mod | rules | classes | failed | real | mixin-added | datagen | access | missing refs | call sites |\n|---|---|---|---|---|---|---|---|---|---|\n");
 		for (Map.Entry<String, Summary> e : summaries.entrySet()) {
 			Summary s = e.getValue();
 			md.append("| ").append(e.getKey()).append(" | ").append(s.kind == Kind.LEGACY ? "renames.txt" : "renames-26x.txt").append(" | ").append(s.classes)
 					.append(" | ").append(s.failed);
 			for (Cat c : Cat.values()) md.append(" | ").append(s.catSites.getOrDefault(c, 0));
+			md.append(" | ").append(s.accessSites);
 			md.append(" | ").append(s.refs.size()).append(" | ").append(s.sites).append(" |\n");
 		}
 		md.append("\nCategory columns are call sites.\n");
@@ -1287,6 +1636,21 @@ public final class ScanTool {
 				if (g.memberHints.containsKey(e.getKey())) md.append(" [").append(g.memberHints.get(e.getKey())).append(']');
 				md.append('\n');
 			});
+		}
+		md.append("\n## Access violations (").append(accessSorted.size()).append(" owner classes, ").append(accessSites).append(" call sites)\n\n");
+		md.append("A member or class that exists in 26.3 but that the calling class may not use under the JVM's rules, resolved up the class hierarchy to the class that declares it.\n");
+		md.append("Each line gives the call sites and the reason, with the widener line that opens it. A mixin's code counts as its target's, so a private member of the target is fine there.\n");
+		md.append("Members Uproot's own mixins add, accessor and invoker routes and the datagen-only classes (").append(datagenAccess).append(" call sites) are not counted.\n");
+		md.append("Widener entries read: ").append(access.entries()).append(".\n");
+		md.append(blindMixins.size()).append(" mixin classes have no target the scan can see, so their bodies were judged as outside classes with public access only.\n");
+		if (accessSorted.isEmpty()) md.append("\nNone.\n");
+		for (Gap g : accessSorted) {
+			int counted = accessMembers(g).stream().mapToInt(e -> e.getValue().cats.getOrDefault(Cat.REAL, 0)).sum();
+			md.append("\n### ").append(g.owner.replace('/', '.')).append(" - ").append(counted).append(" uses\n");
+			for (Map.Entry<String, Use> e : accessMembers(g)) {
+				md.append("- `").append(e.getKey()).append("` - ").append(e.getValue().cats.getOrDefault(Cat.REAL, 0)).append(" (").append(mods(e.getValue())).append(") [")
+						.append(g.memberHints.get(e.getKey())).append("]\n");
+			}
 		}
 		md.append("\n## Lossy mappings (not gaps, not counted above)\n\n");
 		md.append("Rules that drop a call or answer it with a stand-in that does nothing, so a mod's behaviour is lost without an error. Each wants a real\n");
@@ -1320,10 +1684,17 @@ public final class ScanTool {
 		System.out.println("  lossy (not gaps): " + lossies.stream().filter(l -> l.total > 0).count() + " rules hit, " + lossies.stream().mapToInt(l -> l.total).sum() + " sites, "
 				+ lossies.stream().filter(l -> l.total == 0).count() + " rules never hit");
 		System.out.println("  member clashes (resolved by the remapper, " + clashes.values().stream().filter(c -> c.length > 5).count() + " unresolved): " + clashes.size() + " in " + clashes.values().stream().map(c -> c[0]).distinct().count() + " mods");
+		System.out.println("  access (apart from real): " + accessSites + " call sites, " + accessSorted.size() + " owner classes, " + datagenAccess + " more in datagen classes");
 		for (Cat c : Cat.values()) {
 			System.out.println("  " + c.label + ": " + summaries.values().stream().mapToInt(s -> s.catSites.getOrDefault(c, 0)).sum() + " call sites, "
 					+ sorted.stream().filter(g -> g.category() == c).count() + " owner classes");
 		}
+	}
+
+	/** The members of an access gap, most used first. */
+	private static List<Map.Entry<String, Use>> accessMembers(Gap g) {
+		return g.members.entrySet().stream().filter(e -> e.getValue().cats.getOrDefault(Cat.REAL, 0) > 0).sorted(Comparator.<Map.Entry<String, Use>>comparingInt(
+				e -> e.getValue().cats.getOrDefault(Cat.REAL, 0)).reversed().thenComparing(Map.Entry::getKey)).toList();
 	}
 
 	/** The category split of a gap's uses, when they are not all real ({@code " [real 2, datagen 10]"}); empty when every use is real. */

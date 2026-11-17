@@ -398,6 +398,11 @@ public final class Namer {
 		for (Map.Entry<String, String> text : renames.annotationStrings().entrySet()) {
 			if (s.contains(text.getKey())) s = s.replace(text.getKey(), text.getValue());
 		}
+		if (mixinClass != null) {
+			for (Map.Entry<String, String> text : renames.mixinAnnotationStrings(mixinClass).entrySet()) {
+				if (s.contains(text.getKey())) s = s.replace(text.getKey(), text.getValue());
+			}
+		}
 		return s;
 	}
 

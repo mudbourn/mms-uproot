@@ -142,7 +142,10 @@ final class HwrProbes {
 			Holder<MobEffect> effect = effect();
 			player.removeEffect(effect);
 			try {
-				new ItemStack(Items.ENCHANTED_GOLDEN_APPLE).finishUsingItem(player.level(), player);
+				// two apples: the hook runs at the tail of Consumable.onConsume, after the stack has been shrunk, and a one-apple stack of a survival
+				// player is empty by then, which ItemStack.is answers as air (1.21.11's getItem does the same), so the mod gives the effect for the
+				// last apple of a stack only in creative mode
+				new ItemStack(Items.ENCHANTED_GOLDEN_APPLE, 2).finishUsingItem(player.level(), player);
 				MobEffectInstance on = player.getEffect(effect);
 				if (on == null) throw new Probe.Fail("eating an enchanted golden apple did not give the effect");
 				if (on.getDuration() > 6000 || on.getDuration() < 5900) throw new Probe.Fail("effect duration " + on.getDuration() + ", want about 6000");
