@@ -15,6 +15,9 @@ import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.resources.WaypointStyleManager;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.model.monster.zombie.ZombieModel;
+import net.minecraft.client.renderer.entity.ArmorModelSet;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
@@ -134,6 +137,22 @@ public final class LegacyClient {
 			TextureAtlasSprite sprite, boolean sheeted, boolean foil, int tint, ModelFeatureRenderer.CrumblingOverlay crumbling, int outline) {
 		collector.submitModelPart(part, pose, type, light, overlay, sprite, tint, outline);
 		if (crumbling != null) collector.submitCrumblingOverlay(part, pose, type, light, overlay, outline, crumbling);
+	}
+
+	/**
+	 * 26.1 and 26.2's {@code submitModelPart} with a tint and a crumbling overlay; 26.3 takes the overlay as a call of its own, which vanilla's conduit
+	 * makes with the same tint.
+	 */
+	public static void submitModelPart(OrderedSubmitNodeCollector collector, ModelPart part, PoseStack pose, RenderType type, int light, int overlay,
+			TextureAtlasSprite sprite, int tint, ModelFeatureRenderer.CrumblingOverlay crumbling) {
+		collector.submitModelPart(part, pose, type, light, overlay, sprite, tint);
+		if (crumbling != null) collector.submitCrumblingOverlay(part, pose, type, light, overlay, tint, crumbling);
+	}
+
+	/** {@code AbstractZombieRenderer}'s constructor: the same arguments, which 26.3 erases to the generic humanoid model. */
+	public static Object[] abstractZombieRenderer(EntityRendererProvider.Context context, ZombieModel<?> adultModel, ZombieModel<?> babyModel,
+			ArmorModelSet<?> adultArmor, ArmorModelSet<?> babyArmor) {
+		return new Object[] {context, adultModel, babyModel, adultArmor, babyArmor};
 	}
 
 	/** 1.21.11's {@code submitBlock}: the state's baked model, drawn untinted as a moving block is. */

@@ -109,6 +109,10 @@ public final class UprootBoot implements LanguageAdapter {
 			Report.Entry entry = report.mod(id);
 			entry.notes.add("built for an older 26.x: Mojang names kept, 26.3 rules from renames-26x.txt");
 			prepare(mod, new Namer(table, renames26, game, modClasses, entry), false, sources);
+			if (ModSource.shipsOldWorldgen(mod, report)) {
+				DataShim.target(id, entry);
+				entry.notes.add("ships worldgen in folders 26.3 renamed: its data goes through the data shim");
+			}
 		}
 		for (ModSource src : new ArrayList<>(sources)) {
 			try {
@@ -144,7 +148,7 @@ public final class UprootBoot implements LanguageAdapter {
 		report.write();
 	}
 
-	/** Indexes one mod. Only a 1.21.11 mod has data in the old formats, so only it gets the data shim. */
+	/** Indexes one mod. A 1.21.11 mod's data is in the old formats, so it gets the data shim here; an older 26.x mod gets it only when it ships old worldgen. */
 	private static void prepare(ModContainerImpl mod, Namer namer, boolean legacyData, List<ModSource> sources) {
 		String id = mod.getMetadata().getId();
 		Report.Entry entry = report.mod(id);

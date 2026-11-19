@@ -86,6 +86,20 @@ tasks.register('uprootScan', JavaExec) {
 	args = ['--out', file(scanOut).path, '--cache', file('run/mms-uproot/cache').path, file('run/mods').path] + extra
 }
 
+// Offline intersection heat: every point where two or more mods of a pack touch the same thing, scored by fragility.
+// Reads -PintersectMods (default: the test instance's mods folder; *.jar.disabled beside the jars are the pre-update versions).
+tasks.register('uprootIntersect', JavaExec) {
+	group = 'uproot'
+	description = 'Writes build/uproot-intersect/intersections.json and intersections.md: where mods touch the same code or content, scored, without launching the game'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'info.mudbourn.mmsuproot.tool.IntersectTool'
+	maxHeapSize = '4g'
+	def modsDir = providers.gradleProperty('intersectMods').getOrElse('/Volumes/道具/PrismLauncher/instances/MMS 26.3 Test/minecraft/mods')
+	def intersectOut = providers.gradleProperty('intersectOut').getOrElse('build/uproot-intersect')
+	def maxNodes = providers.gradleProperty('intersectMaxNodes').getOrElse('30000')
+	args = ['--out', file(intersectOut).path, '--cache', file('run/mms-uproot/cache').path, '--max-nodes', maxNodes, modsDir]
+}
+
 tasks.matching { it.name == 'runClient' }.configureEach {
 	dependsOn 'uprootOverrides'
 }

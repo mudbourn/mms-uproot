@@ -181,6 +181,16 @@ public final class GameClasses {
 		return internalName.charAt(0) != '[' && names.contains(internalName) && info(internalName).map(Info::isInterface).orElse(false);
 	}
 
+	/**
+	 * Whether a game-side type is an interface, also for Mojang's library classes outside the index (renderpearl, blaze3d, DFU):
+	 * TRUE or FALSE, or null when the type is not the game's or cannot be read.
+	 */
+	public Boolean gameKind(String internalName) {
+		if (internalName.charAt(0) == '[') return null;
+		if (!names.contains(internalName) && !internalName.startsWith("com/mojang/")) return null;
+		return info(internalName).map(Info::isInterface).orElse(null);
+	}
+
 	/** Whether a Minecraft class is a plain class (not an interface) in the running game. */
 	public boolean isClass(String internalName) {
 		return internalName.charAt(0) != '[' && names.contains(internalName) && info(internalName).map(i -> !i.isInterface()).orElse(false);

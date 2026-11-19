@@ -221,6 +221,34 @@ public final class ModSource {
 		return false;
 	}
 
+	/**
+	 * True for a mod built for an older 26.x that still ships {@code worldgen/configured_feature}, a folder 26.3 renamed to {@code worldgen/feature}.
+	 * Its {@code pack.mcmeta} cannot say this: 26.x mods often carry a stale format, so the folder is the mark.
+	 */
+	static boolean shipsOldWorldgen(ModContainerImpl mod, Report report) {
+		try {
+			for (Path root : mod.getRootPaths()) {
+				// the jar's own data, and built-in packs a mod registers from a folder of the jar (resourcepacks/<name>/data, datapack/<name>/data)
+				try (Stream<Path> walk = Files.walk(root, 3)) {
+					for (Path data : (Iterable<Path>) walk::iterator) {
+						if (data.getFileName() == null || !data.getFileName().toString().equals("data") || !Files.isDirectory(data)) continue;
+						try (Stream<Path> namespaces = Files.list(data)) {
+							// configured_feature is the folder 26.3 renamed; enchantment, feature and advancement files of a 26.1 or 26.2 build can keep
+							// shapes 26.3 dropped (a loot condition keyed "condition", a feature's "config" level, a recipe_unlocked "recipe"), which the
+							// converters only touch when present
+							if (namespaces.anyMatch(ns -> Files.isDirectory(ns.resolve("worldgen/configured_feature")) || Files.isDirectory(ns.resolve("enchantment"))
+									|| Files.isDirectory(ns.resolve("worldgen/feature")) || Files.isDirectory(ns.resolve("advancement")))) return true;
+						}
+					}
+				}
+			}
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("Could not tell whether {} ships old worldgen; not converting its data", mod.getMetadata().getId(), e);
+			report.note(mod.getMetadata().getId() + ": could not be scanned for old worldgen, so its data was not converted: " + e);
+		}
+		return false;
+	}
+
 	/** Whether any class file of the mod contains every byte string of one entry of {@link #OLDER_26}. Each file is read once. */
 	private static boolean namesPre263(ModContainerImpl mod) throws IOException {
 		for (Path root : mod.getRootPaths()) {

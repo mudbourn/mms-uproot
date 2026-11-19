@@ -1467,3 +1467,7 @@ mixinmethod io/wispforest/owo/mixin/itemgroup/CreativeModeInventoryScreenMixin i
 
 # MixinTrace: CrashReport.getDetails has two overloads in 26.3 (getDetails() and getDetails(StringBuilder), the one with the category loop the hook sits in), so the bare name no longer picks the hook's method
 mixinmethod link/infra/mixintrace/mixin/MixinCrashReport mixintrace_addTrace getDetails(Ljava/lang/StringBuilder;)V
+
+# Oh The Biomes We've Gone registers its shelf fungi under another id, so the old id is free for the alias to 26.3's shelf mushroom in
+# aliases.txt. Its own block stays (its code reads it as a TreeBranchBlock); nothing in its data names the new id
+ldc net/potionstudios/biomeswevegone/world/level/block/BWGBlocks shelf_fungi legacy_shelf_fungi

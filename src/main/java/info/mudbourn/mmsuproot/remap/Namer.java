@@ -346,7 +346,8 @@ public final class Namer {
 	 */
 	public String rewrite(String s, String mixinClass, boolean field, String memberDesc) {
 		if (!(s.contains("net/minecraft") || s.contains("net.minecraft") || s.contains("com/mojang/blaze3d") || s.contains("com.mojang.blaze3d") || s.contains("method_") || s.contains("field_") || s.contains("comp_")
-				|| mixinClass != null && (renames.hasMethod(bareName(s)) || renames.hasField(bareName(s))) || refersToModMember(s))) {
+				|| mixinClass != null && (renames.hasMethod(bareName(s)) || renames.hasField(bareName(s)) || !renames.mixinAnnotationStrings(mixinClass).isEmpty())
+				|| refersToModMember(s))) {
 			// nothing the rename rules know, but a member of a mod class that a clash renamed is still followed
 			return mixinClass != null && mods.has(mixinClass) ? bare(s, mixinClass, field, memberDesc, s) : s;
 		}

@@ -96,6 +96,7 @@ public final class Renames {
 	private final Map<String, String[]> callMoves = new HashMap<>(); // "owner.name desc" (26.3 names) -> {new owner, new name[, new desc]}
 	private final Map<String, String> fieldGets = new HashMap<>(); // "owner.name" (26.3 names) -> getter name
 	private final Map<String, String> annotationStrings = new HashMap<>(); // text inside a mixin annotation string -> what it becomes
+	private final Map<String, Map<String, String>> ldcStrings = new HashMap<>(); // mod class -> a string constant in its code -> what it becomes
 	private final Map<String, Map<String, String>> mixinAnnotationStrings = new HashMap<>(); // mixin class -> text inside its annotation strings -> what it becomes
 	private final Map<String, String> injectAts = new HashMap<>(); // mixin target string of a call -> the string it becomes
 	private final Map<String, String[]> fieldMoves = new HashMap<>(); // "owner.name" (26.3 names) -> {new owner, new name}
@@ -164,6 +165,10 @@ public final class Renames {
 				if (p.length != 6 && p.length != 7) throw new IllegalStateException("Bad implbridge rule: " + line);
 				String[] h = p.length == 7 ? helper(p[6], line) : new String[] {null, null};
 				r.implBridges.add(new ImplBridge(p[1], p[2], p[3], p[4], p[5], h[0], h[1]));
+			}
+			case "ldc" -> {
+				if (p.length != 4) throw new IllegalStateException("Bad ldc rule: " + line);
+				r.ldcStrings.computeIfAbsent(p[1], k -> new HashMap<>()).put(p[2], p[3]);
 			}
 			case "annotation" -> {
 				if (p.length != 3) throw new IllegalStateException("Bad annotation rule: " + line);
@@ -518,6 +523,11 @@ public final class Renames {
 	/** The {@code mixinannotation} rules of one mixin class: text inside its annotation strings, and what it becomes there. Empty for most classes. */
 	public Map<String, String> mixinAnnotationStrings(String mixin) {
 		return mixinAnnotationStrings.getOrDefault(mixin, Map.of());
+	}
+
+	/** String constants of one mod class that a rule replaces whole (a registry id the class registers under, say). */
+	public Map<String, String> ldcStrings(String owner) {
+		return ldcStrings.getOrDefault(owner, Map.of());
 	}
 
 	/** The mixin {@code @At} target strings that are retargeted, from the 26.3 form of the 1.21.11 target to the new one. */

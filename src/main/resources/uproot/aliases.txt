@@ -1,0 +1,8 @@
+# Registry ids of mod content that 26.3 now has itself, sent to the vanilla entry: `<registry> <old id> <new id>`, registry being block or item.
+# Every lookup of the old id (data files, saved chunks and inventories, commands) gets the vanilla entry. The mod's own registration
+# must leave the old id free, which an ldc rule in renames.txt does by moving it to another id.
+#
+# Oh The Biomes We've Gone's shelf fungi: 26.3's dappled forest added shelf mushrooms, the same bracket fungus on a trunk side
+# (facing; the vanilla block also has an age, which defaults to the youngest stage)
+block biomeswevegone:shelf_fungi minecraft:shelf_mushroom
+item biomeswevegone:shelf_fungi minecraft:shelf_mushroom

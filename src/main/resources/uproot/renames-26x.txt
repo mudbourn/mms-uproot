@@ -470,6 +470,59 @@ annotation tooltip(Lnet/minecraft/client/gui/Font;Ljava/util/List;IILnet/minecra
 # Frostiful shakes the hand while shivering: the hook sits after bobHurt in GameRenderer.renderItemInHand, which takes the camera state, the player state and a texture view
 # in 26.3 (26.2 took the camera state, a partial tick and a projection). The hook reads none of the old two and captures the pose stack the method makes
 handler com/github/thedeathlycow/frostiful/client/mixin/gui/GameRendererMixin shakeViewWhenShivering (Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lnet/minecraft/client/renderer/state/level/PlayerRenderState;Lcom/mojang/renderpearl/api/textures/GpuTextureView;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;Lcom/mojang/blaze3d/vertex/PoseStack;)V 0,null,null locals=4
+# Underground Worlds. 26.3 has no ConfiguredFeature: Registries.FEATURE is what CONFIGURED_FEATURE held, and the type points at the same
+# stand-in as for 1.21.11 mods (renames.txt)
+class net/minecraft/world/level/levelgen/feature/ConfiguredFeature info/mudbourn/mmsuproot/shim/feature/ConfiguredFeature
+field net/minecraft/core/registries/Registries CONFIGURED_FEATURE FEATURE
+castadapt info/mudbourn/mmsuproot/shim/feature/ConfiguredFeature info/mudbourn/mmsuproot/shim/feature/ConfiguredFeature.cast
+# A model part takes any UV mapping now, which a sprite is; the tint-and-crumbling form is two calls in 26.3
+calldesc net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModelPart (Lnet/minecraft/client/model/geom/ModelPart;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IILnet/minecraft/client/renderer/texture/TextureAtlasSprite;)V (Lnet/minecraft/client/model/geom/ModelPart;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IILnet/minecraft/client/renderer/texture/UvMapping;)V
+callinst net/minecraft/client/renderer/OrderedSubmitNodeCollector submitModelPart (Lnet/minecraft/client/model/geom/ModelPart;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IILnet/minecraft/client/renderer/texture/TextureAtlasSprite;ILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.submitModelPart
+# The zombie renderer's constructor names the generic humanoid model where 26.2 named the zombie model; the arguments are the same
+ctoradapt net/minecraft/client/renderer/entity/AbstractZombieRenderer (Lnet/minecraft/client/renderer/entity/EntityRendererProvider$Context;Lnet/minecraft/client/model/monster/zombie/ZombieModel;Lnet/minecraft/client/model/monster/zombie/ZombieModel;Lnet/minecraft/client/renderer/entity/ArmorModelSet;Lnet/minecraft/client/renderer/entity/ArmorModelSet;)V (Lnet/minecraft/client/renderer/entity/EntityRendererProvider$Context;Lnet/minecraft/client/model/HumanoidModel;Lnet/minecraft/client/model/HumanoidModel;Lnet/minecraft/client/renderer/entity/ArmorModelSet;Lnet/minecraft/client/renderer/entity/ArmorModelSet;)V info/mudbourn/mmsuproot/shim/client/LegacyClient.abstractZombieRenderer
+# Projectile.mayBreak takes the block too; shim.entity.LegacyProjectiles answers the old question
+callinst net/minecraft/world/entity/projectile/Projectile mayBreak (Lnet/minecraft/server/level/ServerLevel;)Z info/mudbourn/mmsuproot/shim/entity/LegacyProjectiles.mayBreak
+# Same rule as renames.txt: the colour and exploration flag of a map decoration were dropped
+ctoradapt net/minecraft/world/level/saveddata/maps/MapDecorationType (Lnet/minecraft/resources/Identifier;ZIZZ)V (Lnet/minecraft/resources/Identifier;ZZ)V info/mudbourn/mmsuproot/shim/compat/CtorAdapters.mapDecorationType
+# Knot's strip-log and till-soil events, as for Arc in renames.txt: 26.3 has no axe or hoe class, so the hooks take Item and inject into the two
+# methods Uproot's ItemToolEventsMixin adds, which BlockTransformerMixin calls before a strip or a till
+mixintarget com/daqem/knot/fabric/events/mixin/AxeItemMixin info/mudbourn/mmsuproot/shim/item/AxeItem net/minecraft/world/item/Item
+mixintarget com/daqem/knot/fabric/events/mixin/HoeItemMixin info/mudbourn/mmsuproot/shim/item/HoeItem net/minecraft/world/item/Item
+mixinannotation com/daqem/knot/fabric/events/mixin/HoeItemMixin useOn uprootTillSoil(Lnet/minecraft/world/item/context/UseOnContext;)Lnet/minecraft/world/InteractionResult;
+mixinannotation com/daqem/knot/fabric/events/mixin/AxeItemMixin Lnet/minecraft/world/level/Level;playSound(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/core/BlockPos;Lnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FF)V Linfo/mudbourn/mmsuproot/shim/item/ToolEventPoint;stripLog(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)V
+# Immersive Storms (the 26.1 build, nested in Scorchful and Frostiful) has the 1.21.11 build's hooks in its client.mixin.client package; the same
+# targets as in renames.txt: render state capture brackets prepare, the black rain colour sits in prepareInstances
+mixinmethod com/thedeathlycow/immersive/storms/client/mixin/client/WeatherEffectRendererMixin captureWeatherRenderState prepare(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/client/renderer/state/level/WeatherRenderState;)V
+mixinmethod com/thedeathlycow/immersive/storms/client/mixin/client/WeatherEffectRendererMixin clearWeatherRenderState prepare(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/client/renderer/state/level/WeatherRenderState;)V
+mixinmethod com/thedeathlycow/immersive/storms/client/mixin/client/WeatherEffectRendererMixin setBlackRainColumnColor prepareInstances(Lcom/mojang/blaze3d/vertex/VertexConsumer;Ljava/util/List;Lnet/minecraft/world/phys/Vec3;FIF)V
+handler com/thedeathlycow/immersive/storms/client/mixin/client/WeatherEffectRendererMixin captureWeatherRenderState (Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/client/renderer/state/level/WeatherRenderState;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,0,1
+handler com/thedeathlycow/immersive/storms/client/mixin/client/WeatherEffectRendererMixin clearWeatherRenderState (Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/client/renderer/state/level/WeatherRenderState;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,0,1
+# A trigger's list of entity predicates holds holders in 26.3 (Frostiful's frost wand victims); the list form of Validatable.validate cast
+# each element, so the call goes to shim.compat.LegacyLoot, which unwraps them first
+callmove net/minecraft/world/level/storage/loot/Validatable validate (Lnet/minecraft/world/level/storage/loot/ValidationContext;Ljava/lang/String;Ljava/util/List;)V info/mudbourn/mmsuproot/shim/compat/LegacyLoot validate
+# Colours of environment attributes were packed ints in 26.1 and 26.2 and are vectors in 26.3 (Immersive Storms' storm fog and sky tints
+# multiply by an int, so its config sync could not encode): shim.compat.LegacyAttributes turns a packed int into the vector before the builder stores it
+callinst net/minecraft/world/attribute/EnvironmentAttributeMap$Builder modify (Lnet/minecraft/world/attribute/EnvironmentAttribute;Lnet/minecraft/world/attribute/modifier/AttributeModifier;Ljava/lang/Object;)Lnet/minecraft/world/attribute/EnvironmentAttributeMap$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyAttributes.modify
+callinst net/minecraft/world/attribute/EnvironmentAttributeMap$Builder set (Lnet/minecraft/world/attribute/EnvironmentAttribute;Ljava/lang/Object;)Lnet/minecraft/world/attribute/EnvironmentAttributeMap$Builder; info/mudbourn/mmsuproot/shim/compat/LegacyAttributes.set
+# --- dead hooks group A ---
+# --- end dead hooks group A ---
+# --- dead hooks group B ---
+# Mob AI Tweaks' crossbow arms for zombie villagers and zombified piglins hook the AnimationUtils.animateZombieArms call that ended setupAnim. In 26.3 that call
+# sits in each model's own setupAttackAnimation (HumanoidModel.setupAnim calls it), which takes the same render state; cancelling there skips the zombie arms as before
+mixinmethod com/notunanancyowen/mait/mixin/ZombieVillagerEntityModelMixin crossbowHoldingAnimation setupAttackAnimation(Lnet/minecraft/client/renderer/entity/state/ZombieVillagerRenderState;)V
+mixinmethod com/notunanancyowen/mait/mixin/ZombifiedPiglinEntityModelMixin crossbowHoldingAnimation setupAttackAnimation(Lnet/minecraft/client/renderer/entity/state/ZombifiedPiglinRenderState;)V
+# Its drowned head tilt ran at the tail of setupAnim, which DrownedModel no longer declares (HumanoidModel does, and a hook there would reach every humanoid). It only acts
+# while swimAmount is above zero, and HumanoidModel.setupAnim ends with setupSwimAnimation exactly then, which DrownedModel overrides: the tail of that override is the same moment
+mixinmethod com/notunanancyowen/mait/mixin/DrownedEntityModelMixin fixHeadRotation setupSwimAnimation(Lnet/minecraft/client/renderer/entity/state/ZombieRenderState;FF)V
+handler com/notunanancyowen/mait/mixin/DrownedEntityModelMixin fixHeadRotation (Lnet/minecraft/client/renderer/entity/state/ZombieRenderState;FFLorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0
+# --- end dead hooks group B ---
+# --- dead hooks group C ---
+# Scorchful's shader effects (heat haze and the like) run after the entity outline pass of GameRenderer.render. In 26.3 render() takes no arguments and the pass is
+# LevelRenderer.blitEntityOutline, which render calls just before applyPostEffects; the hook uses the Minecraft and resource pool fields (both still there) and
+# never reads the tick counter, so the handler gets the defaults for it and for the boolean
+injectat net/minecraft/client/renderer/LevelRenderer doEntityOutline ()V net/minecraft/client/renderer/LevelRenderer blitEntityOutline ()V
+handler com/github/thedeathlycow/scorchful/client/mixin/GameRendererMixin hookShaderRender (Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V null,false
+# --- end dead hooks group C ---
 # --- end gaps of the 26.1 and 26.2 builds ---
 
 

@@ -71,7 +71,7 @@ public final class ScanTool {
 	/** Owners the game and Fabric API provide; anything else (other mods, libraries, the JDK) is not judged. */
 	private static final String[] GAME = {"net/minecraft/", "com/mojang/", "net/fabricmc/fabric/", "net/fabricmc/loader/", "net/fabricmc/api/"};
 
-	private enum Kind { LEGACY, MODERN, NONE }
+	enum Kind { LEGACY, MODERN, NONE }
 
 	/** What a missing reference means for the game, strongest first: only {@code REAL} is a gap to fix. */
 	private enum Cat {
@@ -85,7 +85,7 @@ public final class ScanTool {
 	}
 
 	/** One mod jar, possibly nested in another. */
-	private record Jar(String label, String id, Kind kind, Path root) { }
+	record Jar(String label, String id, Kind kind, Path root) { }
 
 	/** The header of a remapped mod class, for following a call up to the Minecraft class that declares it. */
 	private record Header(String superName, List<String> interfaces, Set<String> fields, Set<String> methods, boolean isInterface) { }
@@ -204,7 +204,12 @@ public final class ScanTool {
 	private final Set<String> blindMixins = new HashSet<>(); // "mod\tclass" of each mixin judged as an outsider, since none of its targets is visible
 	private int datagenAccess; // call sites of the access violations that only datagen classes make; not counted
 
-	private ScanTool(GameClasses game, ClassLoader loader) {
+	/** Set by {@link IntersectTool}: receives each class as remapped, and the run stops after the remap pass (no gap analysis). */
+	java.util.function.Consumer<Remapped> sink;
+	/** With {@link #sink}: the namer of each remapped mod, for naming what the mod's other files (access wideners) mention. */
+	final Map<String, Namer> namersOut = new HashMap<>();
+
+	ScanTool(GameClasses game, ClassLoader loader) {
 		this.game = game;
 		this.loader = loader;
 	}
@@ -245,7 +250,7 @@ public final class ScanTool {
 
 	// ---- finding the target jars
 
-	private static List<Jar> discover(List<Path> inputs, Path nestedDir, List<FileSystem> open, List<String> notes) throws IOException {
+	static List<Jar> discover(List<Path> inputs, Path nestedDir, List<FileSystem> open, List<String> notes) throws IOException {
 		List<Path> files = new ArrayList<>();
 		for (Path in : inputs) {
 			if (Files.isDirectory(in)) {
@@ -355,9 +360,9 @@ public final class ScanTool {
 
 	// ---- remapping
 
-	private record Remapped(String mod, String name, byte[] bytes) { }
+	record Remapped(String mod, String name, byte[] bytes) { }
 
-	private void run(List<Jar> jars, GameClasses game, Report report, Path cache, List<String> notes) throws IOException {
+	void run(List<Jar> jars, GameClasses game, Report report, Path cache, List<String> notes) throws IOException {
 		List<Jar> targets = jars.stream().filter(j -> j.kind() != Kind.NONE).toList();
 		for (Jar j : jars) {
 			if (j.kind() == Kind.NONE) notes.add(j.id() + ": not a target (no intermediary names, not built for 26.1 or 26.2), not scanned");
@@ -437,7 +442,8 @@ public final class ScanTool {
 						if (n > 0 && !a.kind().equals("mixin")) lossyUse(lossy("disable-" + a.kind(), a.describe(), a.reason()), j.id(), n);
 					}
 					dump(j.id(), name, disabled);
-					remapped.add(new Remapped(j.id(), name, disabled));
+					if (sink != null) sink.accept(new Remapped(j.id(), name, disabled));
+					else remapped.add(new Remapped(j.id(), name, disabled));
 					s.classes++;
 				} catch (IOException e) {
 					throw new UncheckedIOException(e);
@@ -446,6 +452,11 @@ public final class ScanTool {
 					notes.add(j.id() + ": " + name + " could not be remapped: " + e);
 				}
 			}
+		}
+
+		if (sink != null) {
+			namersOut.putAll(namers);
+			return;
 		}
 
 		namers.forEach((mod, namer) -> namer.drops().forEach((rule, n) -> lossyUse(lossy("calldrop", rule, ""), mod, n)));

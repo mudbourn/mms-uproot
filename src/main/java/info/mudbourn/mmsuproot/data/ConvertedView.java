@@ -257,7 +257,8 @@ final class ConvertedView {
 			String path = (String) f[1];
 			if (!path.endsWith(".json")) continue;
 			boolean feature = path.startsWith(OLD_FEATURES);
-			if (!feature && GENERIC.stream().noneMatch(path::startsWith)) continue;
+			boolean renamedFeature = path.startsWith(NEW_FEATURES);
+			if (!feature && !renamedFeature && GENERIC.stream().noneMatch(path::startsWith)) continue;
 
 			String text;
 			try (InputStream in = ((IoSupplier<InputStream>) f[2]).get()) {
@@ -266,7 +267,12 @@ final class ConvertedView {
 				fail(ns + ":" + path, e);
 				continue;
 			}
-			String outPath = feature ? NEW_FEATURES + path.substring(OLD_FEATURES.length()) : path;
+			if (renamedFeature) {
+				// an older 26.x build already uses the 26.3 folder but may keep the old shape: the config level marks it
+				if (!text.contains("\"config\"")) continue;
+				feature = true;
+			}
+			String outPath = feature && !renamedFeature ? NEW_FEATURES + path.substring(OLD_FEATURES.length()) : path;
 			String key = ns + ":" + path;
 			try {
 				Map<String, Object> root = Json.parseObject(text);
@@ -282,7 +288,7 @@ final class ConvertedView {
 				fail(key, e);
 				if (feature) served.put(ns + ":" + outPath, text.getBytes(StandardCharsets.UTF_8));
 			}
-			if (feature) {
+			if (feature && !renamedFeature) {
 				hidden.add(key);
 				added.add(ns + ":" + outPath);
 			}

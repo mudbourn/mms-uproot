@@ -1,5 +1,7 @@
 package info.mudbourn.mmsuproot.remap;
 
+import java.util.Map;
+
 import info.mudbourn.mmsuproot.map.Renames;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
@@ -185,9 +187,17 @@ public final class ClassRemap {
 	private static final class StringNames extends ClassVisitor {
 		private final Namer namer;
 
+		private Map<String, String> constants = Map.of();
+
 		StringNames(ClassVisitor next, Namer namer) {
 			super(API, next);
 			this.namer = namer;
+		}
+
+		@Override
+		public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+			constants = namer.renames().ldcStrings(name);
+			super.visit(version, access, name, signature, superName, interfaces);
 		}
 
 		private Object names(Object value) {
@@ -207,6 +217,10 @@ public final class ClassRemap {
 			return new MethodVisitor(API, mv) {
 				@Override
 				public void visitLdcInsn(Object value) {
+					if (value instanceof String s && constants.containsKey(s)) {
+						super.visitLdcInsn(constants.get(s));
+						return;
+					}
 					super.visitLdcInsn(names(value));
 				}
 			};
@@ -455,6 +469,9 @@ public final class ClassRemap {
 					if (opcode == Opcodes.PUTFIELD && fieldRule(owner, fieldName, true, fieldDesc, this)) return;
 					if (opcode == Opcodes.GETSTATIC) {
 						String[] move = namer.renames().fieldMove(owner, fieldName);
+						// a move stands in for a constant whose declared type changed; a mod built against the type 26.3 still
+						// declares (a 26.x build reading Potions.AWKWARD as a Holder) reads the game's own field
+						if (move != null && !shimHasField(move[0], move[1], fieldDesc) && namer.game().has(owner) && namer.game().findField(owner, fieldName, fieldDesc)) move = null;
 						if (move != null) {
 							owner = move[0];
 							fieldName = move[1];
@@ -492,6 +509,32 @@ public final class ClassRemap {
 				}
 			};
 		}
+	}
+
+	private static final java.util.Map<String, java.util.Set<String>> SHIM_FIELDS = new java.util.concurrent.ConcurrentHashMap<>();
+
+	/**
+	 * Whether a stand-in class declares the field with this descriptor. Read from the class bytes, never by loading the class: a stand-in
+	 * such as LegacyRegistries builds game objects in its static initialiser, which must not run while mods are being remapped.
+	 */
+	static boolean shimHasField(String owner, String name, String desc) {
+		java.util.Set<String> fields = SHIM_FIELDS.computeIfAbsent(owner, o -> {
+			java.util.Set<String> out = new java.util.HashSet<>();
+			try (java.io.InputStream in = ClassRemap.class.getClassLoader().getResourceAsStream(o + ".class")) {
+				if (in == null) return out;
+				new ClassReader(in).accept(new ClassVisitor(API) {
+					@Override
+					public org.objectweb.asm.FieldVisitor visitField(int access, String n, String d, String sig, Object value) {
+						out.add(n + ":" + d);
+						return null;
+					}
+				}, ClassReader.SKIP_CODE);
+			} catch (java.io.IOException e) {
+				// unreadable: treated as declaring nothing, so the move is decided by the game's field alone
+			}
+			return out;
+		});
+		return fields.contains(name + ":" + desc);
 	}
 
 	/**
@@ -722,6 +765,13 @@ public final class ClassRemap {
 					}
 					Renames.Ctor c = opcode == Opcodes.INVOKESPECIAL && methodName.equals("<init>") ? namer.renames().ctor(owner, methodDesc) : null;
 					if (c == null) {
+						// a game type that turned from a class into an interface (or back) between the mod's build and 26.3,
+						// such as renderpearl's GpuDevice: the call keeps its target but takes the instruction the type needs now
+						Boolean nowItf = opcode == Opcodes.INVOKESPECIAL ? null : namer.game().gameKind(owner);
+						if (nowItf != null && nowItf != itf) {
+							if (opcode != Opcodes.INVOKESTATIC) opcode = nowItf ? Opcodes.INVOKEINTERFACE : Opcodes.INVOKEVIRTUAL;
+							itf = nowItf;
+						}
 						super.visitMethodInsn(opcode, owner, methodName, methodDesc, itf);
 						return;
 					}

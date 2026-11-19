@@ -1,5 +1,6 @@
 package info.mudbourn.mmsuproot.shim.compat;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 
 import net.minecraft.core.Holder;
@@ -7,6 +8,8 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.HolderOwner;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.storage.loot.LootTable;
+import net.minecraft.world.level.storage.loot.Validatable;
+import net.minecraft.world.level.storage.loot.ValidationContext;
 import net.minecraft.world.level.storage.loot.entries.NestedLootTable;
 import net.minecraft.world.level.storage.loot.entries.UniformContainerBase;
 import net.minecraft.core.registries.Registries;
@@ -37,6 +40,14 @@ public final class LegacyLoot {
 	 * {@code LootPool.Builder.setRolls(NumberProvider)}: 26.3 takes a holder of an int provider. Constant and
 	 * uniform counts convert; anything else would have to be rolled by a provider that no longer exists.
 	 */
+	/**
+	 * A 26.1 build's {@code Validatable.validate(context, name, list)}: in 26.3 the lists a trigger decodes (Frostiful's victims) hold
+	 * holders of the predicates, not the predicates. Each holder is unwrapped, then the game's own validation runs.
+	 */
+	public static void validate(ValidationContext context, String name, List<?> list) {
+		Validatable.validate(context, name, list.stream().map(o -> (Validatable) (o instanceof Holder<?> h ? h.value() : o)).toList());
+	}
+
 	public static LootPool.Builder setRolls(LootPool.Builder builder, LegacyNumberProvider rolls) {
 		return builder.setRolls(count(rolls));
 	}

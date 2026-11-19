@@ -25,7 +25,9 @@ public final class FeatureJson {
 			"minecraft:noise_threshold_provider", "minecraft:noise_threshold",
 			"minecraft:noise_provider", "minecraft:noise",
 			"minecraft:dual_noise_provider", "minecraft:dual_noise",
-			"minecraft:rotated_block_provider", "minecraft:rotated");
+			"minecraft:rotated_block_provider", "minecraft:rotated",
+			// 26.1 and 26.2 named the rule based provider (1.21.11 left it untyped); fallback and rules kept their names
+			"minecraft:rule_based_state_provider", "minecraft:rule_based");
 
 	/**
 	 * Block tags whose meaning moved in 26.3 (old id to new id), rewritten wherever converted data names one: {@code #id} in tag files and
@@ -642,7 +644,9 @@ public final class FeatureJson {
 				stats.count(type);
 			}
 			Map<String, Object> out = typed(type);
-			for (Map.Entry<String, Object> e : cfg.entrySet()) out.put(e.getKey(), e.getValue());
+			// inline features in the config (a vegetation patch's vegetation_feature, say) take the 26.3 shape too
+			boolean selector = type.equals("minecraft:random_selector") || type.equals("minecraft:simple_random_selector");
+			for (Map.Entry<String, Object> e : cfg.entrySet()) out.put(e.getKey(), selector ? e.getValue() : nested(e.getValue(), stats));
 			if (type.equals("minecraft:delta_feature")) fitDelta(out, stats);
 			if (type.equals("minecraft:random_selector")) {
 				out.put("features", selectorEntries(out.get("features"), stats));

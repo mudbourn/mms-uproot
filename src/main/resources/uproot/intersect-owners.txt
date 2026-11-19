@@ -1,0 +1,54 @@
+# Routing for IntersectTool: which repo a fix for a node, a pair or an uncovered item most likely belongs to. Edit freely.
+# Order of the rules for a node (first that applies wins):
+#   1. an mms mod is a party of the node            -> that mod's repo (mod-repo)
+#   2. the node matches a domain-node rule          -> the repo of the first matching rule, in file order
+#   3. a mod Uproot remapped touches the node and the node's target (class, or class and member) has a rule or shim in Uproot's own rule files -> default-uproot
+#   4. two or more mms-less, non-library mods collide in code (method, site, class, access nodes)                        -> default-compat
+#   5. data nodes (id, name, tag, override, recipe, modifier) with no mms mod involved                                   -> default-data
+#   anything left                                                                                                         -> default-compat
+# A domain-node regex is searched in "KEY DETAIL DETAIL..." (the node key, then the details of its touches); keys are
+# method:CLASS#NAME+DESC, site:..., class:CLASS, access:..., id:PATH, name:TEXT, tag:REGISTRY/NS:PATH, override:FULL/PATH, recipe:TYPE|SIGNATURE, modifier:...
+# Regexes carry no spaces: write \s.
+
+# mod id -> repo
+mod-repo mms_combat mms-combat
+mod-repo mms_weapons mms-weapons
+mod-repo mms_arsenal mms-arsenal
+mod-repo mms_origins mms-origins
+mod-repo mms_compat mms-mod-compat-support
+mod-repo mms_economy mms-economy
+mod-repo mms_jobs mms-jobs
+mod-repo mms_metro mms-metro
+mod-repo mms_anim mms-animation
+mod-repo mms_animation mms-animation
+mod-repo mms_vanity mms-vanity
+mod-repo mms_render_common mms-render-common
+mod-repo mms_perf mms-perf
+mod-repo mms_tweaks mms-tweaks
+mod-repo mms_settings mms-settings
+mod-repo mms_mod_compat_support mms-mod-compat-support
+
+default-uproot mms-uproot
+default-compat mms-mod-compat-support
+default-data mms-pack
+
+# Domain: weapons, tools and combat. Item tuning goes to mms-weapons, combat mechanics (hit and damage flow, projectiles) to mms-combat.
+domain-node mms-weapons ^tag:items?/[^:]+:(.*[/_])?(swords?|axes?|pickaxes?|shovels?|hoes?|maces?|spears?|tridents?|bows?|crossbows?|tools?|weapons?|melee_weapons?|sharp_weapons?|daggers?|katanas?|halberds?|glaives?|scythes?|rapiers?|claymores?|hammers?|mining|durability)([/_].*)?$
+domain-node mms-weapons ^override:data/[^/]+/weapon_attributes/
+domain-node mms-weapons ^(override:data/[^/]+/enchantment/|tag:enchantment/[^:]+:(.*/)?(weapon|sword|sharp|melee|damage|bow|crossbow|trident|mace))
+domain-node mms-weapons (attack_damage|attack_speed|attack_reach|attack_range|entity_interaction_range)
+domain-node mms-combat ^(method|site|class):net/minecraft/world/entity/projectile/
+domain-node mms-combat ^(method|site):net/minecraft/world/entity/(LivingEntity|player/Player|Mob)#[^\s]*(hurt|Hurt|attack|Attack|damage|Damage|knockback|Knockback|die|Die)
+domain-node mms-combat ^(method|site|class):net/minecraft/world/damagesource/
+domain-node mms-weapons ^(method|site|class):net/minecraft/world/item/(ItemStack#[^\s]*([hH]urt|[dD]amage|[dD]urab)|(AxeItem|MaceItem|TridentItem|BowItem|CrossbowItem|ProjectileWeaponItem|ShieldItem|SpearItem|SwordItem|DiggerItem|HoeItem|PickaxeItem|ShovelItem|ProjectileItem|ToolMaterial))
+domain-node mms-weapons ^(id|name):(.*[/_\s])?(sword|axe|pickaxe|shovel|hoe|mace|spear|trident|bow|crossbow|dagger|katana|halberd|glaive|scythe|rapier|claymore|greatsword|hammer|lance|cleaver|sickle|whip|pike|javelin|boomerang)s?([/_\s]|$)
+domain-node mms-weapons (?s)^recipe:.*->\s*[a-z0-9_.:/-]*(sword|pickaxe|shovel|hoe|mace|spear|trident|crossbow|dagger|katana|halberd|glaive|scythe|rapier|claymore|greatsword|hammer|axe|bow)
+
+# Coverage: the mods that are meant to handle weapons and tools, and where an uncovered item goes (first match, by item id; the last is the default).
+coverage-mods mms_weapons mms_combat mms_arsenal
+coverage-route mms-combat ^[^:]+:[a-z0-9_/.-]*(bow|crossbow|trident|javelin|boomerang)[a-z0-9_/.-]*$
+coverage-route mms-weapons ^
+
+# What counts as a weapon or tool: an item in a tag whose id matches domain-tag, an item with a weapon_attributes file, or an item whose path matches domain-item.
+domain-tag (^|[/_:])(swords?|axes?|pickaxes?|shovels?|hoes?|maces?|spears?|tridents?|bows?|crossbows?|tools?|weapons?|melee_weapons?|sharp_weapons?|daggers?|katanas?|halberds?|glaives?|scythes?|rapiers?|claymores?|hammers?)($|[/_])
+domain-item (^|[/_])(swords?|axes?|pickaxes?|shovels?|hoes?|maces?|spears?|tridents?|bows?|crossbows?|daggers?|katanas?|halberds?|glaives?|scythes?|rapiers?|claymores?|greatswords?|hammers?|lances?|cleavers?|sickles?|whips?|pikes?|javelins?|boomerangs?)($|[/_])

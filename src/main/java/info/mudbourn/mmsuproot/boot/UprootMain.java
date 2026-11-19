@@ -13,5 +13,6 @@ public final class UprootMain implements ModInitializer {
 		GenSetup.register();
 		LegacyRule.register();
 		LegacyWorld.register();
+		RegistryAliases.register();
 	}
 }
