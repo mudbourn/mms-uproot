@@ -29,7 +29,9 @@ final class LeafFormProbes {
 		return List.of(
 			Probe.steps("leafform.land-ledge", 500, (c, t) -> walk(c, t, 0, false)),
 			Probe.steps("leafform.water-wall", 500, (c, t) -> walk(c, t, 40, true)),
-			Probe.steps("leafform.water-ledge", 500, (c, t) -> walk(c, t, 80, null)));
+			Probe.steps("leafform.water-ledge", 500, (c, t) -> walk(c, t, 80, null)),
+			Probe.steps("leafform.grass-ledge", 500, (c, t) -> walk(c, t, 120, false, true)),
+			Probe.steps("leafform.sneak-sink", 400, (c, t) -> sink(c, t, 160)));
 	}
 
 	/**
@@ -37,6 +39,14 @@ final class LeafFormProbes {
 	 * with a stone block at the water line, which a swimmer has to climb onto (stone is not passable).
 	 */
 	private static String walk(Probe.Ctx c, int tick, int x0, Boolean water) throws Exception {
+		return walk(c, tick, x0, water, false);
+	}
+
+	/**
+	 * {@code real} true plays it as a player does: a grass floor (itself passable) and the form turned on without the
+	 * manual power sync, so the client only knows what Apoli syncs on its own.
+	 */
+	private static String walk(Probe.Ctx c, int tick, int x0, Boolean water, boolean real) throws Exception {
 		if (!FabricLoader.getInstance().isModLoaded("mms_origins")) throw new Probe.Skip("mms-origins is not installed");
 		MinecraftServer server = c.server();
 		int y = FLOOR + 1;
@@ -48,7 +58,7 @@ final class LeafFormProbes {
 			run(server, "origin set @p origins:origin mms_origins:floran");
 			run(server, "forceload add " + (x0 - 2) + " -2 " + (x0 + 6) + " 16");
 			run(server, "fill " + (x0 - 1) + " " + FLOOR + " -1 " + (x0 + 5) + " " + (y + 4) + " 15 minecraft:air");
-			run(server, "fill " + x0 + " " + FLOOR + " 0 " + (x0 + 4) + " " + FLOOR + " 14 minecraft:stone");
+			run(server, "fill " + x0 + " " + FLOOR + " 0 " + (x0 + 4) + " " + FLOOR + " 14 minecraft:" + (real ? "grass_block" : "stone"));
 			if (water == null) {
 				run(server, "fill " + (x0 - 1) + " " + y + " -1 " + (x0 + 5) + " " + y + " 15 minecraft:glass");
 				run(server, "fill " + x0 + " " + y + " 0 " + (x0 + 4) + " " + y + " 7 minecraft:water");
@@ -58,7 +68,7 @@ final class LeafFormProbes {
 				run(server, "fill " + x0 + " " + y + " 0 " + (x0 + 4) + " " + (y + 2) + " 14 minecraft:water");
 				run(server, "fill " + x0 + " " + y + " 8 " + (x0 + 4) + " " + (y + 2) + " 8 minecraft:dirt");
 			} else {
-				run(server, "fill " + x0 + " " + y + " 8 " + (x0 + 4) + " " + y + " 8 minecraft:dirt");
+				run(server, "fill " + x0 + " " + y + " 8 " + (x0 + 4) + " " + y + " 8 minecraft:" + (real ? "grass_block" : "dirt"));
 			}
 			run(server, "tp @p " + (x0 + 2.5) + " " + y + " 2.5 0 0");
 			return null;
@@ -69,7 +79,7 @@ final class LeafFormProbes {
 			if (tick < 40 || tick % 10 != 0) return null;
 			boolean set;
 			try {
-				set = c.onServer(() -> setLeafForm(c.serverPlayer(), true));
+				set = c.onServer(() -> setLeafForm(c.serverPlayer(), true, !real));
 			} catch (Probe.Fail busy) {
 				if (tick >= 200) throw busy;
 				return null;
@@ -119,6 +129,60 @@ final class LeafFormProbes {
 		return null;
 	}
 
+	/** Stands a leaf-form player on a grass-topped, three-deep dirt floor, holds sneak and expects them to sink into it. */
+	private static String sink(Probe.Ctx c, int tick, int x0) throws Exception {
+		if (!FabricLoader.getInstance().isModLoaded("mms_origins")) throw new Probe.Skip("mms-origins is not installed");
+		MinecraftServer server = c.server();
+		int y = FLOOR + 1;
+		if (tick == 1) {
+			c.mc.options.keyShift.setDown(false);
+			run(server, "gamemode survival @p");
+			run(server, "origin set @p origins:origin origins:human");
+			run(server, "origin set @p origins:origin mms_origins:floran");
+			run(server, "forceload add " + (x0 - 2) + " -2 " + (x0 + 6) + " 8");
+			run(server, "fill " + (x0 - 1) + " " + (FLOOR - 3) + " -1 " + (x0 + 5) + " " + (y + 4) + " 7 minecraft:air");
+			run(server, "fill " + x0 + " " + (FLOOR - 3) + " 0 " + (x0 + 4) + " " + (FLOOR - 3) + " 6 minecraft:stone");
+			run(server, "fill " + x0 + " " + (FLOOR - 2) + " 0 " + (x0 + 4) + " " + FLOOR + " 6 minecraft:dirt");
+			run(server, "fill " + x0 + " " + FLOOR + " 0 " + (x0 + 4) + " " + FLOOR + " 6 minecraft:grass_block");
+			run(server, "tp @p " + (x0 + 2.5) + " " + y + " 2.5 0 0");
+			return null;
+		}
+		LocalPlayer client = c.mc.player;
+		if (!c.state.containsKey("sinkStart")) {
+			if (tick < 40 || tick % 10 != 0) return null;
+			boolean set;
+			try {
+				set = c.onServer(() -> setLeafForm(c.serverPlayer(), true, false));
+			} catch (Probe.Fail busy) {
+				if (tick >= 200) throw busy;
+				return null;
+			}
+			boolean done = set && complete(client) && c.onServer(() -> complete(c.serverPlayer()));
+			if (!done) {
+				if (tick >= 200) throw new Probe.Fail("leaf form did not finish: set " + set + ", client " + complete(client)
+					+ ", client phasing " + phasing(client) + ", server " + c.onServer(() -> complete(c.serverPlayer())));
+				return null;
+			}
+			c.state.put("sinkStart", tick);
+		}
+		c.mc.options.keyShift.setDown(true);
+		int start = (int) c.state.get("sinkStart");
+		ServerPlayer sp = c.serverPlayer();
+		String now = String.format("c(y%.2f shift%s phase%s ground%s) s(y%.2f phase%s)", client.getY(), b(client.isShiftKeyDown()),
+			b(phasing(client)), b(client.onGround()), c.onServer(() -> sp.getY()), b(c.onServer(() -> phasing(sp))));
+		if (client.getY() < y - 1.0) {
+			c.mc.options.keyShift.setDown(false);
+			c.onServer(() -> setLeafForm(c.serverPlayer(), false));
+			return "sank: " + now;
+		}
+		if (tick >= start + 60) {
+			c.mc.options.keyShift.setDown(false);
+			c.onServer(() -> setLeafForm(c.serverPlayer(), false));
+			throw new Probe.Fail("did not sink into the dirt while sneaking: " + now);
+		}
+		return null;
+	}
+
 	private static String b(boolean v) {
 		return v ? "Y" : "n";
 	}
@@ -137,12 +201,17 @@ final class LeafFormProbes {
 	 * Returns whether the toggle now matches {@code on}; false while the origin has not applied yet.
 	 */
 	private static boolean setLeafForm(Player player, boolean on) throws Exception {
+		return setLeafForm(player, on, true);
+	}
+
+	private static boolean setLeafForm(Player player, boolean on, boolean sync) throws Exception {
 		ClassLoader loader = LeafFormProbes.class.getClassLoader();
 		Object type = Class.forName(POWERS, true, loader).getField("LEAF_FORM").get(null);
 		Object power = type.getClass().getMethod("get", Entity.class).invoke(type, player);
 		if (power == null) return false;
 		if ((boolean) type.getClass().getMethod("isActive", Entity.class).invoke(type, player) == on) return true;
 		power.getClass().getMethod("onUse").invoke(power);
+		if (!sync) return (boolean) type.getClass().getMethod("isActive", Entity.class).invoke(type, player) == on;
 		Field key = Class.forName(HOLDER, true, loader).getField("KEY");
 		Object componentKey = key.get(null);
 		componentKey.getClass().getMethod("sync", Object.class).invoke(componentKey, player);
