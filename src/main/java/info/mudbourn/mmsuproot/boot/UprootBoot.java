@@ -59,6 +59,7 @@ public final class UprootBoot implements LanguageAdapter {
 		for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
 			ModContainerImpl impl = (ModContainerImpl) mod;
 			if (ModSource.skip(impl)) continue;
+			if (ModSource.declares263Only(impl)) continue;
 			if (ModSource.refersToIntermediary(impl, report)) targets.add(impl);
 			else if (ModSource.builtForOlder26(impl, report)) modern.add(impl);
 			else if (ModSource.legacyDataPack(impl, report)) DataShim.target(impl.getMetadata().getId(), report.mod(impl.getMetadata().getId()));

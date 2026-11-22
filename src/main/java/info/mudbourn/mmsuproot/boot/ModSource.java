@@ -177,20 +177,51 @@ public final class ModSource {
 		return false;
 	}
 
+	/**
+	 * True when the mod's own {@code fabric.mod.json} admits 26.3 and nothing older (no 1.21.x, 26.1 or 26.2), such as "26.3" or
+	 * "~26.3". Such a mod is a native 26.3 build and is never remapped, even if a class names intermediary classes: Streams Reflowing,
+	 * for one, carries optional compat mixins that target other mods' 1.21.11 names.
+	 */
+	static boolean declares263Only(ModContainerImpl mod) {
+		try {
+			for (Path root : mod.getRootPaths()) {
+				Path file = root.resolve("fabric.mod.json");
+				if (!Files.isRegularFile(file)) continue;
+				Map<String, Object> fmj = Json.parseObject(Files.readString(file));
+				if (!(fmj.get("depends") instanceof Map<?, ?> deps) || !deps.containsKey("minecraft")) return false;
+				Object range = deps.get("minecraft");
+				if (!Ranges.admits(range, MINECRAFT)) return false;
+				for (int[] v : new int[][] {{1, 21, 0}, {1, 21, 1}, {1, 21, 4}, {1, 21, 8}, {1, 21, 10}, {1, 21, 11}}) {
+					if (Ranges.admits(range, v)) return false;
+				}
+				for (int minor = 1; minor <= 2; minor++) {
+					for (int patch = 0; patch <= 9; patch++) {
+						if (Ranges.admits(range, new int[] {26, minor, patch})) return false;
+					}
+				}
+				return true;
+			}
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("Could not read the Minecraft range of {}", mod.getMetadata().getId(), e);
+		}
+		return false;
+	}
+
 	/** What a {@code fabric.mod.json} says about an older 26.x build: true or false, or null when only the class files can tell (an open range). */
 	public static Boolean olderByRange(Map<String, Object> fmj) {
 		if (!(fmj.get("depends") instanceof Map<?, ?> deps) || !deps.containsKey("minecraft")) return false;
 		Object range = deps.get("minecraft");
-		if (!Ranges.admits(range, MINECRAFT)) {
-			// every patch release of 26.1 and 26.2 counts: a range such as ~26.1.1 admits 26.1.1 but not 26.1.0
-			for (int minor = 1; minor <= 2; minor++) {
-				for (int patch = 0; patch <= 9; patch++) {
-					if (Ranges.admits(range, new int[] {26, minor, patch})) return true;
-				}
+		// every patch release of 26.1 and 26.2 counts: a range such as ~26.1.1 admits 26.1.1 but not 26.1.0
+		boolean older = false;
+		for (int minor = 1; minor <= 2 && !older; minor++) {
+			for (int patch = 0; patch <= 9; patch++) {
+				if (Ranges.admits(range, new int[] {26, minor, patch})) { older = true; break; }
 			}
-			return false;
 		}
-		return null;
+		if (!Ranges.admits(range, MINECRAFT)) return older;
+		// A range that admits 26.3 but no 26.1 or 26.2 (such as "26.3" or "~26.3") is a 26.3 build: never remap it,
+		// even if a class file happens to hold one of the OLDER_26 names.
+		return older ? null : false;
 	}
 
 	/**
