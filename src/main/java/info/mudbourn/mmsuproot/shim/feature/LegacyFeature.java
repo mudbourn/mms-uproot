@@ -32,6 +32,13 @@ public abstract class LegacyFeature<FC extends FeatureConfiguration> {
 	public static final LegacyFeature<?> DELTA_FEATURE = inert();
 	public static final LegacyFeature<?> BASALT_COLUMNS = inert();
 	public static final LegacyFeature<?> FALLEN_TREE = inert();
+	public static final LegacyFeature<?> TREE = inert();
+	public static final LegacyFeature<?> ORE = inert();
+	public static final LegacyFeature<?> HUGE_FUNGUS = inert();
+	public static final LegacyFeature<?> BLOCK_COLUMN = inert();
+	public static final LegacyFeature<?> MULTIFACE_GROWTH = inert();
+	public static final LegacyFeature<?> NETHER_FOREST_VEGETATION = inert();
+	public static final LegacyFeature<?> VEGETATION_PATCH = inert();
 
 	private final Codec<FC> configCodec;
 

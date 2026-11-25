@@ -4,9 +4,12 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.function.Function;
 
+import net.minecraft.core.HolderGetter;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.material.rule.MaterialRule;
 
 /**
@@ -21,9 +24,17 @@ public final class SurfaceRuleManager {
 	/** Same constants as TerraBlender's category; looked up by name on the real one. */
 	public enum RuleCategory { OVERWORLD, NETHER, END }
 
+	/** The builder form 26.2's TerraBlender took: rules made from the biome lookup once the registries exist. */
+	@FunctionalInterface
+	public interface RuleBuilder extends Function<HolderGetter<Biome>, SurfaceRules.RuleSource> { }
+
 	private SurfaceRuleManager() { }
 
 	public static void addSurfaceRules(RuleCategory category, String modId, SurfaceRules.RuleSource rules) {
+		addSurfaceRules(category, modId, lookup -> rules);
+	}
+
+	public static void addSurfaceRules(RuleCategory category, String modId, RuleBuilder rules) {
 		try {
 			Class<?> manager = Class.forName(MANAGER);
 			Class<?> categoryClass = Class.forName(MANAGER + "$RuleCategory");
@@ -40,9 +51,10 @@ public final class SurfaceRuleManager {
 		}
 	}
 
-	private static Object invoke(Method method, Object[] args, SurfaceRules.RuleSource rules) {
+	private static Object invoke(Method method, Object[] args, RuleBuilder rules) {
 		if (method.getName().equals("apply") && args != null && args.length == 1 && args[0] instanceof RegistryAccess access) {
-			MaterialRule rule = SurfaceRules.toMaterial(rules, access.lookupOrThrow(Registries.BIOME));
+			HolderGetter<Biome> biomes = access.lookupOrThrow(Registries.BIOME);
+			MaterialRule rule = SurfaceRules.toMaterial(rules.apply(biomes), biomes);
 			return rule;
 		}
 		if (method.getName().equals("toString")) return "mms-uproot converted surface rules";

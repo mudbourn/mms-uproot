@@ -290,8 +290,16 @@ public final class FeatureJson {
 			}
 			out.put(e.getKey(), v);
 		}
+		// 26.1 and 26.2 had a default for the cooking time of a furnace-like recipe; 26.3 requires it
+		if (!out.containsKey("cookingtime") && out.get("type") instanceof String type && COOKING_TIMES.containsKey(type)) {
+			stats.count("cooking times");
+			out.put("cookingtime", COOKING_TIMES.get(type));
+		}
 		return out;
 	}
+
+	/** Cooking time in ticks that a recipe type had when its file named none. */
+	private static final Map<String, Integer> COOKING_TIMES = Map.of("minecraft:smelting", 200, "minecraft:blasting", 100, "minecraft:smoking", 100, "minecraft:campfire_cooking", 600);
 
 	/** A loot condition with the discriminator renamed from {@code condition} to {@code type}, at every depth. */
 	@SuppressWarnings("unchecked")
@@ -618,6 +626,27 @@ public final class FeatureJson {
 		case "minecraft:random_patch", "minecraft:flower" -> {
 			return patch(cfg, stats);
 		}
+		case "minecraft:nether_forest_vegetation" -> {
+			// 26.3 has no such feature: vanilla's forests place a simple block spread around the origin by their placement. This is the same
+			// as a patch of spread_width squared tries (the old feature's attempts), spread as the feature spread them, over air only
+			stats.count(type);
+			long width = cfg.get("spread_width") instanceof Number n ? n.longValue() : 8;
+			long height = cfg.get("spread_height") instanceof Number n ? n.longValue() : 4;
+			// in the old shape, which patch() converts like any inline feature
+			Map<String, Object> block = typed("minecraft:simple_block");
+			block.put("config", new LinkedHashMap<>(Map.of("to_place", cfg.get("state_provider"))));
+			Map<String, Object> air = typed("minecraft:block_predicate_filter");
+			air.put("predicate", airTag());
+			Map<String, Object> inner = new LinkedHashMap<>();
+			inner.put("feature", block);
+			inner.put("placement", List.of(air));
+			Map<String, Object> patch = new LinkedHashMap<>();
+			patch.put("feature", inner);
+			patch.put("tries", width * width);
+			patch.put("xz_spread", width - 1);
+			patch.put("y_spread", height - 1);
+			return patch(patch, stats);
+		}
 		case "minecraft:forest_rock" -> {
 			stats.count(type);
 			Map<String, Object> out = typed("minecraft:block_blob");
@@ -635,6 +664,14 @@ public final class FeatureJson {
 		case "ohthetreesyoullgrow:tree_from_nbt_v1" -> {
 			stats.count(type);
 			return tree(cfg);
+		}
+		case "ohthetreesyoullgrow:tree_from_nbt_v2" -> {
+			// 26.1 and 26.2 wrote its settings under a config level; 26.3's second version reads them flat (the 1.21.11 file's v1 goes through tree above)
+			if (!(f.get("config") instanceof Map<?, ?>)) return f;
+			stats.count(type);
+			Map<String, Object> out = typed(type);
+			out.putAll(cfg);
+			return out;
 		}
 		default -> {
 			if (!FLAT.contains(type)) {

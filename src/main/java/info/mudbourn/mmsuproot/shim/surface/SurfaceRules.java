@@ -124,6 +124,12 @@ public final class SurfaceRules {
 		return new LazyCondition(g -> MaterialRules.isBiome(g, biomes));
 	}
 
+	/** 26.1 and 26.2 took the biome lookup first; the rule is built against the lookup it is converted with, so this one is not needed. */
+	@SafeVarargs
+	public static ConditionSource isBiome(HolderGetter<Biome> lookup, ResourceKey<Biome>... biomes) {
+		return isBiome(biomes);
+	}
+
 	public static ConditionSource isBiome(List<ResourceKey<Biome>> biomes) {
 		@SuppressWarnings("unchecked")
 		ResourceKey<Biome>[] keys = biomes.toArray(new ResourceKey[0]);
@@ -139,6 +145,25 @@ public final class SurfaceRules {
 	public static ConditionSource noiseCondition(ResourceKey<?> noise, double min, double max) {
 		ResourceKey<net.minecraft.world.level.levelgen.synth.NormalNoise> key = (ResourceKey<net.minecraft.world.level.levelgen.synth.NormalNoise>) noise;
 		return new LazyCondition(g -> MaterialRules.noiseCondition2d(key, min, max));
+	}
+
+	/** 26.1 and 26.2 named the sampling dimension in the method name, as 26.3's material rules do. */
+	public static ConditionSource noiseCondition2d(ResourceKey<?> noise, double min) {
+		return noiseCondition(noise, min, Double.MAX_VALUE);
+	}
+
+	public static ConditionSource noiseCondition2d(ResourceKey<?> noise, double min, double max) {
+		return noiseCondition(noise, min, max);
+	}
+
+	public static ConditionSource noiseCondition3d(ResourceKey<?> noise, double min) {
+		return noiseCondition3d(noise, min, Double.MAX_VALUE);
+	}
+
+	@SuppressWarnings("unchecked")
+	public static ConditionSource noiseCondition3d(ResourceKey<?> noise, double min, double max) {
+		ResourceKey<net.minecraft.world.level.levelgen.synth.NormalNoise> key = (ResourceKey<net.minecraft.world.level.levelgen.synth.NormalNoise>) noise;
+		return new LazyCondition(g -> MaterialRules.noiseCondition3d(key, min, max));
 	}
 
 	public static ConditionSource verticalGradient(String name, VerticalAnchor trueAtAndBelow, VerticalAnchor falseAtAndAbove) {

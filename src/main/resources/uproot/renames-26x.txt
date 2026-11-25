@@ -530,3 +530,37 @@ handler com/github/thedeathlycow/scorchful/client/mixin/GameRendererMixin hookSh
 # itself (invokevirtual), which fails verification on a Codec. shim.compat.LegacyRegistryCodec is a Codec class that wraps RegistryCodecs.holder.
 class net/minecraft/resources/RegistryFixedCodec info/mudbourn/mmsuproot/shim/compat/LegacyRegistryCodec
 class net/minecraft/resources/RegistryFileCodec info/mudbourn/mmsuproot/shim/compat/LegacyRegistryCodec
+
+# --- Nether Descent (26.2 build) ---
+# Rules copied line for line from renames.txt: classes and calls a 26.2 mod still names as 1.21.11 did, which 26.3 dropped or reshaped. Same
+# stand-ins as for 1.21.11 mods (shim.surface, shim.feature, shim.item, shim.block).
+class net/minecraft/world/level/levelgen/feature/configurations/NoneFeatureConfiguration info/mudbourn/mmsuproot/shim/feature/NoneFeatureConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/RandomFeatureConfiguration info/mudbourn/mmsuproot/shim/feature/RandomFeatureConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/SimpleBlockConfiguration info/mudbourn/mmsuproot/shim/feature/SimpleBlockConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/SimpleRandomFeatureConfiguration info/mudbourn/mmsuproot/shim/feature/SimpleRandomFeatureConfiguration
+class net/minecraft/world/level/levelgen/placement/RandomOffsetPlacement net/minecraft/world/level/levelgen/placement/OffsetPlacement
+callmove net/minecraft/world/level/levelgen/blockpredicates/BlockPredicate matchesBlocks (Lnet/minecraft/core/Vec3i;[Lnet/minecraft/world/level/block/Block;)Lnet/minecraft/world/level/levelgen/blockpredicates/BlockPredicate; info/mudbourn/mmsuproot/shim/feature/LegacyBlockPredicates matchesBlocks
+callmove net/minecraft/world/level/levelgen/blockpredicates/BlockPredicate matchesFluids (Lnet/minecraft/core/Vec3i;[Lnet/minecraft/world/level/material/Fluid;)Lnet/minecraft/world/level/levelgen/blockpredicates/BlockPredicate; info/mudbourn/mmsuproot/shim/feature/LegacyBlockPredicates matchesFluids
+callmove net/minecraft/world/level/levelgen/blockpredicates/BlockPredicate noFluid (Lnet/minecraft/core/Vec3i;)Lnet/minecraft/world/level/levelgen/blockpredicates/BlockPredicate; info/mudbourn/mmsuproot/shim/feature/LegacyBlockPredicates noFluid
+class net/minecraft/world/item/SignItem info/mudbourn/mmsuproot/shim/item/SignItem
+ctor net/minecraft/world/level/block/UntintedParticleLeavesBlock (FLnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V (FLnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/world/level/block/sounds/AmbientLeavesBlockSoundPlayer;Lnet/minecraft/world/level/block/state/BlockBehaviour$Properties;)V 2=info/mudbourn/mmsuproot/shim/block/LegacyBlocks.NO_AMBIENT_SOUND:Lnet/minecraft/world/level/block/sounds/AmbientLeavesBlockSoundPlayer;
+class net/minecraft/world/level/levelgen/SurfaceRules info/mudbourn/mmsuproot/shim/surface/SurfaceRules
+class net/minecraft/world/level/levelgen/SurfaceSystem info/mudbourn/mmsuproot/shim/surface/SurfaceSystem
+class net/minecraft/data/worldgen/SurfaceRuleData info/mudbourn/mmsuproot/shim/surface/SurfaceRuleData
+class net/minecraft/util/KeyDispatchDataCodec info/mudbourn/mmsuproot/shim/surface/KeyDispatchDataCodec
+class terrablender/api/SurfaceRuleManager info/mudbourn/mmsuproot/shim/surface/SurfaceRuleManager
+callinst net/minecraft/world/level/biome/MobSpawnSettings$Builder addSpawn (Lnet/minecraft/world/entity/MobCategory;ILnet/minecraft/world/level/biome/MobSpawnSettings$SpawnerData;)Lnet/minecraft/world/level/biome/MobSpawnSettings$Builder; info/mudbourn/mmsuproot/shim/feature/LegacyWorldgen.addSpawn
+class net/minecraft/world/level/levelgen/feature/HugeFungusConfiguration info/mudbourn/mmsuproot/shim/feature/HugeFungusConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/BlockColumnConfiguration info/mudbourn/mmsuproot/shim/feature/BlockColumnConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/MultifaceGrowthConfiguration info/mudbourn/mmsuproot/shim/feature/MultifaceGrowthConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/NetherForestVegetationConfig info/mudbourn/mmsuproot/shim/feature/NetherForestVegetationConfig
+class net/minecraft/world/level/levelgen/feature/configurations/VegetationPatchConfiguration info/mudbourn/mmsuproot/shim/feature/VegetationPatchConfiguration
+class net/minecraft/world/level/levelgen/feature/configurations/TreeConfiguration info/mudbourn/mmsuproot/shim/feature/TreeConfiguration
+field net/minecraft/core/registries/BuiltInRegistries MATERIAL_RULE MATERIAL_RULE_TYPE
+# Fabric API 26.2 called the compost registry CompostableRegistry; same shape as 1.21.11's CompostingChanceRegistry (an Item2ObjectMap)
+class net/fabricmc/fabric/api/registry/CompostableRegistry info/mudbourn/mmsuproot/shim/compat/CompostingChanceRegistry
+callmove info/mudbourn/mmsuproot/shim/item/HoeItem changeIntoState (Lnet/minecraft/world/level/block/state/BlockState;)Ljava/util/function/Consumer; info/mudbourn/mmsuproot/shim/item/LegacyTools changeIntoState
+callmove info/mudbourn/mmsuproot/shim/item/HoeItem onlyIfAirAbove (Lnet/minecraft/world/item/context/UseOnContext;)Z info/mudbourn/mmsuproot/shim/item/LegacyTools onlyIfAirAbove
+# StructurePieceAccessor is gone; the pieces builder is the one class that has addPiece and findCollisionPiece (addChildren takes it)
+class net/minecraft/world/level/levelgen/structure/StructurePieceAccessor net/minecraft/world/level/levelgen/structure/pieces/StructurePiecesBuilder
+# --- end Nether Descent ---
