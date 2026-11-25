@@ -31,19 +31,38 @@ import org.slf4j.LoggerFactory;
 public final class MappingFetcher {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mms-uproot");
 	public static final String SOURCE_VERSION = "1.21.11";
-	private static final String INTERMEDIARY = "https://maven.fabricmc.net/net/fabricmc/intermediary/" + SOURCE_VERSION + "/intermediary-" + SOURCE_VERSION + "-v2.jar";
+	/** The release the older fallback table is read from: names that 1.21.11 no longer has but a 1.21.1 build still uses. */
+	public static final String OLDER_VERSION = "1.21.1";
 	private static final String MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 
 	private static final Map<String, String> PRIMITIVES = Map.of("int", "I", "long", "J", "float", "F", "double", "D",
 			"boolean", "Z", "byte", "B", "char", "C", "short", "S", "void", "V");
 
 	private final HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+	private final String version;
+	private final String intermediaryUrl;
 
-	/** Loads the cached table, or builds and caches it. Returns null when it cannot be had. */
+	private MappingFetcher(String version) {
+		this.version = version;
+		this.intermediaryUrl = "https://maven.fabricmc.net/net/fabricmc/intermediary/" + version + "/intermediary-" + version + "-v2.jar";
+	}
+
+	/** Loads the cached table of 1.21.11, or builds and caches it. Returns null when it cannot be had. */
 	public static NameTable obtain(Path cacheDir) {
-		Path file = cacheDir.resolve("names-" + SOURCE_VERSION + ".v2.tsv");
+		return obtain(cacheDir, SOURCE_VERSION);
+	}
+
+	/**
+	 * The table of {@link #OLDER_VERSION}, for the names the 1.21.11 table lacks. Returns null when it cannot be had.
+	 */
+	public static NameTable obtainOlder(Path cacheDir) {
+		return obtain(cacheDir, OLDER_VERSION);
+	}
+
+	private static NameTable obtain(Path cacheDir, String version) {
+		Path file = cacheDir.resolve("names-" + version + ".v2.tsv");
 		try {
-			java.nio.file.Files.deleteIfExists(cacheDir.resolve("names-" + SOURCE_VERSION + ".v1.tsv")); // written in place, may be cut short
+			java.nio.file.Files.deleteIfExists(cacheDir.resolve("names-" + version + ".v1.tsv")); // written in place, may be cut short
 		} catch (IOException e) {
 			LOGGER.debug("Could not remove the old name table", e);
 		}
@@ -54,13 +73,13 @@ public final class MappingFetcher {
 		}
 
 		try {
-			LOGGER.info("Downloading 1.21.11 intermediary and Mojang mappings (first launch only)");
-			NameTable table = new MappingFetcher().build();
+			LOGGER.info("Downloading {} intermediary and Mojang mappings (first launch only)", version);
+			NameTable table = new MappingFetcher(version).build();
 			table.save(file);
 			LOGGER.info("Cached the joined name table at {}", file);
 			return table;
 		} catch (Exception e) {
-			LOGGER.error("Could not build the name table; mods built for 1.21.11 cannot be remapped", e);
+			LOGGER.error("Could not build the {} name table; mods built for it cannot be remapped", version, e);
 			return null;
 		}
 	}
@@ -100,9 +119,9 @@ public final class MappingFetcher {
 		String versionUrl = null;
 		for (Object v : (List<Object>) manifest.get("versions")) {
 			Map<String, Object> entry = (Map<String, Object>) v;
-			if (SOURCE_VERSION.equals(entry.get("id"))) versionUrl = (String) entry.get("url");
+			if (version.equals(entry.get("id"))) versionUrl = (String) entry.get("url");
 		}
-		if (versionUrl == null) throw new IOException("version " + SOURCE_VERSION + " missing from the manifest");
+		if (versionUrl == null) throw new IOException("version " + version + " missing from the manifest");
 
 		Map<String, Object> downloads = (Map<String, Object>) Json.parseObject(text(versionUrl)).get("downloads");
 		List<String> mojangTexts = new ArrayList<>();
@@ -120,7 +139,7 @@ public final class MappingFetcher {
 	private Tiny readIntermediary() throws IOException, InterruptedException {
 		List<String[]> classes = new ArrayList<>();
 		List<String[]> members = new ArrayList<>(); // kind, officialClass, officialName, officialDesc, intermediaryName
-		try (ZipInputStream zip = new ZipInputStream(open(INTERMEDIARY))) {
+		try (ZipInputStream zip = new ZipInputStream(open(intermediaryUrl))) {
 			ZipEntry e;
 			while ((e = zip.getNextEntry()) != null) {
 				if (!e.getName().equals("mappings/mappings.tiny")) continue;

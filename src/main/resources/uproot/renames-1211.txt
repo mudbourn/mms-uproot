@@ -1,0 +1,124 @@
+# Names that changed between Minecraft 1.21.1 and 1.21.11, read after renames.txt for a mod built in the 1.21.1 era (its fabric.mod.json admits 1.21.1).
+# The member names of that era come from the 1.21.1 table when 1.21.11 dropped them (map.NameTable.older), in 1.21.1 Mojang names; these rules take them on to 26.3.
+# Same rule kinds as renames.txt. A rule written for a name only 1.21.1 had cannot touch a 1.21.11 mod, so nothing here is shared with them.
+
+# ---- the item rework of 1.21.2: ArmorItem, Tiers and the armor material registry became equipment assets, ToolMaterial and Item.Properties.humanoidArmor.
+# A 1.21.1 mod reaches armor through Spell Engine's RPG series API, which speaks the new shapes: ArmorItem is its Armor.CustomItem, a Tier a ToolMaterial.
+class net/minecraft/world/item/ArmorItem net/spell_engine/rpg_series/item/Armor$CustomItem
+class net/minecraft/world/item/ArmorItem$Type net/minecraft/world/item/equipment/ArmorType
+class net/minecraft/world/item/Tier net/minecraft/world/item/ToolMaterial
+class net/minecraft/world/item/Tiers net/minecraft/world/item/ToolMaterial
+class net/minecraft/world/item/ArmorMaterial$Layer info/mudbourn/mmsuproot/shim/item/LegacyArmor$Layer
+class net/minecraft/world/item/equipment/ArmorMaterial$Layer info/mudbourn/mmsuproot/shim/item/LegacyArmor$Layer
+ctoradapt net/minecraft/world/item/equipment/ArmorMaterial (Ljava/util/Map;ILnet/minecraft/core/Holder;Ljava/util/function/Supplier;Ljava/util/List;FF)V (ILjava/util/Map;ILnet/minecraft/core/Holder;FFLnet/minecraft/tags/TagKey;Lnet/minecraft/resources/ResourceKey;)V info/mudbourn/mmsuproot/shim/item/LegacyArmor.materialArgs
+ctoradapt net/spell_engine/rpg_series/item/Armor$CustomItem (Lnet/minecraft/core/Holder;Lnet/minecraft/world/item/equipment/ArmorType;Lnet/minecraft/world/item/Item$Properties;)V (Lnet/minecraft/world/item/equipment/ArmorMaterial;Lnet/minecraft/world/item/equipment/ArmorType;Lnet/minecraft/world/item/Item$Properties;)V info/mudbourn/mmsuproot/shim/item/LegacyArmor.customItemArgs
+fieldmove net/minecraft/core/registries/BuiltInRegistries ARMOR_MATERIAL info/mudbourn/mmsuproot/shim/item/LegacyArmor MATERIALS
+callmove net/spell_engine/rpg_series/item/Armor$Entry create (Lnet/minecraft/core/Holder;Lnet/minecraft/resources/Identifier;ILnet/spell_engine/rpg_series/item/Armor$Set$ItemFactory;Lnet/spell_engine/rpg_series/config/ArmorSetConfig;Lnet/spell_engine/rpg_series/item/Equipment$LootProperties;Lnet/spell_engine/rpg_series/item/Armor$ItemSettingsTweaker;)Lnet/spell_engine/rpg_series/item/Armor$Entry; info/mudbourn/mmsuproot/shim/item/LegacyArmor createEntry (Lnet/minecraft/core/Holder;Lnet/minecraft/resources/Identifier;ILjava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+callmove net/spell_engine/rpg_series/item/Weapon$CustomMaterial matching (Lnet/minecraft/world/item/ToolMaterial;Ljava/util/function/Supplier;)Lnet/spell_engine/rpg_series/item/Weapon$CustomMaterial; info/mudbourn/mmsuproot/shim/item/LegacyArmor matching (Lnet/minecraft/world/item/ToolMaterial;Ljava/util/function/Supplier;)Ljava/lang/Object;
+# the factory a set makes its pieces with was handed a material holder and an ArmorItem.Type; it is handed the material itself now
+lambdaadapt net/spell_engine/rpg_series/item/Armor$Set$ItemFactory create (Lnet/minecraft/core/Holder;Lnet/minecraft/world/item/equipment/ArmorType;Lnet/minecraft/world/item/Item$Properties;)Lnet/spell_engine/rpg_series/item/Armor$CustomItem; (Lnet/minecraft/world/item/equipment/ArmorMaterial;Lnet/minecraft/world/item/equipment/ArmorType;Lnet/minecraft/world/item/Item$Properties;)Lnet/spell_engine/rpg_series/item/Armor$CustomItem; info/mudbourn/mmsuproot/shim/item/LegacyArmor.holder,-,-
+
+# the wool items moved into a colour collection, Items.WOOL
+fieldmove net/minecraft/world/item/Items BLACK_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields BLACK_WOOL
+fieldmove net/minecraft/world/item/Items BLUE_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields BLUE_WOOL
+fieldmove net/minecraft/world/item/Items BROWN_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields BROWN_WOOL
+fieldmove net/minecraft/world/item/Items CYAN_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields CYAN_WOOL
+fieldmove net/minecraft/world/item/Items GRAY_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields GRAY_WOOL
+fieldmove net/minecraft/world/item/Items GREEN_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields GREEN_WOOL
+fieldmove net/minecraft/world/item/Items LIGHT_BLUE_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields LIGHT_BLUE_WOOL
+fieldmove net/minecraft/world/item/Items LIGHT_GRAY_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields LIGHT_GRAY_WOOL
+fieldmove net/minecraft/world/item/Items LIME_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields LIME_WOOL
+fieldmove net/minecraft/world/item/Items MAGENTA_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields MAGENTA_WOOL
+fieldmove net/minecraft/world/item/Items ORANGE_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields ORANGE_WOOL
+fieldmove net/minecraft/world/item/Items PINK_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields PINK_WOOL
+fieldmove net/minecraft/world/item/Items PURPLE_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields PURPLE_WOOL
+fieldmove net/minecraft/world/item/Items RED_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields RED_WOOL
+fieldmove net/minecraft/world/item/Items WHITE_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields WHITE_WOOL
+fieldmove net/minecraft/world/item/Items YELLOW_WOOL info/mudbourn/mmsuproot/shim/item/LegacyItemFields YELLOW_WOOL
+
+# an item is made before it has a name; registering it gives it the one it is registered under (shim.item.LegacyItemIds)
+callmove net/minecraft/core/Registry register (Lnet/minecraft/core/Registry;Lnet/minecraft/resources/Identifier;Ljava/lang/Object;)Ljava/lang/Object; info/mudbourn/mmsuproot/shim/item/LegacyItemIds register
+
+# ---- NBT: a read answers with the value itself (0 or empty when the key is missing); a UUID is an int array
+callinst net/minecraft/nbt/CompoundTag getInt (Ljava/lang/String;)I info/mudbourn/mmsuproot/shim/compat/LegacyNbt.getInt
+callinst net/minecraft/nbt/CompoundTag getLong (Ljava/lang/String;)J info/mudbourn/mmsuproot/shim/compat/LegacyNbt.getLong
+callinst net/minecraft/nbt/CompoundTag getFloat (Ljava/lang/String;)F info/mudbourn/mmsuproot/shim/compat/LegacyNbt.getFloat
+callinst net/minecraft/nbt/CompoundTag getDouble (Ljava/lang/String;)D info/mudbourn/mmsuproot/shim/compat/LegacyNbt.getDouble
+callinst net/minecraft/nbt/CompoundTag getString (Ljava/lang/String;)Ljava/lang/String; info/mudbourn/mmsuproot/shim/compat/LegacyNbt.getString
+callinst net/minecraft/nbt/CompoundTag getBoolean (Ljava/lang/String;)Z info/mudbourn/mmsuproot/shim/compat/LegacyNbt.getBoolean
+callinst net/minecraft/nbt/CompoundTag getUUID (Ljava/lang/String;)Ljava/util/UUID; info/mudbourn/mmsuproot/shim/compat/LegacyNbt.getUUID
+callinst net/minecraft/nbt/CompoundTag hasUUID (Ljava/lang/String;)Z info/mudbourn/mmsuproot/shim/compat/LegacyNbt.hasUUID
+callinst net/minecraft/nbt/CompoundTag putUUID (Ljava/lang/String;Ljava/util/UUID;)V info/mudbourn/mmsuproot/shim/compat/LegacyNbt.putUUID
+# an entity saved itself into a tag; 26.3 hands it a value view, which wraps one
+argbridge net/minecraft/world/entity/Entity readAdditionalSaveData (Lnet/minecraft/nbt/CompoundTag;)V readAdditionalSaveData (Lnet/minecraft/world/level/storage/ValueInput;)V info/mudbourn/mmsuproot/shim/compat/LegacyNbt.tagOf
+argbridge net/minecraft/world/entity/Entity addAdditionalSaveData (Lnet/minecraft/nbt/CompoundTag;)V addAdditionalSaveData (Lnet/minecraft/world/level/storage/ValueOutput;)V info/mudbourn/mmsuproot/shim/compat/LegacyNbt.emptyTag!info/mudbourn/mmsuproot/shim/compat/LegacyNbt.writeBack
+
+# ---- entities: hurting and effects take the server level (1.21.2); the names below are what 1.21.1's method ids are called after the 1.21.11 table
+# Entity.hurt(DamageSource, float) is hurtClient by id; the 26.3 hurtClient takes only the source
+callinst net/minecraft/world/entity/Entity hurtClient (Lnet/minecraft/world/damagesource/DamageSource;F)Z info/mudbourn/mmsuproot/shim/entity/LegacyEntities.hurt
+implbridge net/minecraft/world/entity/Entity hurtClient (Lnet/minecraft/world/damagesource/DamageSource;F)Z hurtServer (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/damagesource/DamageSource;F)Z
+# an entity that never overrode hurt: 26.3 left hurtServer abstract on Entity
+defaultimpl net/minecraft/world/entity/Entity hurtServer (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/damagesource/DamageSource;F)Z info/mudbourn/mmsuproot/shim/entity/LegacyEntities.hurtServer
+callinst net/minecraft/world/entity/LivingEntity doHurtTarget (Lnet/minecraft/world/entity/Entity;)Z info/mudbourn/mmsuproot/shim/entity/LegacyEntities.doHurtTarget
+implbridge net/minecraft/world/entity/LivingEntity doHurtTarget (Lnet/minecraft/world/entity/Entity;)Z doHurtTarget (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/Entity;)Z
+callinst net/minecraft/world/entity/LivingEntity actuallyHurt (Lnet/minecraft/world/damagesource/DamageSource;F)V info/mudbourn/mmsuproot/shim/entity/LegacyEntities.actuallyHurt
+implbridge net/minecraft/world/entity/LivingEntity actuallyHurt (Lnet/minecraft/world/damagesource/DamageSource;F)V actuallyHurt (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/damagesource/DamageSource;F)V
+callinst net/minecraft/world/effect/MobEffect applyEffectTick (Lnet/minecraft/world/entity/LivingEntity;I)Z info/mudbourn/mmsuproot/shim/entity/LegacyEntities.applyEffectTick
+implbridge net/minecraft/world/effect/MobEffect applyEffectTick (Lnet/minecraft/world/entity/LivingEntity;I)Z applyEffectTick (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;I)Z
+# an effect that extends one of Spell Power's: the library class is not read, so the rule names it as the owner too
+implbridge net/spell_power/api/statuseffects/SpellVulnerabilityStatusEffect applyEffectTick (Lnet/minecraft/world/entity/LivingEntity;I)Z applyEffectTick (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;I)Z
+bridge net/minecraft/world/entity/Entity canBeCollidedWith ()Z (Lnet/minecraft/world/entity/Entity;)Z
+callinst net/minecraft/world/entity/EntityType$Builder build (Ljava/lang/String;)Lnet/minecraft/world/entity/EntityType; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.build
+method net/minecraft/world/entity/Entity getCommandSenderWorld level 0
+calldesc net/minecraft/world/level/Level playSound (Lnet/minecraft/world/entity/player/Player;DDDLnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FF)V (Lnet/minecraft/world/entity/Entity;DDDLnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FF)V
+callinst net/minecraft/server/network/ServerGamePacketListenerImpl send (Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketSendListener;)V info/mudbourn/mmsuproot/shim/compat/LegacyServerCalls.send
+callinst net/minecraft/ChatFormatting getSerializedName ()Ljava/lang/String; info/mudbourn/mmsuproot/shim/entity/LegacyEntities.serializedName
+
+# ---- registries: a registry reads by get(Identifier) and answers a value; getHolder(Identifier) is get(Identifier) now
+method net/minecraft/core/Registry getHolder get (Lnet/minecraft/resources/Identifier;)Ljava/util/Optional;
+method net/minecraft/core/Registry get getValue (Lnet/minecraft/resources/Identifier;)Ljava/lang/Object;
+
+# ---- mixins
+# a mod's mixin on Entity.hurt(DamageSource, float) (method id of hurtClient now, with the old descriptor) is on hurtServer; the argument it changes is the float, which stays
+mixinannotation net/elemental_wizards_rpg/mixin/LivingEntityMixin hurtClient(Lnet/minecraft/world/damagesource/DamageSource;F)Z hurtServer(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/damagesource/DamageSource;F)Z
+
+# ---- rendering: 1.21.1 renderers drew into a MultiBufferSource; 26.3 submits to a collector. Stand-ins and adapters are mms-render-common's (client/legacy).
+class net/minecraft/client/renderer/MultiBufferSource info/mudbourn/mmsrendercommon/client/legacy/MultiBufferSource
+class net/minecraft/client/renderer/entity/ItemRenderer info/mudbourn/mmsrendercommon/client/legacy/ItemRenderer
+class net/minecraft/client/renderer/block/BlockRenderDispatcher info/mudbourn/mmsrendercommon/client/legacy/BlockRenderDispatcher
+class net/minecraft/client/model/HierarchicalModel info/mudbourn/mmsrendercommon/client/legacy/HierarchicalModel
+class net/elemental_wizards_rpg/client/effect/StoneFleshPlayerRenderLayer$TilingVertexConsumer info/mudbourn/mmsrendercommon/client/legacy/UvScalingVertexConsumer
+callinst net/minecraft/client/renderer/entity/EntityRendererProvider$Context getItemRenderer ()Linfo/mudbourn/mmsrendercommon/client/legacy/ItemRenderer; info/mudbourn/mmsrendercommon/client/legacy/ItemRenderer.of
+callinst net/minecraft/client/Minecraft getItemRenderer ()Linfo/mudbourn/mmsrendercommon/client/legacy/ItemRenderer; info/mudbourn/mmsrendercommon/client/legacy/ItemRenderer.of
+callinst net/minecraft/client/renderer/entity/EntityRendererProvider$Context getBlockRenderDispatcher ()Linfo/mudbourn/mmsrendercommon/client/legacy/BlockRenderDispatcher; info/mudbourn/mmsrendercommon/client/legacy/BlockRenderDispatcher.of
+callinst net/minecraft/client/Minecraft getBlockRenderer ()Linfo/mudbourn/mmsrendercommon/client/legacy/BlockRenderDispatcher; info/mudbourn/mmsrendercommon/client/legacy/BlockRenderDispatcher.of
+# a renderer is drawn from its render state, which keeps the entity for the old render call; a model and a layer likewise
+superdefault net/minecraft/client/renderer/entity/EntityRenderer info/mudbourn/mmsrendercommon/client/legacy/LegacyEntityRenderer
+superdefault net/minecraft/client/renderer/entity/MobRenderer info/mudbourn/mmsrendercommon/client/legacy/LegacyMobRenderer
+superdefault net/minecraft/client/renderer/entity/layers/RenderLayer info/mudbourn/mmsrendercommon/client/legacy/LegacyRenderLayer
+# 26.3's root() and renderToBuffer are final on Model; a 1.21 model's own are renamed, and the game draws the root the stand-in is bound to
+method info/mudbourn/mmsrendercommon/client/legacy/HierarchicalModel root legacyRoot 0
+method info/mudbourn/mmsrendercommon/client/legacy/HierarchicalModel renderToBuffer legacyRenderToBuffer 5
+callinst net/minecraft/client/model/geom/ModelPart getAllParts ()Ljava/util/stream/Stream; info/mudbourn/mmsrendercommon/client/legacy/LegacyModels.allParts
+callinst net/minecraft/client/model/Model renderToBuffer (Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;II)V info/mudbourn/mmsrendercommon/client/legacy/LegacyModels.renderToBuffer
+ctoradapt net/minecraft/client/animation/Keyframe (FLorg/joml/Vector3f;Lnet/minecraft/client/animation/AnimationChannel$Interpolation;)V (FLorg/joml/Vector3fc;Lnet/minecraft/client/animation/AnimationChannel$Interpolation;)V info/mudbourn/mmsrendercommon/client/legacy/LegacyModels.keyframeArgs
+# the quaternion overload of PoseStack.mulPose took a Quaternionf, which rotate takes as a Quaternionfc
+method com/mojang/blaze3d/vertex/PoseStack mulPose rotate (Lorg/joml/Quaternionf;)V
+calldesc com/mojang/blaze3d/vertex/PoseStack rotate (Lorg/joml/Quaternionf;)V (Lorg/joml/Quaternionfc;)V
+# RenderType.entity* statics moved to RenderTypes, and the two cutout names swapped places
+callmove net/minecraft/client/renderer/rendertype/RenderType entitySolid (Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType; net/minecraft/client/renderer/rendertype/RenderTypes entitySolid
+callmove net/minecraft/client/renderer/rendertype/RenderType entityCutout (Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType; net/minecraft/client/renderer/rendertype/RenderTypes entityCutoutCull
+callmove net/minecraft/client/renderer/rendertype/RenderType entityCutoutNoCull (Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType; net/minecraft/client/renderer/rendertype/RenderTypes entityCutout
+callmove net/minecraft/client/renderer/rendertype/RenderType entityCutoutNoCull (Lnet/minecraft/resources/Identifier;Z)Lnet/minecraft/client/renderer/rendertype/RenderType; net/minecraft/client/renderer/rendertype/RenderTypes entityCutout
+callmove net/minecraft/client/renderer/rendertype/RenderType entityTranslucent (Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType; net/minecraft/client/renderer/rendertype/RenderTypes entityTranslucent
+callmove net/minecraft/client/renderer/rendertype/RenderType entityTranslucent (Lnet/minecraft/resources/Identifier;Z)Lnet/minecraft/client/renderer/rendertype/RenderType; net/minecraft/client/renderer/rendertype/RenderTypes entityTranslucent
+callmove net/minecraft/client/renderer/rendertype/RenderType entityTranslucentCull (Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType; net/minecraft/client/renderer/rendertype/RenderTypes entityTranslucentCull
+callmove net/minecraft/client/renderer/rendertype/RenderType entityTranslucentEmissive (Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType; net/minecraft/client/renderer/rendertype/RenderTypes entityTranslucentEmissive
+callmove net/minecraft/client/renderer/rendertype/RenderType entityShadow (Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType; net/minecraft/client/renderer/rendertype/RenderTypes entityShadow
+# Spell Engine draws a custom model into the collector now; the 1.21 call gave it an item renderer and a buffer source
+callmove net/spell_engine/api/render/CustomModels render (Lnet/minecraft/client/renderer/rendertype/RenderType;Linfo/mudbourn/mmsrendercommon/client/legacy/ItemRenderer;Lnet/minecraft/resources/Identifier;Lcom/mojang/blaze3d/vertex/PoseStack;Linfo/mudbourn/mmsrendercommon/client/legacy/MultiBufferSource;II)V info/mudbourn/mmsrendercommon/client/legacy/SpellEngineModels render
+# a spell effect renderer was given a buffer source, and is given the collector; what it drew is submitted when it returns
+argbridge net/spell_engine/api/effect/CustomModelStatusEffect$Renderer renderEffect (JILnet/minecraft/world/entity/LivingEntity;FLcom/mojang/blaze3d/vertex/PoseStack;Linfo/mudbourn/mmsrendercommon/client/legacy/MultiBufferSource;I)V renderEffect (JILnet/minecraft/world/entity/LivingEntity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;I)V -,-,-,-,-,info/mudbourn/mmsrendercommon/client/legacy/SubmitBufferSource.of!info/mudbourn/mmsrendercommon/client/legacy/SubmitBufferSource.flush,-
+# Elemental Wizards hooks Spell Engine's cloud renderer, which now draws into the collector; its handlers never read the buffer source
+handler net/elemental_wizards_rpg/mixin/SpellCloudRendererMixin captureCloud (Lnet/spell_engine/entity/SpellCloud;Lnet/spell_engine/api/spell/Spell$Delivery$Cloud$ClientData;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;ILorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,1,2,3,null,5
+handler net/elemental_wizards_rpg/mixin/SpellCloudRendererMixin releaseCloud (Lnet/spell_engine/entity/SpellCloud;Lnet/spell_engine/api/spell/Spell$Delivery$Cloud$ClientData;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;ILorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V 0,1,2,3,null,5

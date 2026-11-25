@@ -36,11 +36,13 @@ final class ConvertedView {
 
 	private final PackResources pack;
 	private final Report.Entry report;
+	private final boolean era1211;
 	private volatile Built built;
 
-	ConvertedView(PackResources pack, Report.Entry report) {
+	ConvertedView(PackResources pack, Report.Entry report, boolean era1211) {
 		this.pack = pack;
 		this.report = report;
+		this.era1211 = era1211;
 	}
 
 	/** Files by "namespace:path". {@code served} replaces or adds, {@code hidden} is not served, {@code added} did not exist before. */
@@ -159,6 +161,8 @@ final class ConvertedView {
 							return;
 						}
 						Map<String, Object> root = Json.parseObject(text);
+						if (era1211 && folder.equals("advancement")) root = Legacy1211Data.advancement(root, stats);
+						if (era1211 && folder.equals("recipe")) root = Legacy1211Data.recipe(root, stats);
 						if (folder.equals("recipe")) {
 							// a recipe of a type whose serializer a mod could not register would fail the whole recipe registry
 							if (root.get("type") instanceof String type && Identifier.tryParse(type) instanceof Identifier serializer

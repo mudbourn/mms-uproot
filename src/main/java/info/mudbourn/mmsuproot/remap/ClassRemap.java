@@ -44,7 +44,7 @@ public final class ClassRemap {
 	}
 
 	/**
-	 * A {@code super} rule: the mod class extends the stand-in the rule names, which itself extends what the class extended.
+	 * A {@code super} or {@code superdefault} rule: the mod class extends the stand-in the rule names, which itself extends what the class extended.
 	 * The class's calls of its old superclass's constructor and methods (invokespecial) go to the stand-in, which inherits them.
 	 */
 	private static final class SuperSwap extends ClassVisitor {
@@ -60,6 +60,7 @@ public final class ClassRemap {
 		@Override
 		public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
 			String swap = namer.renames().superSwap(name);
+			if (swap == null) swap = namer.renames().superDefault(superName);
 			if (swap != null) {
 				oldSuper = superName;
 				newSuper = swap;
@@ -761,6 +762,9 @@ public final class ClassRemap {
 					String[] move = opcode == Opcodes.INVOKESTATIC ? callMove(owner, methodName, methodDesc) : null;
 					if (move != null) {
 						super.visitMethodInsn(opcode, move[0], move[1], move.length > 2 ? move[2] : methodDesc, namer.game().isInterface(move[0]));
+						// a helper that answers as Object (for a type of a library Uproot is not built against) leaves the value the code expects to be cast back
+						Type was = Type.getReturnType(methodDesc);
+						if (move.length > 2 && was.getSort() == Type.OBJECT && !was.equals(Type.getReturnType(move[2]))) super.visitTypeInsn(Opcodes.CHECKCAST, was.getInternalName());
 						return;
 					}
 					Renames.Ctor c = opcode == Opcodes.INVOKESPECIAL && methodName.equals("<init>") ? namer.renames().ctor(owner, methodDesc) : null;

@@ -191,3 +191,8 @@ mixin com/github/thedeathlycow/scorchful/mixin/NaturalSpawnerMixin | breezes do 
 
 mixin com/daqem/knot/api/mixin/AxeItemAccessor | accessor for AxeItem.STRIPPABLES, which 26.3 does not have (stripping is a block transformer); no Knot class calls it
 mixin com/daqem/knot/api/mixin/ShovelItemAccessor | accessor for ShovelItem.FLATTENABLES, likewise gone (flattening is a block transformer); no Knot class calls it
+
+# --- Elemental Wizards RPG (built for 1.21.1) ---
+# The wizard merchant offers: it fills Fabric's villager trade tables with trade listings (VillagerTrades.ItemsForEmeralds, EnchantedItemForEmeralds) that 26.3 made data.
+# Villagers stay on emeralds in the pack, and the Wizards mod brings its own trades, so the registration is left out and nothing of the mod is lost in play.
+noop com/elemental_wizards/fabric/FabricMod registerWizardTrades * | wizard villager trades are data in 26.3 and the pack's villagers trade in emeralds; Wizards 26.3 has its own offers

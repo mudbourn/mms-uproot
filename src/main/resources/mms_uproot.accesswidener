@@ -45,3 +45,14 @@ accessible field net/minecraft/world/level/levelgen/feature/stateproviders/Noise
 accessible field net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider parameters Lnet/minecraft/world/level/levelgen/synth/NormalNoise;
 accessible field net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider scale F
 accessible method net/minecraft/world/level/levelgen/feature/stateproviders/NoiseBasedStateProvider getNoiseValue (Lnet/minecraft/core/BlockPos;D)F
+
+# the tags a value view wraps, which a save method written for a tag (1.21.1) is handed and fills (shim.compat.LegacyNbt), and the hurt a mod calls on its own entity (shim.entity.LegacyEntities)
+accessible field net/minecraft/world/level/storage/TagValueInput input Lnet/minecraft/nbt/CompoundTag;
+accessible field net/minecraft/world/level/storage/TagValueOutput output Lnet/minecraft/nbt/CompoundTag;
+accessible method net/minecraft/world/entity/LivingEntity actuallyHurt (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/damagesource/DamageSource;F)V
+
+# an item made without an id (1.21.1) gets the one it is registered under: the properties' description and component initialiser, and the item's description id (shim.item.LegacyItemIds)
+accessible method net/minecraft/world/item/Item$Properties effectiveDescriptionId ()Ljava/lang/String;
+accessible method net/minecraft/world/item/Item$Properties finalizeInitializer (Lnet/minecraft/network/chat/Component;Lnet/minecraft/resources/Identifier;)Lnet/minecraft/core/component/DataComponentInitializers$Initializer;
+mutable field net/minecraft/world/item/Item descriptionId Ljava/lang/String;
+accessible field net/minecraft/world/item/Item descriptionId Ljava/lang/String;

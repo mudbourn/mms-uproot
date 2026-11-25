@@ -26,6 +26,8 @@ import net.minecraft.server.packs.PackResources;
  */
 public final class DataShim {
 	private static final Map<String, Report.Entry> TARGETS = new ConcurrentHashMap<>();
+	/** The target mods built for 1.21.1: their data goes through {@link Legacy1211Data} first. */
+	private static final Set<String> ERA_1211 = ConcurrentHashMap.newKeySet();
 	/** Weak on both sides: the view's handler holds its pack, so a strong value would keep a closed pack alive across reloads. */
 	private static final Map<PackResources, WeakReference<PackResources>> WRAPPED = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -68,6 +70,12 @@ public final class DataShim {
 		TARGETS.put(modId, report);
 	}
 
+	/** As {@link #target(String, Report.Entry)}; {@code era1211} for a mod built for 1.21.1, whose data starts from the shapes of that release. */
+	public static void target(String modId, Report.Entry report, boolean era1211) {
+		target(modId, report);
+		if (era1211) ERA_1211.add(modId);
+	}
+
 	/** The id of the mod a pack belongs to: its own for a pack Fabric API made, else the first part of a "mod/id:name" pack id. */
 	private static String modOf(PackResources pack) {
 		if (pack instanceof ModPackResources mod) return mod.getFabricModMetadata().getId();
@@ -104,8 +112,9 @@ public final class DataShim {
 	}
 
 	private static PackResources view(PackResources p, Report.Entry report) {
-		ConvertedView view = new ConvertedView(p, report);
-		ConvertedAssets assets = new ConvertedAssets(p, report);
+		boolean era1211 = ERA_1211.contains(modOf(p));
+		ConvertedView view = new ConvertedView(p, report, era1211);
+		ConvertedAssets assets = new ConvertedAssets(p, report, era1211);
 		return (PackResources) Proxy.newProxyInstance(DataShim.class.getClassLoader(), new Class<?>[] {p instanceof ModPackResources ? ModPackResources.class : PackResources.class}, new ViewHandler(p, view, assets));
 	}
 

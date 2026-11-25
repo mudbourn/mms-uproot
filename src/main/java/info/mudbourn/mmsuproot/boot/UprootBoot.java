@@ -104,7 +104,34 @@ public final class UprootBoot implements LanguageAdapter {
 		// Index every target before any name is mapped, so a class of one target is never renamed for another.
 		ModClasses modClasses = new ModClasses();
 		List<ModSource> sources = new ArrayList<>();
-		for (ModContainerImpl mod : targets) prepare(mod, new Namer(table, renames, game, modClasses, report.mod(mod.getMetadata().getId())), true, sources);
+		NameTable older = null; // 1.21.1 names, for the mods built in that era; read once, and only when one is present
+		Renames renames1211 = null; // the 1.21.11 rules plus the ones for what 1.21.2 to 1.21.10 changed
+		boolean olderTried = false;
+		for (ModContainerImpl mod : targets) {
+			NameTable names = table;
+			Renames rules = renames;
+			if (ModSource.builtFor1211(mod)) {
+				if (renames1211 == null) renames1211 = Renames.load(Renames.RULES_1211_ERA);
+				rules = renames1211;
+				if (!olderTried) {
+					olderTried = true;
+					older = MappingFetcher.obtainOlder(dir.resolve("cache"));
+				}
+				Report.Entry entry = report.mod(mod.getMetadata().getId());
+				if (older != null) {
+					names = table.withOlder(older);
+					entry.notes.add("built for 1.21.1: names 1.21.11 dropped are read from the 1.21.1 table");
+				} else {
+					entry.notes.add("built for 1.21.1, but the 1.21.1 name table could not be built: names 1.21.11 dropped stay unmapped");
+				}
+			}
+			int before = sources.size();
+			prepare(mod, new Namer(names, rules, game, modClasses, report.mod(mod.getMetadata().getId())), true, sources);
+			if (rules == renames1211 && sources.size() > before) {
+				// an item these classes make without an id is given the one it is registered under (shim.item.LegacyItemIds)
+				for (String cls : sources.get(sources.size() - 1).classes.keySet()) info.mudbourn.mmsuproot.shim.item.LegacyClasses.add(cls.replace('/', '.'));
+			}
+		}
 		for (ModContainerImpl mod : modern) {
 			String id = mod.getMetadata().getId();
 			Report.Entry entry = report.mod(id);
@@ -155,7 +182,7 @@ public final class UprootBoot implements LanguageAdapter {
 		Report.Entry entry = report.mod(id);
 		entry.legacy = legacyData;
 		ModSource src = new ModSource(mod, namer, entry);
-		if (legacyData) DataShim.target(id, entry);
+		if (legacyData) DataShim.target(id, entry, ModSource.builtFor1211(mod));
 		try {
 			src.index();
 			sources.add(src);

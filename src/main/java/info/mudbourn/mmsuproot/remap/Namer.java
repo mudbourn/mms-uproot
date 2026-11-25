@@ -137,11 +137,11 @@ public final class Namer {
 	}
 
 	private String mojang(String name) {
-		String m = table.classes.get(name);
+		String m = table.cls(name);
 		if (m != null) return m;
 		int dollar = name.indexOf('$');
 		if (dollar > 0) {
-			String outer = table.classes.get(name.substring(0, dollar));
+			String outer = table.cls(name.substring(0, dollar));
 			if (outer != null) {
 				String suffix = name.substring(dollar);
 				if (suffix.contains("class_")) report.unmapped.add(name);
@@ -164,7 +164,7 @@ public final class Namer {
 	/** The method's name before clashes are looked at. */
 	String baseMethod(String owner, String name, String desc) {
 		if (name.startsWith("method_") || name.startsWith("comp_")) { // comp_: a record component's accessor
-			String m = table.methods.get(name);
+			String m = table.method(name);
 			if (m == null) {
 				report.unmapped.add(name);
 				return name;
@@ -190,7 +190,7 @@ public final class Namer {
 	/** The field's name before clashes are looked at. */
 	String baseField(String owner, String name) {
 		if (name.startsWith("field_") || name.startsWith("comp_")) { // comp_: a record component's field
-			String f = table.fields.get(name);
+			String f = table.field(name);
 			if (f == null) {
 				report.unmapped.add(name);
 				return name;
@@ -295,7 +295,7 @@ public final class Namer {
 		StringBuilder sb = new StringBuilder();
 		while (m.find()) {
 			String token = m.group();
-			String mapped = (m.group(1).equals("method") ? table.methods : table.fields).get(token);
+			String mapped = m.group(1).equals("method") ? table.method(token) : table.field(token);
 			if (mapped == null) report.unmapped.add(token);
 			m.appendReplacement(sb, Matcher.quoteReplacement(mapped != null ? mapped : token));
 		}

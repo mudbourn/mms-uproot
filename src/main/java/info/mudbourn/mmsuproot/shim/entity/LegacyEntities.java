@@ -83,6 +83,45 @@ public final class LegacyEntities {
 		return dropped;
 	}
 
+	/** {@code Entity.hurt(DamageSource, float)}: a server level hurts and the client only asks, and 26.3 told the two apart. */
+	public static boolean hurt(Entity entity, net.minecraft.world.damagesource.DamageSource source, float amount) {
+		return entity.level() instanceof net.minecraft.server.level.ServerLevel level ? entity.hurtServer(level, source, amount) : entity.hurtClient(source);
+	}
+
+	/** What {@code Entity.hurt} did in a class that never overrode it: 26.3 left {@code hurtServer} abstract, and a hit that nothing takes is a miss. */
+	public static boolean hurtServer(Entity entity, net.minecraft.server.level.ServerLevel level, net.minecraft.world.damagesource.DamageSource source, float amount) {
+		return false;
+	}
+
+	/** {@code LivingEntity.doHurtTarget(Entity)}: the attack takes the level it happens in now, and only a server level attacks. */
+	public static boolean doHurtTarget(LivingEntity attacker, Entity target) {
+		return attacker.level() instanceof net.minecraft.server.level.ServerLevel level && attacker.doHurtTarget(level, target);
+	}
+
+	/** {@code LivingEntity.actuallyHurt(DamageSource, float)}: takes the server level, so a client level has nothing to hurt. */
+	public static void actuallyHurt(LivingEntity entity, net.minecraft.world.damagesource.DamageSource source, float amount) {
+		if (entity.level() instanceof net.minecraft.server.level.ServerLevel level) entity.actuallyHurt(level, source, amount);
+	}
+
+	/** {@code MobEffect.applyEffectTick(LivingEntity, int)}: the effect ticks in a server level now; a client level keeps the effect (true). */
+	public static boolean applyEffectTick(net.minecraft.world.effect.MobEffect effect, LivingEntity entity, int amplifier) {
+		return !(entity.level() instanceof net.minecraft.server.level.ServerLevel level) || effect.applyEffectTick(level, entity, amplifier);
+	}
+
+	/**
+	 * {@code EntityType.Builder.build(String)}: the string was a name for the data fixer, and a mod passes its entity's id. 26.3 wants the registry key the
+	 * type is registered under.
+	 */
+	public static <T extends Entity> EntityType<T> build(EntityType.Builder<T> builder, String id) {
+		return builder.build(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ENTITY_TYPE,
+				id.indexOf(':') >= 0 ? net.minecraft.resources.Identifier.parse(id) : net.minecraft.resources.Identifier.withDefaultNamespace(id)));
+	}
+
+	/** {@code ChatFormatting.getSerializedName()}: the lower case name. */
+	public static String serializedName(net.minecraft.ChatFormatting formatting) {
+		return formatting.name().toLowerCase(java.util.Locale.ROOT);
+	}
+
 	/** {@code LivingEntity.knockback(double, double, double)}: 26.3 asks where the push came from and a size for it; a push of no source is a generic one of no damage. */
 	public static void knockback(LivingEntity entity, double strength, double x, double z) {
 		entity.knockback(strength, x, z, entity.damageSources().generic(), 0.0F);

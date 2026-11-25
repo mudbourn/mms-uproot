@@ -6,6 +6,8 @@
 	"mixins": [
 		"BlockTransformerMixin",
 		"GenPackMixin",
+		"ItemMixin",
+		"ItemPropertiesMixin",
 		"ItemToolEventsMixin",
 		"LegacyGameRuleCategoryMixin",
 		"LenientDataRegistriesMixin",

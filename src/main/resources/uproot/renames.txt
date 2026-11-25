@@ -144,6 +144,9 @@
 #                                  injectors now belong to two classes (one of them moved, the others stayed). Each injector runs where it finds its target;
 #                                  name the owner in the method string (see mixinmethod) so that a method both classes have is only hooked in one.
 #                                  Shadows are not read against the added class, so the mixin should have none the class lacks.
+# superdefault OLDSUPER NEWSUPER  every mod class whose direct superclass is OLDSUPER (a 26.3 name) extends NEWSUPER instead, as super does for one class.
+#                                  For a base class whose 1.21 shape a stand-in answers; NEWSUPER must extend OLDSUPER and have its constructors.
+#                                  e.g. superdefault net/minecraft/client/renderer/entity/EntityRenderer info/mudbourn/mmsrendercommon/client/legacy/LegacyEntityRenderer
 # super CLASS NEWSUPER             a mod class (its own name, as it is in the mod) extends NEWSUPER, an internal name, where it extended its own
 #                                  superclass; NEWSUPER must extend that superclass and have its constructors. The class's invokespecial calls
 #                                  of the old superclass (constructors, super.m()) go to NEWSUPER. For a mod class whose superclass lost methods

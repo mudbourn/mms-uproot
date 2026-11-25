@@ -347,6 +347,18 @@ public final class ScanTool {
 		return Kind.NONE;
 	}
 
+	/** Whether the mod's {@code fabric.mod.json} admits 1.21.1, as the boot hook asks ({@code ModSource.builtFor1211}). */
+	private static boolean builtFor1211(Path root) {
+		try {
+			Path file = root.resolve("fabric.mod.json");
+			if (!Files.isRegularFile(file)) return false;
+			return Json.parseObject(Files.readString(file)).get("depends") instanceof Map<?, ?> deps && deps.containsKey("minecraft")
+					&& info.mudbourn.mmsuproot.tool.Ranges.admits(deps.get("minecraft"), new int[] {1, 21, 1});
+		} catch (IOException | RuntimeException e) {
+			return false;
+		}
+	}
+
 	private static List<Path> classFiles(Path root) throws IOException {
 		try (Stream<Path> walk = Files.walk(root)) {
 			return walk.filter(p -> p.toString().endsWith(".class") && !p.toString().startsWith("/META-INF/")).toList();
@@ -415,12 +427,25 @@ public final class ScanTool {
 
 		List<Remapped> remapped = new ArrayList<>();
 		Map<String, Namer> namers = new HashMap<>();
+		NameTable older = null;
+		Renames renames1211 = null;
 		for (Jar j : targets) {
 			Summary s = new Summary();
 			s.file = j.label();
 			s.kind = j.kind();
 			summaries.put(j.id(), s);
-			Namer namer = new Namer(table, j.kind() == Kind.LEGACY ? renames : renames26, game, modClasses, report.mod(j.id()));
+			NameTable names = table;
+			if (j.kind() == Kind.LEGACY && builtFor1211(j.root())) {
+				if (older == null) older = MappingFetcher.obtainOlder(cache);
+				if (older != null) names = table.withOlder(older);
+				else notes.add(j.id() + ": the 1.21.1 name table could not be built");
+			}
+			Renames rules = j.kind() == Kind.LEGACY ? renames : renames26;
+			if (j.kind() == Kind.LEGACY && builtFor1211(j.root())) {
+				if (renames1211 == null) renames1211 = Renames.load(Renames.RULES_1211_ERA);
+				rules = renames1211;
+			}
+			Namer namer = new Namer(names, rules, game, modClasses, report.mod(j.id()));
 			namers.put(j.id(), namer);
 			Set<String> own = new HashSet<>();
 			for (Path p : files.get(j.id())) own.add(internal(j.root(), p));

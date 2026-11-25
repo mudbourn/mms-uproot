@@ -101,4 +101,9 @@ public final class LegacyServerCalls {
 	public static Object[] showItemArgs(ItemStack stack) {
 		return new Object[] {ItemStackTemplate.fromNonEmptyStack(stack)};
 	}
+
+	/** {@code ServerGamePacketListenerImpl.send(Packet, PacketSendListener)}: the listener said when the packet was out, and 26.3 takes a Netty one; a mod that wanted that got nothing from null anyway. */
+	public static void send(net.minecraft.server.network.ServerGamePacketListenerImpl connection, net.minecraft.network.protocol.Packet<?> packet, net.minecraft.network.PacketSendListener listener) {
+		connection.send(packet);
+	}
 }

@@ -207,6 +207,25 @@ public final class ModSource {
 		return false;
 	}
 
+	/**
+	 * True when the mod's own {@code fabric.mod.json} admits 1.21.1: a build for the 1.21.1 era, whose intermediary names include some that 1.21.11 dropped, so
+	 * its names are also read from the 1.21.1 table. Loader's overrides rewrite the metadata in memory, so the file in the jar is read.
+	 */
+	static boolean builtFor1211(ModContainerImpl mod) {
+		try {
+			for (Path root : mod.getRootPaths()) {
+				Path file = root.resolve("fabric.mod.json");
+				if (!Files.isRegularFile(file)) continue;
+				Map<String, Object> fmj = Json.parseObject(Files.readString(file));
+				if (fmj.get("depends") instanceof Map<?, ?> deps && deps.containsKey("minecraft")) return Ranges.admits(deps.get("minecraft"), new int[] {1, 21, 1});
+				return false;
+			}
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("Could not read the Minecraft range of {}", mod.getMetadata().getId(), e);
+		}
+		return false;
+	}
+
 	/** What a {@code fabric.mod.json} says about an older 26.x build: true or false, or null when only the class files can tell (an open range). */
 	public static Boolean olderByRange(Map<String, Object> fmj) {
 		if (!(fmj.get("depends") instanceof Map<?, ?> deps) || !deps.containsKey("minecraft")) return false;

@@ -51,6 +51,61 @@ public final class Renames {
 	public record ImplBridge(String owner, String oldName, String oldDesc, String newName, String newDesc, String helperOwner, String helperName) { }
 	private final List<ImplBridge> implBridges = new ArrayList<>();
 
+	/**
+	 * One parameter's conversion in an {@link ArgBridge} or {@link LambdaAdapt}: {@code to} is a static {@code (new type) old type} helper, or null
+	 * for a value that passes as it is; {@code after} (null for none) is a static {@code (new value, converted value)V} helper that runs once the call has returned.
+	 */
+	public record Conv(String[] to, String[] after) { }
+
+	/**
+	 * A class under {@code owner} that declares {@code oldName oldDesc} also gets {@code newName newDesc}, which converts each argument with
+	 * {@code conv} (one entry per old parameter; the new descriptor may lead with parameters the old one never had), calls the old method and runs the
+	 * {@code after} helpers. For an override whose parameters changed type, such as a save method that takes a value view in place of an NBT tag.
+	 */
+	public record ArgBridge(String owner, String oldName, String oldDesc, String newName, String newDesc, List<Conv> conv) { }
+	private final List<ArgBridge> argBridges = new ArrayList<>();
+
+	/**
+	 * A lambda or method reference for a functional interface under {@code owner} whose method {@code name} was {@code oldDesc} and is {@code newDesc} now:
+	 * it is made for the new shape, and runs through a static method of the mod class that converts each argument with {@code conv} (one entry per
+	 * parameter, new descriptor order) and calls the old implementation.
+	 */
+	public record LambdaAdapt(String owner, String name, String oldDesc, String newDesc, List<Conv> conv) { }
+	private final List<LambdaAdapt> lambdaAdapts = new ArrayList<>();
+
+	/**
+	 * A class whose direct superclass is {@code owner} and that declares no {@code name desc} gets one that returns what
+	 * {@code helperOwner.helperName(this, arguments...)} answers. For a method 1.21.1 gave a body that 26.3 left abstract.
+	 */
+	public record DefaultImpl(String owner, String name, String desc, String helperOwner, String helperName) { }
+	private final List<DefaultImpl> defaultImpls = new ArrayList<>();
+
+	public List<DefaultImpl> defaultImpls() {
+		return defaultImpls;
+	}
+
+	public List<ArgBridge> argBridges() {
+		return argBridges;
+	}
+
+	public List<LambdaAdapt> lambdaAdapts() {
+		return lambdaAdapts;
+	}
+
+	/** Reads {@code H.to} or {@code -} or {@code H.to!H.after} entries, comma separated. */
+	private static List<Conv> convs(String text, String line) {
+		List<Conv> out = new ArrayList<>();
+		for (String part : text.split(",")) {
+			if (part.equals("-")) {
+				out.add(new Conv(null, null));
+				continue;
+			}
+			int bang = part.indexOf('!');
+			out.add(new Conv(helper(bang < 0 ? part : part.substring(0, bang), line), bang < 0 ? null : helper(part.substring(bang + 1), line)));
+		}
+		return out;
+	}
+
 	public List<ImplBridge> implBridges() {
 		return implBridges;
 	}
@@ -106,6 +161,10 @@ public final class Renames {
 	private final Set<String> typesOnly = new HashSet<>(); // 1.21.11 classes whose class rule is valid for type uses only
 	private final Set<String> interfaces = new HashSet<>(); // classes of other mods' libraries that are interfaces now (the game's own are read from the game)
 	private final Map<String, String> superSwaps = new HashMap<>(); // mod class -> the class it extends in place of its own superclass
+	private final Map<String, String> superDefaults = new HashMap<>(); // superclass (26.3 name) -> the class every mod class that extends it extends instead
+
+	/** The tables of a mod built for the 1.21.1 era: the 1.21.11 rules, then the rules for what changed between 1.21.1 and 1.21.11. */
+	public static final String[] RULES_1211_ERA = {"/uproot/renames.txt", "/uproot/renames-1211.txt"};
 
 	public static Renames load() {
 		return load("/uproot/renames.txt");
@@ -121,9 +180,25 @@ public final class Renames {
 		}
 	}
 
+	/** Reads the tables in the class path resources {@code resources}, in order, into one: later rules add to earlier ones. A missing one adds nothing. */
+	public static Renames load(String... resources) {
+		Renames r = new Renames();
+		for (String resource : resources) {
+			try (InputStream in = Renames.class.getResourceAsStream(resource)) {
+				if (in != null) parse(new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8)), r);
+			} catch (IOException e) {
+				throw new RuntimeException("Could not read the rename table " + resource, e);
+			}
+		}
+		return r;
+	}
+
 	/** Reads a table from text in the {@code renames.txt} format. */
 	public static Renames parse(BufferedReader reader) throws IOException {
-		Renames r = new Renames();
+		return parse(reader, new Renames());
+	}
+
+	private static Renames parse(BufferedReader reader, Renames r) throws IOException {
 		String line;
 		while ((line = reader.readLine()) != null) {
 			line = line.strip();
@@ -156,6 +231,7 @@ public final class Renames {
 			case "typesonly" -> r.typesOnly.add(p[1]);
 			case "interface" -> r.interfaces.add(p[1]);
 			case "super" -> r.superSwaps.put(p[1], p[2]);
+			case "superdefault" -> r.superDefaults.put(p[1], p[2]);
 			case "calldrop" -> r.callDrops.add(p[1] + "." + p[2] + " " + p[3]);
 			case "retbridge" -> {
 				if (p.length != 5) throw new IllegalStateException("Bad retbridge rule: " + line);
@@ -165,6 +241,23 @@ public final class Renames {
 				if (p.length != 6 && p.length != 7) throw new IllegalStateException("Bad implbridge rule: " + line);
 				String[] h = p.length == 7 ? helper(p[6], line) : new String[] {null, null};
 				r.implBridges.add(new ImplBridge(p[1], p[2], p[3], p[4], p[5], h[0], h[1]));
+			}
+			case "argbridge" -> {
+				if (p.length != 7) throw new IllegalStateException("Bad argbridge rule: " + line);
+				List<Conv> conv = convs(p[6], line);
+				if (conv.size() != Type.getArgumentTypes(p[3]).length) throw new IllegalStateException("An argbridge wants one conversion per old parameter: " + line);
+				r.argBridges.add(new ArgBridge(p[1], p[2], p[3], p[4], p[5], conv));
+			}
+			case "defaultimpl" -> {
+				if (p.length != 5) throw new IllegalStateException("Bad defaultimpl rule: " + line);
+				String[] h = helper(p[4], line);
+				r.defaultImpls.add(new DefaultImpl(p[1], p[2], p[3], h[0], h[1]));
+			}
+			case "lambdaadapt" -> {
+				if (p.length != 6) throw new IllegalStateException("Bad lambdaadapt rule: " + line);
+				List<Conv> conv = convs(p[5], line);
+				if (conv.size() != Type.getArgumentTypes(p[4]).length || Type.getArgumentTypes(p[3]).length != conv.size()) throw new IllegalStateException("A lambdaadapt wants one conversion per parameter, and as many parameters old and new: " + line);
+				r.lambdaAdapts.add(new LambdaAdapt(p[1], p[2], p[3], p[4], conv));
 			}
 			case "ldc" -> {
 				if (p.length != 4) throw new IllegalStateException("Bad ldc rule: " + line);
@@ -497,6 +590,11 @@ public final class Renames {
 	/** The class a mod class extends in place of its own superclass, or null (see the {@code super} rule). */
 	public String superSwap(String modClass) {
 		return superSwaps.get(modClass);
+	}
+
+	/** The class every mod class whose direct superclass is {@code superClass} (26.3 name) extends instead, or null (see the {@code superdefault} rule). */
+	public String superDefault(String superClass) {
+		return superDefaults.isEmpty() ? null : superDefaults.get(superClass);
 	}
 
 	/** Whether the injector handler {@code method} of the mixin class is allowed to find no target even in strict mode. */

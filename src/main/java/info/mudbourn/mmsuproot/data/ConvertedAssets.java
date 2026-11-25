@@ -48,11 +48,13 @@ final class ConvertedAssets {
 
 	private final PackResources pack;
 	private final Report.Entry report;
+	private final boolean era1211;
 	private volatile Built built;
 
-	ConvertedAssets(PackResources pack, Report.Entry report) {
+	ConvertedAssets(PackResources pack, Report.Entry report, boolean era1211) {
 		this.pack = pack;
 		this.report = report;
+		this.era1211 = era1211;
 	}
 
 	/** Files by "namespace:path". */
@@ -115,6 +117,10 @@ final class ConvertedAssets {
 		try {
 			signs(served);
 			farmlands(served);
+			if (era1211) {
+				itemDefinitions(served);
+				equipment(served);
+			}
 		} catch (RuntimeException e) {
 			report.dataFailures.add("client assets: " + e);
 		}
@@ -191,6 +197,62 @@ final class ConvertedAssets {
 				}
 			});
 		}
+	}
+
+	/** An item definition for every item model file of a 1.21.1 mod, which 1.21.2 reads from {@code items/} rather than from the model of the same name. */
+	private void itemDefinitions(Map<String, byte[]> served) {
+		for (String ns : pack.getNamespaces(PackType.CLIENT_RESOURCES)) {
+			pack.listResources(PackType.CLIENT_RESOURCES, ns, "models/item", (id, supplier) -> {
+				String path = id.getPath();
+				if (!path.endsWith(".json")) return;
+				String rel = path.substring("models/item/".length(), path.length() - ".json".length());
+				if (pack.getResource(PackType.CLIENT_RESOURCES, Identifier.fromNamespaceAndPath(ns, "items/" + rel + ".json")) != null) return;
+				served.put(ns + ":items/" + rel + ".json", Legacy1211Data.itemDefinition(ns, rel));
+				count("item definitions made");
+			});
+		}
+	}
+
+	/**
+	 * An equipment asset for every armor of a 1.21.1 mod: the texture pair of a material ({@code textures/models/armor/<name>_layer_1.png} and
+	 * {@code _layer_2}) moves under {@code textures/entity/equipment}, and a material the mod's code made without textures gets an asset whose layers are a transparent texture, which draws nothing.
+	 */
+	private void equipment(Map<String, byte[]> served) {
+		for (String ns : pack.getNamespaces(PackType.CLIENT_RESOURCES)) {
+			Set<String> bodies = new HashSet<>();
+			Set<String> legs = new HashSet<>();
+			pack.listResources(PackType.CLIENT_RESOURCES, ns, "textures/models/armor", (id, supplier) -> {
+				String path = id.getPath();
+				if (path.endsWith("_layer_1.png")) bodies.add(path.substring("textures/models/armor/".length(), path.length() - "_layer_1.png".length()));
+				else if (path.endsWith("_layer_2.png")) legs.add(path.substring("textures/models/armor/".length(), path.length() - "_layer_2.png".length()));
+			});
+			Set<String> names = new HashSet<>(bodies);
+			names.addAll(legs);
+			for (String name : names) {
+				boolean body = bodies.contains(name);
+				boolean leg = legs.contains(name);
+				if (body) moveTexture(served, ns, "textures/models/armor/" + name + "_layer_1.png", "textures/entity/equipment/humanoid/" + name + ".png");
+				if (leg) moveTexture(served, ns, "textures/models/armor/" + name + "_layer_2.png", "textures/entity/equipment/humanoid_leggings/" + name + ".png");
+				served.put(ns + ":equipment/" + name + ".json", Legacy1211Data.equipmentAsset(ns, name, body, leg));
+				count("equipment assets made");
+			}
+		}
+		for (String asset : Legacy1211Data.registeredAssets()) {
+			int colon = asset.indexOf(':');
+			String ns = asset.substring(0, colon);
+			String path = asset.substring(colon + 1);
+			if (!pack.getNamespaces(PackType.CLIENT_RESOURCES).contains(ns) || served.containsKey(ns + ":equipment/" + path + ".json")) continue;
+			if (pack.getResource(PackType.CLIENT_RESOURCES, Identifier.fromNamespaceAndPath(ns, "equipment/" + path + ".json")) != null) continue;
+			served.put(ns + ":equipment/" + path + ".json", Legacy1211Data.equipmentAsset(ns, path, false, false));
+			served.put(ns + ":textures/entity/equipment/humanoid/" + Legacy1211Data.EMPTY_TEXTURE + ".png", Legacy1211Data.EMPTY_PNG);
+			served.put(ns + ":textures/entity/equipment/humanoid_leggings/" + Legacy1211Data.EMPTY_TEXTURE + ".png", Legacy1211Data.EMPTY_PNG);
+			count("equipment assets made");
+		}
+	}
+
+	private void moveTexture(Map<String, byte[]> served, String ns, String from, String to) {
+		byte[] bytes = read(ns, from);
+		if (bytes != null) served.put(ns + ":" + to, bytes);
 	}
 
 	@SuppressWarnings("unchecked")

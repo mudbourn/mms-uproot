@@ -28,6 +28,7 @@ final class CallRules extends ClassVisitor {
 	private final Namer namer;
 	private final Renames renames;
 	private String className;
+	private String superClass;
 	private boolean isInterface;
 	private final Set<String> declared = new HashSet<>(); // name+desc of the methods the class declares
 	private final List<Object[]> superStubs = new ArrayList<>(); // {stub name, super owner, interface flag, Bridge}
@@ -43,6 +44,7 @@ final class CallRules extends ClassVisitor {
 	@Override
 	public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
 		className = name;
+		superClass = superName;
 		isInterface = (access & Opcodes.ACC_INTERFACE) != 0;
 		super.visit(version, access, name, signature, superName, interfaces);
 	}
@@ -153,6 +155,87 @@ final class CallRules extends ClassVisitor {
 		return out;
 	}
 
+	/**
+	 * A lambda or method reference for a functional interface a {@code lambdaadapt} rule covers: made for the new method type, running through a static
+	 * method of this class that converts the arguments the rule names and calls the old implementation. Returns the new bootstrap arguments, or null.
+	 */
+	private Object[] adaptedLambda(String indyName, String indyDesc, Handle bsm, Object[] args) {
+		if (!bsm.getOwner().equals("java/lang/invoke/LambdaMetafactory") || args.length < 3 || renames.lambdaAdapts().isEmpty()) return null;
+		if (!(args[0] instanceof Type sam) || !(args[1] instanceof Handle impl) || !(args[2] instanceof Type inst)) return null;
+		Type itf = Type.getReturnType(indyDesc);
+		if (itf.getSort() != Type.OBJECT) return null;
+		Set<String> up = new HashSet<>(namer.ancestorsOf(itf.getInternalName()));
+		up.add(itf.getInternalName());
+		Renames.LambdaAdapt rule = null;
+		for (Renames.LambdaAdapt a : renames.lambdaAdapts()) {
+			if (a.name().equals(indyName) && a.oldDesc().equals(sam.getDescriptor()) && up.contains(a.owner())) rule = a;
+		}
+		if (rule == null) return null;
+
+		Type[] newArgs = Type.getArgumentTypes(rule.newDesc());
+		List<Type> implArgs = new ArrayList<>();
+		if (impl.getTag() != Opcodes.H_INVOKESTATIC && impl.getTag() != Opcodes.H_NEWINVOKESPECIAL) implArgs.add(Type.getObjectType(impl.getOwner()));
+		implArgs.addAll(List.of(Type.getArgumentTypes(impl.getDesc())));
+		// the stub takes the captured values the lambda holds, then the new method's arguments
+		Type[] captured = Type.getArgumentTypes(indyDesc);
+		if (implArgs.size() != captured.length + newArgs.length) return null; // an unbound receiver or other shape this rule does not cover
+		List<Type> stubArgs = new ArrayList<>(List.of(captured));
+		stubArgs.addAll(List.of(newArgs));
+		Type ret = impl.getTag() == Opcodes.H_NEWINVOKESPECIAL ? Type.getObjectType(impl.getOwner()) : Type.getReturnType(impl.getDesc());
+		String stubDesc = Type.getMethodDescriptor(ret, stubArgs.toArray(new Type[0]));
+		String stub = "uproot$lambda$" + lambdaStubs.size();
+		lambdaStubs.add(new Object[] {stub, stubDesc, impl, implArgs.size(), rule, captured.length});
+
+		Type[] instArgs = Type.getArgumentTypes(inst.getDescriptor());
+		Type[] oldArgs = Type.getArgumentTypes(rule.oldDesc());
+		Type[] nowInst = instArgs.clone();
+		for (int i = 0; i < nowInst.length && i < newArgs.length; i++) {
+			if (instArgs[i].equals(oldArgs[i])) nowInst[i] = newArgs[i];
+		}
+		Object[] out = args.clone();
+		out[0] = Type.getMethodType(rule.newDesc());
+		out[1] = new Handle(Opcodes.H_INVOKESTATIC, className, stub, stubDesc, isInterface);
+		out[2] = Type.getMethodType(Type.getReturnType(inst.getDescriptor()), nowInst);
+		return out;
+	}
+
+	/** The static method an adapted lambda runs: converts the arguments its rule names and calls the implementation. */
+	private void emitAdaptedStub(String stub, String desc, Handle impl, int implArgCount, Renames.LambdaAdapt rule, int capturedCount) {
+		Type[] args = Type.getArgumentTypes(desc);
+		Type ret = Type.getReturnType(desc);
+		Type[] oldArgs = Type.getArgumentTypes(rule.oldDesc());
+		MethodVisitor mv = super.visitMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, stub, desc, null, null);
+		mv.visitCode();
+		int stack = 0;
+		if (impl.getTag() == Opcodes.H_NEWINVOKESPECIAL) {
+			mv.visitTypeInsn(Opcodes.NEW, impl.getOwner());
+			mv.visitInsn(Opcodes.DUP);
+			stack += 2;
+		}
+		int slot = 0;
+		for (int i = 0; i < args.length; i++) {
+			mv.visitVarInsn(args[i].getOpcode(Opcodes.ILOAD), slot);
+			slot += args[i].getSize();
+			Renames.Conv c = i >= capturedCount ? rule.conv().get(i - capturedCount) : null;
+			if (c != null && c.to() != null) {
+				mv.visitMethodInsn(Opcodes.INVOKESTATIC, c.to()[0], c.to()[1], "(" + args[i].getDescriptor() + ")" + oldArgs[i - capturedCount].getDescriptor(), false);
+				stack += oldArgs[i - capturedCount].getSize();
+			} else {
+				stack += args[i].getSize();
+			}
+		}
+		int opcode = switch (impl.getTag()) {
+			case Opcodes.H_INVOKESTATIC -> Opcodes.INVOKESTATIC;
+			case Opcodes.H_INVOKEVIRTUAL -> Opcodes.INVOKEVIRTUAL;
+			case Opcodes.H_INVOKEINTERFACE -> Opcodes.INVOKEINTERFACE;
+			default -> Opcodes.INVOKESPECIAL;
+		};
+		mv.visitMethodInsn(opcode, impl.getOwner(), impl.getName(), impl.getDesc(), impl.isInterface());
+		mv.visitInsn(ret.getOpcode(Opcodes.IRETURN));
+		mv.visitMaxs(Math.max(stack, ret.getSize()), slot);
+		mv.visitEnd();
+	}
+
 	/** The static method a bridged lambda runs: calls the old implementation with the arguments it knew and ignores the rest. */
 	private void emitLambdaStub(String stub, String desc, Handle impl, int implArgCount) {
 		Type[] args = Type.getArgumentTypes(desc);
@@ -228,7 +311,8 @@ final class CallRules extends ClassVisitor {
 				Object[] mapped = bsmArgs.clone();
 				for (int i = 0; i < mapped.length; i++) mapped[i] = rewritten(mapped[i]);
 				samDesc(indyName, indyDesc, bsm, mapped);
-				Object[] adapted = bridgedLambda(indyName, indyDesc, bsm, mapped);
+				Object[] adapted = adaptedLambda(indyName, indyDesc, bsm, mapped);
+				if (adapted == null) adapted = bridgedLambda(indyName, indyDesc, bsm, mapped);
 				super.visitInvokeDynamicInsn(indyName, indyDesc, bsm, adapted != null ? adapted : mapped);
 			}
 
@@ -308,7 +392,21 @@ final class CallRules extends ClassVisitor {
 				if (up.contains(b.owner()) && declared.contains(b.oldName() + b.oldDesc()) && !declared.contains(b.newName() + b.newDesc())) emitImplBridge(b);
 			}
 		}
-		for (Object[] l : lambdaStubs) emitLambdaStub((String) l[0], (String) l[1], (Handle) l[2], (int) l[3]);
+		for (Object[] l : lambdaStubs) {
+			if (l.length > 4) emitAdaptedStub((String) l[0], (String) l[1], (Handle) l[2], (int) l[3], (Renames.LambdaAdapt) l[4], (int) l[5]);
+			else emitLambdaStub((String) l[0], (String) l[1], (Handle) l[2], (int) l[3]);
+		}
+		if (!renames.defaultImpls().isEmpty() && !isInterface) {
+			for (Renames.DefaultImpl d : renames.defaultImpls()) {
+				if (d.owner().equals(superClass) && !declared.contains(d.name() + d.desc())) emitDefaultImpl(d);
+			}
+		}
+		if (!renames.argBridges().isEmpty()) {
+			Set<String> up = namer.ancestorsOf(className);
+			for (Renames.ArgBridge b : renames.argBridges()) {
+				if (up.contains(b.owner()) && declared.contains(b.oldName() + b.oldDesc()) && !declared.contains(b.newName() + b.newDesc())) emitArgBridge(b);
+			}
+		}
 		for (Object[] s : superStubs) emitSuperStub((String) s[0], (String) s[1], (boolean) s[2], (Renames.Bridge) s[3]);
 		super.visitEnd();
 	}
@@ -372,6 +470,83 @@ final class CallRules extends ClassVisitor {
 		}
 		mv.visitInsn(Type.getReturnType(b.newDesc()).getOpcode(Opcodes.IRETURN));
 		mv.visitMaxs(Math.max(slot, Type.getReturnType(b.newDesc()).getSize()) + 1, slot);
+		mv.visitEnd();
+		declared.add(b.newName() + b.newDesc());
+	}
+
+	/** A method that a {@code defaultimpl} rule gives a class: it forwards to the helper, with the object first. */
+	private void emitDefaultImpl(Renames.DefaultImpl d) {
+		Type[] args = Type.getArgumentTypes(d.desc());
+		Type ret = Type.getReturnType(d.desc());
+		MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC, d.name(), d.desc(), null, null);
+		mv.visitCode();
+		mv.visitVarInsn(Opcodes.ALOAD, 0);
+		int slot = 1;
+		for (Type a : args) {
+			mv.visitVarInsn(a.getOpcode(Opcodes.ILOAD), slot);
+			slot += a.getSize();
+		}
+		mv.visitMethodInsn(Opcodes.INVOKESTATIC, d.helperOwner(), d.helperName(), "(L" + d.owner() + ";" + d.desc().substring(1), false);
+		mv.visitInsn(ret.getOpcode(Opcodes.IRETURN));
+		mv.visitMaxs(slot, slot);
+		mv.visitEnd();
+		declared.add(d.name() + d.desc());
+	}
+
+	/**
+	 * The new method of an {@code argbridge} rule: each argument goes through its conversion, the old method runs, and the {@code after} helpers get the new
+	 * argument and the converted one back. The leading new parameters the old method never had are dropped.
+	 */
+	private void emitArgBridge(Renames.ArgBridge b) {
+		Type[] now = Type.getArgumentTypes(b.newDesc());
+		Type[] old = Type.getArgumentTypes(b.oldDesc());
+		int dropped = now.length - old.length;
+		Type ret = Type.getReturnType(b.newDesc());
+		boolean after = b.conv().stream().anyMatch(c -> c.after() != null);
+		if (after && ret.getSort() != Type.VOID) throw new IllegalStateException("An argbridge with an after helper returns nothing: " + b);
+		int[] newSlot = new int[now.length];
+		int slot = 1;
+		for (int i = 0; i < now.length; i++) {
+			newSlot[i] = slot;
+			slot += now[i].getSize();
+		}
+		int[] converted = new int[old.length]; // local slot holding a converted value that an after helper needs, else -1
+		int next = slot;
+		MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC, b.newName(), b.newDesc(), null, null);
+		mv.visitCode();
+		mv.visitVarInsn(Opcodes.ALOAD, 0);
+		int stack = 1;
+		for (int i = 0; i < old.length; i++) {
+			Type n = now[dropped + i];
+			mv.visitVarInsn(n.getOpcode(Opcodes.ILOAD), newSlot[dropped + i]);
+			Renames.Conv c = b.conv().get(i);
+			converted[i] = -1;
+			if (c.to() != null) {
+				mv.visitMethodInsn(Opcodes.INVOKESTATIC, c.to()[0], c.to()[1], "(" + n.getDescriptor() + ")" + old[i].getDescriptor(), false);
+				if (c.after() != null) {
+					mv.visitInsn(Opcodes.DUP);
+					converted[i] = next;
+					mv.visitVarInsn(old[i].getOpcode(Opcodes.ISTORE), next);
+					next += old[i].getSize();
+				}
+			} else if (!n.equals(old[i]) && old[i].getSort() >= Type.ARRAY) {
+				mv.visitTypeInsn(Opcodes.CHECKCAST, old[i].getInternalName());
+			}
+			stack += old[i].getSize() + (converted[i] >= 0 ? 1 : 0);
+		}
+		mv.visitMethodInsn(isInterface ? Opcodes.INVOKEINTERFACE : Opcodes.INVOKEVIRTUAL, className, b.oldName(), b.oldDesc(), isInterface);
+		int after2 = 0;
+		for (int i = 0; i < old.length; i++) {
+			Renames.Conv c = b.conv().get(i);
+			if (c.after() == null) continue;
+			Type n = now[dropped + i];
+			mv.visitVarInsn(n.getOpcode(Opcodes.ILOAD), newSlot[dropped + i]);
+			mv.visitVarInsn(old[i].getOpcode(Opcodes.ILOAD), converted[i]);
+			mv.visitMethodInsn(Opcodes.INVOKESTATIC, c.after()[0], c.after()[1], "(" + n.getDescriptor() + old[i].getDescriptor() + ")V", false);
+			after2 = Math.max(after2, n.getSize() + old[i].getSize());
+		}
+		mv.visitInsn(ret.getOpcode(Opcodes.IRETURN));
+		mv.visitMaxs(Math.max(Math.max(stack, after2), ret.getSize()) + 1, next);
 		mv.visitEnd();
 		declared.add(b.newName() + b.newDesc());
 	}

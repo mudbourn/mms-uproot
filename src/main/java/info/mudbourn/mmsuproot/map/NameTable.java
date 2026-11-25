@@ -18,9 +18,46 @@ import java.util.Map;
 public final class NameTable {
 	private static final String END = "E";
 
-	public final Map<String, String> classes = new HashMap<>();
-	public final Map<String, String> methods = new HashMap<>();
-	public final Map<String, String> fields = new HashMap<>();
+	public final Map<String, String> classes;
+	public final Map<String, String> methods;
+	public final Map<String, String> fields;
+
+	public NameTable() {
+		this(new HashMap<>(), new HashMap<>(), new HashMap<>(), null);
+	}
+
+	private NameTable(Map<String, String> classes, Map<String, String> methods, Map<String, String> fields, NameTable older) {
+		this.classes = classes;
+		this.methods = methods;
+		this.fields = fields;
+		this.older = older;
+	}
+
+	/** A view of this table with {@code older} behind it. The maps are shared, so the base table is neither copied nor changed. */
+	public NameTable withOlder(NameTable older) {
+		return new NameTable(classes, methods, fields, older);
+	}
+	/**
+	 * The 1.21.1 table, for a mod built for that release: intermediary names that 1.21.11 dropped (a method or class removed
+	 * between the two) are named from it, in 1.21.1 Mojang names, and the rename rules take them on from there. Null for a mod that needs none.
+	 */
+	public NameTable older;
+
+	/** The Mojang name of an intermediary class, or null. The 1.21.11 name wins; the older table answers only what 1.21.11 lacks. */
+	public String cls(String name) {
+		String m = classes.get(name);
+		return m == null && older != null ? older.classes.get(name) : m;
+	}
+
+	public String method(String name) {
+		String m = methods.get(name);
+		return m == null && older != null ? older.methods.get(name) : m;
+	}
+
+	public String field(String name) {
+		String m = fields.get(name);
+		return m == null && older != null ? older.fields.get(name) : m;
+	}
 
 	/**
 	 * Writes to a temporary file and moves it into place, so a crash never leaves a half-written

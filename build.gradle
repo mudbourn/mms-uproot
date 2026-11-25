@@ -20,6 +20,20 @@ loom {
 		}
 	}
 	runs {
+		// a dedicated server on its own mods folder (run-server/mods), for a mod run in isolation from the shared run/mods: runUprootServer
+		uprootServer {
+			server()
+			ideConfigGenerated false
+			runDir "run-server"
+		}
+		// a client on its own mods folder (run-client/mods) that loads a singleplayer world: runUprootClient
+		uprootClient {
+			client()
+			ideConfigGenerated false
+			runDir "run-client"
+			programArg "--quickPlaySingleplayer"
+			programArg "uproot_client"
+		}
 		// the dev client the probe harness drives (info.mudbourn.mmsuproot.probe); run it through the uprootProbe task
 		uprootProbe {
 			client()
@@ -71,6 +85,71 @@ tasks.register('uprootOverrides', JavaExec) {
 	onlyIf { mods.isDirectory() }
 }
 
+// The same for the dedicated server on its own mods folder.
+tasks.register('uprootServerOverrides', JavaExec) {
+	group = 'uproot'
+	description = 'Writes run-server/config/fabric_loader_dependencies.json for the mods in run-server/mods'
+	def mods = file('run-server/mods')
+	def out = file('run-server/config/fabric_loader_dependencies.json')
+	classpath = sourceSets.main.output
+	mainClass = 'info.mudbourn.mmsuproot.tool.OverridesTool'
+	args mods.path, out.path
+	inputs.dir(mods).optional()
+	outputs.file(out)
+	onlyIf { mods.isDirectory() }
+}
+
+tasks.matching { it.name == 'runUprootServer' }.configureEach {
+	dependsOn 'uprootServerOverrides'
+}
+
+// The same for the client on its own mods folder.
+tasks.register('uprootClientOverrides', JavaExec) {
+	group = 'uproot'
+	description = 'Writes run-client/config/fabric_loader_dependencies.json for the mods in run-client/mods'
+	def mods = file('run-client/mods')
+	def out = file('run-client/config/fabric_loader_dependencies.json')
+	classpath = sourceSets.main.output
+	mainClass = 'info.mudbourn.mmsuproot.tool.OverridesTool'
+	args mods.path, out.path
+	inputs.dir(mods).optional()
+	outputs.file(out)
+	onlyIf { mods.isDirectory() }
+}
+
+// The classes 1.21.1 renderers are pointed at live in mms-render-common (client/legacy); the client run loads its jar from run-client/mods.
+def renderCommonProps = new Properties()
+file('../mms-render-common/gradle.properties').withInputStream { renderCommonProps.load(it) }
+
+tasks.register('renderCommonJar', Exec) {
+	group = 'uproot'
+	description = 'Builds the jar of the sibling mms-render-common'
+	workingDir file('../mms-render-common')
+	commandLine './gradlew', 'jar', '--console=plain', '-q'
+}
+
+tasks.register('uprootClientMods', Copy) {
+	group = 'uproot'
+	description = 'Copies the mms-render-common jar into run-client/mods'
+	dependsOn 'renderCommonJar'
+	from(fileTree('../mms-render-common/build/libs')) {
+		include "mms-render-common-${renderCommonProps.getProperty('mod_version')}.jar"
+	}
+	into 'run-client/mods'
+}
+
+tasks.matching { it.name == 'uprootClientOverrides' }.configureEach {
+	dependsOn 'uprootClientMods'
+}
+
+tasks.matching { it.name == 'runUprootClient' }.configureEach {
+	dependsOn 'uprootClientOverrides'
+	// Keep the client from taking focus: a background app is never activated, so the window opens behind whatever the user is working in.
+	environment 'SDL_WINDOW_ACTIVATE_WHEN_SHOWN', '0'
+	environment 'SDL_WINDOW_ACTIVATE_WHEN_RAISED', '0'
+	environment 'SDL_MAC_BACKGROUND_APP', '1'
+}
+
 // Offline gap scan: lists what the mods in run/mods (and any jar or folder in -PscanMods, comma separated) still reference that 26.3 lacks.
 tasks.register('uprootScan', JavaExec) {
 	group = 'uproot'
@@ -100,7 +179,7 @@ tasks.register('uprootIntersect', JavaExec) {
 	args = ['--out', file(intersectOut).path, '--cache', file('run/mms-uproot/cache').path, '--max-nodes', maxNodes, modsDir]
 }
 
-tasks.matching { it.name == 'runClient' }.configureEach {
+tasks.matching { it.name == 'runClient' || it.name == 'runServer' }.configureEach {
 	dependsOn 'uprootOverrides'
 }
 
