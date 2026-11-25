@@ -218,6 +218,24 @@ final class ConvertedView {
 		tagTimelines(timelines, served, added, namespaces, stats);
 		legacyBlockTags(served, added, namespaces, stats);
 
+		// Lithostitched on 26.3 has no add_surface_rule modifier, since surface rules became material rules; a mod that also registers
+		// its rules through TerraBlender (Nether Descent) keeps them that way, so the modifier file is left out instead of failing the registry
+		for (String ns : pack.getNamespaces(PackType.SERVER_DATA)) {
+			pack.listResources(PackType.SERVER_DATA, ns, "lithostitched/worldgen_modifier", (id, supplier) -> {
+				if (!id.getPath().endsWith(".json")) return;
+				String key = ns + ":" + id.getPath();
+				try (InputStream in = supplier.get()) {
+					Map<String, Object> root = Json.parseObject(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+					if ("lithostitched:add_surface_rule".equals(root.get("type"))) {
+						hidden.add(key);
+						stats.count("lithostitched add_surface_rule left out");
+					}
+				} catch (IOException | RuntimeException e) {
+					fail(key, e);
+				}
+			});
+		}
+
 		// A mod's own data registry reads from a folder named after the registry's namespace (data/<ns>/<registry namespace>/<registry path>).
 		// What it holds may embed vanilla values in their 1.21.11 shapes (block states, state providers), which the generic pass reads by shape.
 		Set<String> namespaceList = pack.getNamespaces(PackType.SERVER_DATA);
