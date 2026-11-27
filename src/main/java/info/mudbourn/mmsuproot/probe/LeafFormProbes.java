@@ -54,7 +54,7 @@ final class LeafFormProbes {
 			c.mc.options.keyUp.setDown(false);
 			run(server, "gamemode survival @p");
 			// switch away first: an unchanged origin is not re-granted, so a save that lost its powers would stay empty
-			run(server, "origin set @p origins:origin origins:human");
+			run(server, "origin set @p origins:origin mms_origins:human");
 			run(server, "origin set @p origins:origin mms_origins:floran");
 			run(server, "forceload add " + (x0 - 2) + " -2 " + (x0 + 6) + " 16");
 			run(server, "fill " + (x0 - 1) + " " + FLOOR + " -1 " + (x0 + 5) + " " + (y + 4) + " 15 minecraft:air");
@@ -137,7 +137,7 @@ final class LeafFormProbes {
 		if (tick == 1) {
 			c.mc.options.keyShift.setDown(false);
 			run(server, "gamemode survival @p");
-			run(server, "origin set @p origins:origin origins:human");
+			run(server, "origin set @p origins:origin mms_origins:human");
 			run(server, "origin set @p origins:origin mms_origins:floran");
 			run(server, "forceload add " + (x0 - 2) + " -2 " + (x0 + 6) + " 8");
 			run(server, "fill " + (x0 - 1) + " " + (FLOOR - 3) + " -1 " + (x0 + 5) + " " + (y + 4) + " 7 minecraft:air");
