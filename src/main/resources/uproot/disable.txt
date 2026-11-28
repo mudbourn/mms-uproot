@@ -135,14 +135,6 @@ legacy mixin io/wispforest/owo/mixin/tweaks/EditBoxMixin | only acts with owo's 
 mixin com/terraformersmc/terraform/leaves/impl/mixin/MixinBlockRenderLayers | replaced by Uproot's LegacyLeafLayers: 26.3 has no ItemBlockRenderTypes to hook
 
 # --- Found booting the whole pack on a dedicated server (all tentative: not yet confirmed in play) ---
-# 1.21.11's Entity.getInterpolation() is overridable and returns an InterpolationHandler class; 26.3's is final and InterpolationHandler is an interface
-# built by createInterpolationHandler(). Both of these entities override the method and build the handler with `new InterpolationHandler(this)`, which a
-# class that is an interface now cannot do. Nothing in Uproot makes a handler from that constructor yet, so the two entities are inert stand-ins (the
-# override goes, the bodies are emptied) and the rest of their mods run.
-drop info/mudbourn/mmscombat/killstreak/KillstreakCrateEntity getInterpolation * | tentative, lossy: the override of a method that is final in 26.3 stops the class from loading
-stub info/mudbourn/mmscombat/killstreak/KillstreakCrateEntity | tentative, lossy: its constructor builds an InterpolationHandler with new, which is an interface in 26.3; the crate is inert
-drop info/mudbourn/mmsmetro/entity/MetroCarEntity getInterpolation * | tentative, lossy: the override of a method that is final in 26.3 stops the class from loading
-stub info/mudbourn/mmsmetro/entity/MetroCarEntity | tentative, lossy: its constructor builds a PositionInterpolator with new, which 26.3 replaced; the metro car is inert
 
 # The libraries these 1.21.11 mods call have 26.3 builds in the pack whose API dropped what the mods use; the class a mod's entrypoint needs is missing.
 # Bountiful Fish: its pearl necklace extends Trinkets' TrinketItem, which 4.2.1 dropped (renames.txt gives it Item as superclass, so the item exists and is
