@@ -68,6 +68,7 @@ public final class UprootBoot implements LanguageAdapter {
 		if (targets.isEmpty() && modern.isEmpty()) {
 			LOGGER.info("No mod refers to intermediary names or targets an older 26.x; Uproot has nothing to remap");
 			report.note("No target mods found.");
+			installHooks(List.of(), side); // the disable rules still reach the classes of mods built for 26.3
 			report.write();
 			return;
 		}
@@ -155,12 +156,7 @@ public final class UprootBoot implements LanguageAdapter {
 
 		for (ModSource src : sources) MixinAudit.run(src, side);
 
-		try {
-			hooks = new Hooks(sources, side, report);
-			hooks.install(FabricLoaderImpl.INSTANCE.getGameProvider());
-		} catch (ReflectiveOperationException e) {
-			throw new RuntimeException("Uproot could not install its class hooks", e);
-		}
+		installHooks(sources, side);
 
 		for (ModSource src : sources) {
 			LOGGER.info("{}: {} classes indexed, {} mixin issues found before launch", src.id, src.classes.size(), src.report.mixinIssues.size());
@@ -174,6 +170,15 @@ public final class UprootBoot implements LanguageAdapter {
 			audit.start();
 		}
 		report.write();
+	}
+
+	private static void installHooks(List<ModSource> sources, EnvType side) {
+		try {
+			hooks = new Hooks(sources, side, report);
+			hooks.install(FabricLoaderImpl.INSTANCE.getGameProvider());
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Uproot could not install its class hooks", e);
+		}
 	}
 
 	/** Indexes one mod. A 1.21.11 mod's data is in the old formats, so it gets the data shim here; an older 26.x mod gets it only when it ships old worldgen. */

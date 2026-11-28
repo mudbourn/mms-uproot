@@ -23,6 +23,9 @@ import org.slf4j.LoggerFactory;
  * do nothing (the value is handed back unregistered, so the mod's own fields still fill), and
  * {@code mixin} leaves one mixin class out of its mod's mixin config.
  *
+ * <p>A class of a mod Uproot does not remap (one built for 26.3 only) gets the class rules too, when one names it: the boot code
+ * reads it raw and passes it through {@link #transform}. That is how one injector of a native mixin class is dropped.
+ *
  * <p>{@link #transform} is the one entry point and belongs after the remap, on the 26.3-named
  * bytes. This class touches no Minecraft type, so the boot code can use it before the game is on the
  * class path; the rewritten calls go to {@link RegistryGate}, which does.
@@ -93,6 +96,12 @@ public final class Disabler {
 			d = instance;
 		}
 		return d.apply(className.replace('.', '/'), bytes, legacy);
+	}
+
+	/** Whether a rule names this class (a native 26.3 mod's class gets only these rules, so the boot code asks before it reads the bytes). */
+	public static boolean touches(String internal) {
+		Disabler d = instance;
+		return d != null && d.byClass.containsKey(internal.replace('.', '/'));
 	}
 
 	/** Called by {@link RegistryGate}: whether a registration is switched off. */

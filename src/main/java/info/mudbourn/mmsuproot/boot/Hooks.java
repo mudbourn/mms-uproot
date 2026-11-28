@@ -151,7 +151,21 @@ final class Hooks {
 				LOGGER.warn("Could not remap {} for Mixin", name, e);
 			}
 		}
-		return null;
+		return ruled(internal);
+	}
+
+	/** The bytes of a class of a mod Uproot does not remap, with the disable rules that name it applied; null when none does. */
+	private static byte[] ruled(String internal) {
+		if (!Disabler.touches(internal)) return null;
+		try (InputStream in = FabricLauncherBase.getLauncher().getResourceAsStream(internal + ".class")) {
+			if (in == null) return null;
+			byte[] raw = in.readAllBytes();
+			byte[] out = Disabler.transform(internal, raw, false);
+			return out == raw ? null : out;
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("Could not apply the disable rules to {}; loading it as is", internal, e);
+			return null;
+		}
 	}
 
 	private InputStream resource(String name, FabricLauncher launcher) throws IOException {
@@ -232,7 +246,7 @@ final class Hooks {
 					return null;
 				}
 			}
-			return null;
+			return ruled(internal);
 		}
 	}
 }

@@ -196,3 +196,9 @@ mixin com/daqem/knot/api/mixin/ShovelItemAccessor | accessor for ShovelItem.FLAT
 # The wizard merchant offers: it fills Fabric's villager trade tables with trade listings (VillagerTrades.ItemsForEmeralds, EnchantedItemForEmeralds) that 26.3 made data.
 # Villagers stay on emeralds in the pack, and the Wizards mod brings its own trades, so the registration is left out and nothing of the mod is lost in play.
 noop com/elemental_wizards/fabric/FabricMod registerWizardTrades * | wizard villager trades are data in 26.3 and the pack's villagers trade in emeralds; Wizards 26.3 has its own offers
+
+# --- Kielson's API (jar-in-jar of Expanded Weaponry 1.0.4, built for 26.3 only, so Uproot does not remap it) ---
+# Both it and Ranged Weapon API modify the constant 20.0f of AbstractClientPlayer.getFieldOfViewModifier, and Mixin gives it to whichever mixin applies
+# first; when Kielson's wins, Ranged Weapon API's injection fails as critical and the client does not start. Only this one handler is dropped, so the
+# bow-pull zoom follows Ranged Weapon API's pull time and the rest of the class stays.
+drop com/kielson/mixin/client/AbstractClientPlayerMixin Kielson$getFovMultiplierForPullTime (F)F | Ranged Weapon API modifies the same pull-time constant and its injection is critical; this one yields so that it applies
